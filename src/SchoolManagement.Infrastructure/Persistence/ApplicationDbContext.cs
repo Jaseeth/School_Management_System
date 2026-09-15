@@ -26,6 +26,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Staff> Staff { get; set; }
     public DbSet<OtpVerification> OtpVerifications { get; set; }
+    public DbSet<EmailSetting> EmailSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

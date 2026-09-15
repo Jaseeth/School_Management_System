@@ -6,6 +6,8 @@ using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Text;
 using Microsoft.OpenApi;
+using SchoolManagement.Application.Common.Interfaces;
+using SchoolManagement.Infrastructure.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -103,6 +105,11 @@ builder.Services.AddSwaggerGen(options =>
 // =====================================
 
 builder.Services.AddScoped<JwtTokenService>();
+
+builder.Services.Configure<ResendSettings>(
+    builder.Configuration.GetSection("Resend"));
+
+builder.Services.AddHttpClient<IEmailService, ResendEmailService>();
 
 var app = builder.Build();
 
