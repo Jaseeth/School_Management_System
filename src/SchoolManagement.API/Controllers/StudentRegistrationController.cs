@@ -7,6 +7,7 @@ using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Cryptography;
+using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -16,15 +17,19 @@ public class StudentRegistrationController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IEmailService _emailService;
 
+
     public StudentRegistrationController(
-        ApplicationDbContext context,
-        UserManager<ApplicationUser> userManager,
-        IEmailService emailService)
+    ApplicationDbContext context,
+    UserManager<ApplicationUser> userManager,
+    RoleManager<IdentityRole> roleManager,
+    IEmailService emailService)
     {
         _context = context;
         _userManager = userManager;
+        _roleManager = roleManager;
         _emailService = emailService;
     }
 
@@ -299,9 +304,9 @@ public class StudentRegistrationController : ControllerBase
         };
 
         var createResult =
-            await _userManager.CreateAsync(
-                user,
-                request.Password);
+    await _userManager.CreateAsync(
+        user,
+        request.Password);
 
         if (!createResult.Succeeded)
         {
@@ -313,13 +318,50 @@ public class StudentRegistrationController : ControllerBase
             });
         }
 
+        // Find Student role from database
+        var studentRole =
+            await _roleManager.FindByNameAsync("Student");
+
+        if (studentRole == null ||
+            string.IsNullOrWhiteSpace(studentRole.Name))
+        {
+            // Remove the user because account creation succeeded
+            // but role configuration is missing
+            await _userManager.DeleteAsync(user);
+
+            return BadRequest(new
+            {
+                message = "Student role is not configured."
+            });
+        }
+
+        // Assign Student role
+        var roleResult =
+            await _userManager.AddToRoleAsync(
+                user,
+                studentRole.Name);
+
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+
+            return BadRequest(new
+            {
+                message = "Unable to assign Student role.",
+                errors = roleResult.Errors
+                    .Select(x => x.Description)
+            });
+        }
+
+        // Link Identity account with Student table
         student.ApplicationUserId = user.Id;
 
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            message = "Student account created successfully."
+            message = "Student account created successfully.",
+            role = studentRole.Name
         });
     }
 }

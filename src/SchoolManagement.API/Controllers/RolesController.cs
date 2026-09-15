@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Roles.DTOs;
+using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -18,6 +19,7 @@ public class RolesController : ControllerBase
     }
 
     // GET: api/roles
+    [HasPermission("Roles.View")]
     [HttpGet]
     public async Task<IActionResult> GetRoles()
     {
@@ -34,6 +36,7 @@ public class RolesController : ControllerBase
     }
 
     // GET: api/roles/{id}
+    [HasPermission("Roles.View")]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetRole(string id)
     {
@@ -55,6 +58,7 @@ public class RolesController : ControllerBase
     }
 
     // POST: api/roles
+    [HasPermission("Roles.Create")]
     [HttpPost]
     public async Task<IActionResult> CreateRole(
         CreateRoleRequest request)
@@ -107,6 +111,8 @@ public class RolesController : ControllerBase
     }
 
     // PUT: api/roles/{id}
+    // PUT: api/roles/{id}
+    [HasPermission("Roles.Update")]
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateRole(
         string id,
@@ -168,6 +174,7 @@ public class RolesController : ControllerBase
     }
 
     // DELETE: api/roles/{id}
+    [HasPermission("Roles.Delete")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteRole(string id)
     {

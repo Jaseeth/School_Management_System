@@ -12,4 +12,6 @@ public class LoginResponse
 
     public IList<string> Roles { get; set; }
         = new List<string>();
+
+    public bool MustChangePassword { get; set; }
 }

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Students.DTOs;
 using SchoolManagement.Domain.Entities;
+using SchoolManagement.Infrastructure.Authorization;
 using SchoolManagement.Infrastructure.Persistence;
 
 namespace SchoolManagement.API.Controllers;
@@ -72,6 +73,7 @@ public class StudentsController : ControllerBase
         });
     }
 
+    [HasPermission("Students.View")]
     [HttpGet]
     public async Task<IActionResult> GetStudents()
     {

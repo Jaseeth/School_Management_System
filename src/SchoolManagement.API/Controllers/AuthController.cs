@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Application.Authentication.DTOs;
 using SchoolManagement.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -74,7 +76,78 @@ public class AuthController : ControllerBase
                 ExpiresAt = tokenResult.ExpiresAt,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
-                Roles = roles
+                Roles = roles,
+                MustChangePassword = user.MustChangePassword
             });
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(
+    ChangePasswordRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+        {
+            return BadRequest(new
+            {
+                message = "Current password is required."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            return BadRequest(new
+            {
+                message = "New password is required."
+            });
+        }
+
+        if (request.NewPassword != request.ConfirmPassword)
+        {
+            return BadRequest(new
+            {
+                message = "New password and confirmation do not match."
+            });
+        }
+
+        var userId = User.FindFirstValue(
+            ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var result = await _userManager.ChangePasswordAsync(
+            user,
+            request.CurrentPassword,
+            request.NewPassword);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new
+            {
+                message = "Unable to change password.",
+                errors = result.Errors
+                    .Select(x => x.Description)
+            });
+        }
+
+        user.MustChangePassword = false;
+
+        await _userManager.UpdateAsync(user);
+
+        return Ok(new
+        {
+            message = "Password changed successfully.",
+            mustChangePassword = false
+        });
     }
 }

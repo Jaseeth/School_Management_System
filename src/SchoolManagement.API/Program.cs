@@ -8,6 +8,9 @@ using System.Text;
 using Microsoft.OpenApi;
 using SchoolManagement.Application.Common.Interfaces;
 using SchoolManagement.Infrastructure.Email;
+using Microsoft.AspNetCore.Authorization;
+using SchoolManagement.Infrastructure.Authorization;
+using SchoolManagement.API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -111,6 +114,14 @@ builder.Services.Configure<ResendSettings>(
 
 builder.Services.AddHttpClient<IEmailService, ResendEmailService>();
 
+builder.Services.AddSingleton<
+    IAuthorizationPolicyProvider,
+    PermissionPolicyProvider>();
+
+builder.Services.AddScoped<
+    IAuthorizationHandler,
+    PermissionAuthorizationHandler>();
+
 var app = builder.Build();
 
 // =====================================
@@ -127,6 +138,9 @@ app.UseHttpsRedirection();
 
 // Authentication MUST come before Authorization
 app.UseAuthentication();
+
+app.UseMiddleware<ForcePasswordChangeMiddleware>();
+
 app.UseAuthorization();
 
 app.MapControllers();
