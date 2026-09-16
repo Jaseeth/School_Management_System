@@ -27,6 +27,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Staff> Staff { get; set; }
     public DbSet<OtpVerification> OtpVerifications { get; set; }
     public DbSet<EmailSetting> EmailSettings { get; set; }
+    public DbSet<TeacherAssignment> TeacherAssignments => Set<TeacherAssignment>();
+    public DbSet<AcademicTerm> AcademicTerms => Set<AcademicTerm>();
+    public DbSet<StudentMark> StudentMarks => Set<StudentMark>();
+    public DbSet<MarksSubmission> MarksSubmissions => Set<MarksSubmission>();
+    public DbSet<Exam> Exams => Set<Exam>();
+    public DbSet<StaffPermissionDelegation> StaffPermissionDelegations => Set<StaffPermissionDelegation>();
+    public DbSet<SectionHeadAssignment> SectionHeadAssignments => Set<SectionHeadAssignment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -68,5 +75,220 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(x => x.SchoolClassId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<TeacherAssignment>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasOne(x => x.AcademicYear)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.SchoolClass)
+                .WithMany()
+                .HasForeignKey(x => x.SchoolClassId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Subject)
+                .WithMany()
+                .HasForeignKey(x => x.SubjectId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicYearId,
+                x.StaffId,
+                x.SchoolClassId,
+                x.SubjectId
+            })
+            .IsUnique();
+        });
+
+        builder.Entity<AcademicTerm>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.HasOne(x => x.AcademicYear)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicYearId,
+                x.Name
+            })
+            .IsUnique();
+        });
+
+        builder.Entity<Exam>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.MaximumMarks)
+                .HasPrecision(10, 2);
+
+            entity.HasOne(x => x.AcademicTerm)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicTermId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicTermId,
+                x.Name
+            })
+            .IsUnique();
+        });
+
+        builder.Entity<StudentMark>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.MarksObtained)
+                .HasPrecision(10, 2);
+
+            entity.HasOne(x => x.Exam)
+                .WithMany()
+                .HasForeignKey(x => x.ExamId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Student)
+                .WithMany()
+                .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.TeacherAssignment)
+                .WithMany()
+                .HasForeignKey(x => x.TeacherAssignmentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.ExamId,
+                x.StudentId,
+                x.TeacherAssignmentId
+            })
+            .IsUnique();
+        });
+
+        builder.Entity<MarksSubmission>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.ReviewComment)
+                .HasMaxLength(1000);
+
+            entity.HasOne(x => x.Exam)
+                .WithMany()
+                .HasForeignKey(x => x.ExamId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.TeacherAssignment)
+                .WithMany()
+                .HasForeignKey(x => x.TeacherAssignmentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.SubmittedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.SubmittedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.ReviewedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.ReviewedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.PublishedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.PublishedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.ExamId,
+                x.TeacherAssignmentId
+            })
+            .IsUnique();
+        });
+
+        builder.Entity<StaffPermissionDelegation>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Permission)
+                .WithMany()
+                .HasForeignKey(x => x.PermissionId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Section)
+                .WithMany()
+                .HasForeignKey(x => x.SectionId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.GrantedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.GrantedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.RevokedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.RevokedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.PermissionId,
+                x.SectionId
+            });
+        });
+
+        builder.Entity<SectionHeadAssignment>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Section)
+                .WithMany()
+                .HasForeignKey(x => x.SectionId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.AcademicYear)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.SectionId,
+                x.AcademicYearId
+            })
+            .IsUnique();
+        });
     }
 }

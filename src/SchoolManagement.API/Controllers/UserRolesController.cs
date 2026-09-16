@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Application.Users.DTOs;
 using SchoolManagement.Infrastructure.Identity;
+using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -21,6 +22,7 @@ public class UserRolesController : ControllerBase
     }
 
     // GET: api/users/{userId}/roles
+    [HasPermission("UserRoles.View")]
     [HttpGet("{userId}/roles")]
     public async Task<IActionResult> GetUserRoles(
         string userId)
@@ -47,6 +49,7 @@ public class UserRolesController : ControllerBase
     }
 
     // PUT: api/users/{userId}/role
+    [HasPermission("UserRoles.Manage")]
     [HttpPut("{userId}/role")]
     public async Task<IActionResult> AssignRole(
         string userId,

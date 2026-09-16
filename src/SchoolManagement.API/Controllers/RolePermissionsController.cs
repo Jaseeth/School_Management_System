@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Permissions.DTOs;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Persistence;
+using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -23,6 +24,7 @@ public class RolePermissionsController : ControllerBase
     }
 
     // GET: api/roles/{roleId}/permissions
+    [HasPermission("RolePermissions.View")]
     [HttpGet("{roleId}/permissions")]
     public async Task<IActionResult> GetRolePermissions(
         string roleId)
@@ -58,6 +60,7 @@ public class RolePermissionsController : ControllerBase
     }
 
     // PUT: api/roles/{roleId}/permissions
+    [HasPermission("RolePermissions.Manage")]
     [HttpPut("{roleId}/permissions")]
     public async Task<IActionResult> AssignPermissions(
         string roleId,

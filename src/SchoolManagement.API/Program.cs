@@ -122,6 +122,8 @@ builder.Services.AddScoped<
     IAuthorizationHandler,
     PermissionAuthorizationHandler>();
 
+builder.Services.AddScoped<DevelopmentDataSeeder>();
+
 var app = builder.Build();
 
 // =====================================
@@ -132,6 +134,14 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    using var scope = app.Services.CreateScope();
+
+    var seeder =
+        scope.ServiceProvider
+            .GetRequiredService<DevelopmentDataSeeder>();
+
+    await seeder.SeedAsync();
 }
 
 app.UseHttpsRedirection();

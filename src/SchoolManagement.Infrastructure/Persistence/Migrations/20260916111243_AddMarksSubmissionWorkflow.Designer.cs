@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SchoolManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SchoolManagement.Infrastructure.Persistence;
 namespace SchoolManagement.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916111243_AddMarksSubmissionWorkflow")]
+    partial class AddMarksSubmissionWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -483,38 +486,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("Sections");
                 });
 
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.SectionHeadAssignment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AcademicYearId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("SectionId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StaffId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("SectionId");
-
-                    b.HasIndex("StaffId", "SectionId", "AcademicYearId")
-                        .IsUnique();
-
-                    b.ToTable("SectionHeadAssignments");
-                });
-
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Staff", b =>
                 {
                     b.Property<int>("Id")
@@ -546,53 +517,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Staff");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffPermissionDelegation", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("GrantedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("GrantedByStaffId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("PermissionId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("RevokedByStaffId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("SectionId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StaffId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GrantedByStaffId");
-
-                    b.HasIndex("PermissionId");
-
-                    b.HasIndex("RevokedByStaffId");
-
-                    b.HasIndex("SectionId");
-
-                    b.HasIndex("StaffId", "PermissionId", "SectionId");
-
-                    b.ToTable("StaffPermissionDelegations");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Student", b =>
@@ -968,74 +892,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Grade");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.SectionHeadAssignment", b =>
-                {
-                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Section", "Section")
-                        .WithMany()
-                        .HasForeignKey("SectionId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
-                        .WithMany()
-                        .HasForeignKey("StaffId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("AcademicYear");
-
-                    b.Navigation("Section");
-
-                    b.Navigation("Staff");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffPermissionDelegation", b =>
-                {
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "GrantedByStaff")
-                        .WithMany()
-                        .HasForeignKey("GrantedByStaffId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Permission", "Permission")
-                        .WithMany()
-                        .HasForeignKey("PermissionId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "RevokedByStaff")
-                        .WithMany()
-                        .HasForeignKey("RevokedByStaffId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Section", "Section")
-                        .WithMany()
-                        .HasForeignKey("SectionId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
-                        .WithMany()
-                        .HasForeignKey("StaffId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("GrantedByStaff");
-
-                    b.Navigation("Permission");
-
-                    b.Navigation("RevokedByStaff");
-
-                    b.Navigation("Section");
-
-                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Student", b =>

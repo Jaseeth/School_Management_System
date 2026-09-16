@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Settings.DTOs;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Persistence;
+using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -17,6 +18,7 @@ public class SettingsController : ControllerBase
         _context = context;
     }
 
+    [HasPermission("EmailSettings.View")]
     [HttpGet("email")]
     public async Task<IActionResult> GetEmailSettings()
     {
@@ -34,6 +36,7 @@ public class SettingsController : ControllerBase
         return Ok(setting);
     }
 
+    [HasPermission("EmailSettings.Update")]
     [HttpPut("email")]
     public async Task<IActionResult> UpdateEmailSettings(
         UpdateEmailSettingRequest request)

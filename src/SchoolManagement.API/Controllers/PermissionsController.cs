@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Permissions.DTOs;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Persistence;
+using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -19,6 +20,7 @@ public class PermissionsController : ControllerBase
     }
 
     // GET: api/permissions
+    [HasPermission("Permissions.View")]
     [HttpGet]
     public async Task<IActionResult> GetPermissions()
     {
@@ -37,6 +39,7 @@ public class PermissionsController : ControllerBase
     }
 
     // GET: api/permissions/{id}
+    [HasPermission("Permissions.View")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetPermission(int id)
     {
@@ -55,6 +58,7 @@ public class PermissionsController : ControllerBase
     }
 
     // POST: api/permissions
+    [HasPermission("Permissions.Create")]
     [HttpPost]
     public async Task<IActionResult> CreatePermission(
         CreatePermissionRequest request)
@@ -100,6 +104,7 @@ public class PermissionsController : ControllerBase
     }
 
     // PUT: api/permissions/{id}
+    [HasPermission("Permissions.Update")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdatePermission(
         int id,
