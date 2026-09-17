@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SchoolManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SchoolManagement.Infrastructure.Persistence;
 namespace SchoolManagement.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260917113500_AddClassTeacherAttendanceWorkflow")]
+    partial class AddClassTeacherAttendanceWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -586,59 +589,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Staff");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("FromDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("LeaveType")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("RequestedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ReviewRemarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("ReviewedByStaffId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("StaffId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("ToDate")
-                        .HasColumnType("date");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReviewedByStaffId");
-
-                    b.HasIndex("StaffId", "FromDate", "ToDate");
-
-                    b.ToTable("StaffLeaveRequests");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffPermissionDelegation", b =>
@@ -1280,24 +1230,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("AcademicYear");
 
                     b.Navigation("Section");
-
-                    b.Navigation("Staff");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveRequest", b =>
-                {
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "ReviewedByStaff")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByStaffId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
-                        .WithMany()
-                        .HasForeignKey("StaffId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("ReviewedByStaff");
 
                     b.Navigation("Staff");
                 });
