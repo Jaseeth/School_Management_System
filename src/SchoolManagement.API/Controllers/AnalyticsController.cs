@@ -4280,4 +4280,1675 @@ public class AnalyticsController : ControllerBase
                 academicYearComparison
         });
     }
+
+
+    [HttpGet("performance-trend")]
+    public async Task<IActionResult> GetPerformanceTrend(
+    int? academicYearId,
+    int? termId,
+    int? sectionId,
+    int? gradeId,
+    int? classId,
+    int? subjectId)
+    {
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user =
+            await _userManager.FindByIdAsync(userId);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var roles =
+            await _userManager.GetRolesAsync(user);
+
+        var isWholeSchool =
+            roles.Contains("Admin") ||
+            roles.Contains("Principal") ||
+            roles.Contains("Deputy Principal");
+
+        var isSectionHead =
+            roles.Contains("Section Head");
+
+        var isTeacher =
+            roles.Contains("Teacher");
+
+        int? staffId = null;
+
+        List<int>? allowedSectionIds = null;
+
+        List<int>? allowedTeacherAssignmentIds = null;
+
+        var staff =
+            await _context.Staff
+                .FirstOrDefaultAsync(x =>
+                    x.ApplicationUserId == userId &&
+                    x.IsActive);
+
+        staffId = staff?.Id;
+
+        if (!isWholeSchool &&
+            staff == null)
+        {
+            return Forbid();
+        }
+
+        // ============================================================
+        // SECTION HEAD SCOPE
+        // ============================================================
+
+        if (isSectionHead &&
+            !isWholeSchool)
+        {
+            var sectionQuery =
+                _context.SectionHeadAssignments
+                    .Where(x =>
+                        x.StaffId == staffId &&
+                        x.IsActive);
+
+            if (academicYearId.HasValue)
+            {
+                sectionQuery =
+                    sectionQuery.Where(x =>
+                        x.AcademicYearId ==
+                        academicYearId.Value);
+            }
+
+            allowedSectionIds =
+                await sectionQuery
+                    .Select(x => x.SectionId)
+                    .Distinct()
+                    .ToListAsync();
+
+            if (allowedSectionIds.Count == 0)
+            {
+                return Ok(new
+                {
+                    scope = new
+                    {
+                        type = "SectionHead",
+                        staffId,
+                        sections = allowedSectionIds,
+                        teacherAssignments = (object?)null
+                    },
+
+                    filters = new
+                    {
+                        academicYearId,
+                        termId,
+                        sectionId,
+                        gradeId,
+                        classId,
+                        subjectId
+                    },
+
+                    pointCount = 0,
+
+                    trend = Array.Empty<object>()
+                });
+            }
+
+            if (sectionId.HasValue &&
+                !allowedSectionIds.Contains(
+                    sectionId.Value))
+            {
+                return Forbid();
+            }
+        }
+
+        // ============================================================
+        // TEACHER SCOPE
+        // ============================================================
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead)
+        {
+            var assignmentQuery =
+                _context.TeacherAssignments
+                    .Where(x =>
+                        x.StaffId == staffId &&
+                        x.IsActive);
+
+            if (academicYearId.HasValue)
+            {
+                assignmentQuery =
+                    assignmentQuery.Where(x =>
+                        x.AcademicYearId ==
+                        academicYearId.Value);
+            }
+
+            allowedTeacherAssignmentIds =
+                await assignmentQuery
+                    .Select(x => x.Id)
+                    .Distinct()
+                    .ToListAsync();
+
+            if (allowedTeacherAssignmentIds.Count == 0)
+            {
+                return Ok(new
+                {
+                    scope = new
+                    {
+                        type = "Teacher",
+                        staffId,
+                        sections = (object?)null,
+                        teacherAssignments =
+                            allowedTeacherAssignmentIds
+                    },
+
+                    filters = new
+                    {
+                        academicYearId,
+                        termId,
+                        sectionId,
+                        gradeId,
+                        classId,
+                        subjectId
+                    },
+
+                    pointCount = 0,
+
+                    trend = Array.Empty<object>()
+                });
+            }
+        }
+
+        if (!isWholeSchool &&
+            !isSectionHead &&
+            !isTeacher)
+        {
+            return Forbid();
+        }
+
+        // ============================================================
+        // PUBLISHED RESULT QUERY
+        // ============================================================
+
+        var query =
+            from mark in _context.StudentMarks
+
+            join submission
+                in _context.MarksSubmissions
+
+            on new
+            {
+                mark.ExamId,
+                mark.TeacherAssignmentId
+            }
+            equals new
+            {
+                submission.ExamId,
+                submission.TeacherAssignmentId
+            }
+
+            where
+                mark.IsPublished &&
+                submission.Status ==
+                    MarksSubmissionStatus.Published &&
+                mark.Student.IsActive &&
+                mark.TeacherAssignment.IsActive
+
+            select new
+            {
+                mark.StudentId,
+
+                mark.MarksObtained,
+
+                MaximumMarks =
+                    mark.Exam.MaximumMarks,
+
+                AcademicYearId =
+                    mark.TeacherAssignment
+                        .AcademicYearId,
+
+                AcademicYearName =
+                    mark.TeacherAssignment
+                        .AcademicYear
+                        .Name,
+
+                TermId =
+                    mark.Exam.AcademicTermId,
+
+                TermName =
+                    mark.Exam.AcademicTerm.Name,
+
+                ExamId =
+                    mark.ExamId,
+
+                ExamName =
+                    mark.Exam.Name,
+
+                SectionId =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .Grade
+                        .SectionId,
+
+                GradeId =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .GradeId,
+
+                ClassId =
+                    mark.TeacherAssignment
+                        .SchoolClassId,
+
+                SubjectId =
+                    mark.TeacherAssignment
+                        .SubjectId,
+
+                TeacherAssignmentId =
+                    mark.TeacherAssignmentId
+            };
+
+        // ============================================================
+        // ROLE SCOPE
+        // ============================================================
+
+        if (isSectionHead &&
+            !isWholeSchool &&
+            allowedSectionIds != null)
+        {
+            query =
+                query.Where(x =>
+                    allowedSectionIds.Contains(
+                        x.SectionId));
+        }
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead &&
+            allowedTeacherAssignmentIds != null)
+        {
+            query =
+                query.Where(x =>
+                    allowedTeacherAssignmentIds.Contains(
+                        x.TeacherAssignmentId));
+        }
+
+        // ============================================================
+        // FILTERS
+        // ============================================================
+
+        if (academicYearId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.AcademicYearId ==
+                    academicYearId.Value);
+        }
+
+        if (termId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.TermId ==
+                    termId.Value);
+        }
+
+        if (sectionId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SectionId ==
+                    sectionId.Value);
+        }
+
+        if (gradeId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.GradeId ==
+                    gradeId.Value);
+        }
+
+        if (classId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.ClassId ==
+                    classId.Value);
+        }
+
+        if (subjectId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SubjectId ==
+                    subjectId.Value);
+        }
+
+        // ============================================================
+        // LOAD
+        // ============================================================
+
+        var rows =
+            await query
+                .AsNoTracking()
+                .ToListAsync();
+
+        // ============================================================
+        // PERFORMANCE TREND
+        // ============================================================
+
+        var trend =
+            rows
+                .GroupBy(x => new
+                {
+                    x.AcademicYearId,
+                    x.AcademicYearName,
+
+                    x.TermId,
+                    x.TermName,
+
+                    x.ExamId,
+                    x.ExamName
+                })
+                .Select(group =>
+                {
+                    var totalMarks =
+                        group.Sum(x =>
+                            x.MarksObtained);
+
+                    var maximumTotal =
+                        group.Sum(x =>
+                            x.MaximumMarks);
+
+                    var percentage =
+                        maximumTotal > 0
+                            ? Math.Round(
+                                totalMarks /
+                                maximumTotal *
+                                100m,
+                                2)
+                            : 0m;
+
+                    return new
+                    {
+                        academicYear = new
+                        {
+                            id =
+                                group.Key.AcademicYearId,
+
+                            name =
+                                group.Key.AcademicYearName
+                        },
+
+                        term = new
+                        {
+                            id =
+                                group.Key.TermId,
+
+                            name =
+                                group.Key.TermName
+                        },
+
+                        exam = new
+                        {
+                            id =
+                                group.Key.ExamId,
+
+                            name =
+                                group.Key.ExamName
+                        },
+
+                        studentCount =
+                            group
+                                .Select(x =>
+                                    x.StudentId)
+                                .Distinct()
+                                .Count(),
+
+                        resultCount =
+                            group.Count(),
+
+                        totalMarks,
+
+                        maximumTotal,
+
+                        percentage
+                    };
+                })
+                .OrderBy(x =>
+                    x.academicYear.id)
+                .ThenBy(x =>
+                    x.term.id)
+                .ThenBy(x =>
+                    x.exam.id)
+                .ToList();
+
+        // ============================================================
+        // SCOPE
+        // ============================================================
+
+        string scopeType;
+
+        if (isWholeSchool)
+        {
+            scopeType = "WholeSchool";
+        }
+        else if (isSectionHead)
+        {
+            scopeType = "SectionHead";
+        }
+        else
+        {
+            scopeType = "Teacher";
+        }
+
+        return Ok(new
+        {
+            scope = new
+            {
+                type = scopeType,
+
+                staffId,
+
+                sections =
+                    allowedSectionIds,
+
+                teacherAssignments =
+                    allowedTeacherAssignmentIds
+            },
+
+            filters = new
+            {
+                academicYearId,
+                termId,
+                sectionId,
+                gradeId,
+                classId,
+                subjectId
+            },
+
+            pointCount =
+                trend.Count,
+
+            trend
+        });
+    }
+
+
+    [HttpGet("dashboard-summary")]
+    public async Task<IActionResult> GetDashboardSummary(
+    int? academicYearId,
+    int? termId,
+    int? examId,
+    int? sectionId,
+    int? gradeId,
+    int? classId,
+    int? subjectId)
+    {
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user =
+            await _userManager.FindByIdAsync(userId);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var roles =
+            await _userManager.GetRolesAsync(user);
+
+        var isWholeSchool =
+            roles.Contains("Admin") ||
+            roles.Contains("Principal") ||
+            roles.Contains("Deputy Principal");
+
+        var isSectionHead =
+            roles.Contains("Section Head");
+
+        var isTeacher =
+            roles.Contains("Teacher");
+
+        int? staffId = null;
+
+        List<int>? allowedSectionIds = null;
+        List<int>? allowedTeacherAssignmentIds = null;
+
+        var staff =
+            await _context.Staff
+                .FirstOrDefaultAsync(x =>
+                    x.ApplicationUserId == userId &&
+                    x.IsActive);
+
+        staffId = staff?.Id;
+
+        if (!isWholeSchool &&
+            staff == null)
+        {
+            return Forbid();
+        }
+
+        // ============================================================
+        // SECTION HEAD SCOPE
+        // ============================================================
+
+        if (isSectionHead &&
+            !isWholeSchool)
+        {
+            var sectionQuery =
+                _context.SectionHeadAssignments
+                    .Where(x =>
+                        x.StaffId == staffId &&
+                        x.IsActive);
+
+            if (academicYearId.HasValue)
+            {
+                sectionQuery =
+                    sectionQuery.Where(x =>
+                        x.AcademicYearId ==
+                        academicYearId.Value);
+            }
+
+            allowedSectionIds =
+                await sectionQuery
+                    .Select(x => x.SectionId)
+                    .Distinct()
+                    .ToListAsync();
+
+            if (sectionId.HasValue &&
+                !allowedSectionIds.Contains(
+                    sectionId.Value))
+            {
+                return Forbid();
+            }
+        }
+
+        // ============================================================
+        // TEACHER SCOPE
+        // ============================================================
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead)
+        {
+            var assignmentQuery =
+                _context.TeacherAssignments
+                    .Where(x =>
+                        x.StaffId == staffId &&
+                        x.IsActive);
+
+            if (academicYearId.HasValue)
+            {
+                assignmentQuery =
+                    assignmentQuery.Where(x =>
+                        x.AcademicYearId ==
+                        academicYearId.Value);
+            }
+
+            allowedTeacherAssignmentIds =
+                await assignmentQuery
+                    .Select(x => x.Id)
+                    .Distinct()
+                    .ToListAsync();
+        }
+
+        if (!isWholeSchool &&
+            !isSectionHead &&
+            !isTeacher)
+        {
+            return Forbid();
+        }
+
+        // ============================================================
+        // BASE QUERY
+        // ============================================================
+
+        var query =
+            from mark in _context.StudentMarks
+
+            join submission
+                in _context.MarksSubmissions
+
+            on new
+            {
+                mark.ExamId,
+                mark.TeacherAssignmentId
+            }
+            equals new
+            {
+                submission.ExamId,
+                submission.TeacherAssignmentId
+            }
+
+            where
+                mark.IsPublished &&
+                submission.Status ==
+                    MarksSubmissionStatus.Published &&
+                mark.Student.IsActive &&
+                mark.TeacherAssignment.IsActive
+
+            select new
+            {
+                mark.StudentId,
+
+                StudentName =
+                    mark.Student.FullName,
+
+                mark.MarksObtained,
+
+                MaximumMarks =
+                    mark.Exam.MaximumMarks,
+
+                AcademicYearId =
+                    mark.TeacherAssignment
+                        .AcademicYearId,
+
+                AcademicYearName =
+                    mark.TeacherAssignment
+                        .AcademicYear
+                        .Name,
+
+                TermId =
+                    mark.Exam.AcademicTermId,
+
+                TermName =
+                    mark.Exam.AcademicTerm.Name,
+
+                ExamId =
+                    mark.ExamId,
+
+                ExamName =
+                    mark.Exam.Name,
+
+                SectionId =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .Grade
+                        .SectionId,
+
+                SectionName =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .Grade
+                        .Section
+                        .Name,
+
+                GradeId =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .GradeId,
+
+                GradeName =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .Grade
+                        .Name,
+
+                ClassId =
+                    mark.TeacherAssignment
+                        .SchoolClassId,
+
+                ClassName =
+                    mark.TeacherAssignment
+                        .SchoolClass
+                        .Name,
+
+                SubjectId =
+                    mark.TeacherAssignment
+                        .SubjectId,
+
+                SubjectName =
+                    mark.TeacherAssignment
+                        .Subject
+                        .Name,
+
+                TeacherAssignmentId =
+                    mark.TeacherAssignmentId
+            };
+
+        // ============================================================
+        // ROLE SCOPE
+        // ============================================================
+
+        if (isSectionHead &&
+            !isWholeSchool &&
+            allowedSectionIds != null)
+        {
+            query =
+                query.Where(x =>
+                    allowedSectionIds.Contains(
+                        x.SectionId));
+        }
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead &&
+            allowedTeacherAssignmentIds != null)
+        {
+            query =
+                query.Where(x =>
+                    allowedTeacherAssignmentIds.Contains(
+                        x.TeacherAssignmentId));
+        }
+
+        // ============================================================
+        // FILTERS
+        // ============================================================
+
+        if (academicYearId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.AcademicYearId ==
+                    academicYearId.Value);
+        }
+
+        if (termId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.TermId ==
+                    termId.Value);
+        }
+
+        if (examId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.ExamId ==
+                    examId.Value);
+        }
+
+        if (sectionId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SectionId ==
+                    sectionId.Value);
+        }
+
+        if (gradeId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.GradeId ==
+                    gradeId.Value);
+        }
+
+        if (classId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.ClassId ==
+                    classId.Value);
+        }
+
+        if (subjectId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SubjectId ==
+                    subjectId.Value);
+        }
+
+        var rows =
+            await query
+                .AsNoTracking()
+                .ToListAsync();
+
+        // ============================================================
+        // OVERVIEW CARDS
+        // ============================================================
+
+        var totalStudents =
+            rows
+                .Select(x => x.StudentId)
+                .Distinct()
+                .Count();
+
+        var publishedResultCount =
+            rows.Count;
+
+        var overallTotalMarks =
+            rows.Sum(x =>
+                x.MarksObtained);
+
+        var overallMaximumTotal =
+            rows.Sum(x =>
+                x.MaximumMarks);
+
+        var averagePercentage =
+            overallMaximumTotal > 0
+                ? Math.Round(
+                    overallTotalMarks /
+                    overallMaximumTotal *
+                    100m,
+                    2)
+                : 0m;
+
+        var studentPercentages =
+            rows
+                .GroupBy(x =>
+                    x.StudentId)
+                .Select(group =>
+                {
+                    var total =
+                        group.Sum(x =>
+                            x.MarksObtained);
+
+                    var maximum =
+                        group.Sum(x =>
+                            x.MaximumMarks);
+
+                    return maximum > 0
+                        ? Math.Round(
+                            total /
+                            maximum *
+                            100m,
+                            2)
+                        : 0m;
+                })
+                .ToList();
+
+        var highestPercentage =
+            studentPercentages.Count > 0
+                ? studentPercentages.Max()
+                : 0m;
+
+        var lowestPercentage =
+            studentPercentages.Count > 0
+                ? studentPercentages.Min()
+                : 0m;
+
+        // ============================================================
+        // SUBJECT CHART
+        // ============================================================
+
+        var subjects =
+            rows
+                .GroupBy(x => new
+                {
+                    x.SubjectId,
+                    x.SubjectName
+                })
+                .Select(group =>
+                {
+                    var total =
+                        group.Sum(x =>
+                            x.MarksObtained);
+
+                    var maximum =
+                        group.Sum(x =>
+                            x.MaximumMarks);
+
+                    return new
+                    {
+                        id =
+                            group.Key.SubjectId,
+
+                        name =
+                            group.Key.SubjectName,
+
+                        percentage =
+                            maximum > 0
+                                ? Math.Round(
+                                    total /
+                                    maximum *
+                                    100m,
+                                    2)
+                                : 0m
+                    };
+                })
+                .OrderByDescending(x =>
+                    x.percentage)
+                .ToList();
+
+        // ============================================================
+        // CLASS CHART
+        // ============================================================
+
+        var classes =
+            rows
+                .GroupBy(x => new
+                {
+                    x.ClassId,
+                    x.ClassName,
+                    x.GradeName,
+                    x.SectionName
+                })
+                .Select(group =>
+                {
+                    var total =
+                        group.Sum(x =>
+                            x.MarksObtained);
+
+                    var maximum =
+                        group.Sum(x =>
+                            x.MaximumMarks);
+
+                    return new
+                    {
+                        id =
+                            group.Key.ClassId,
+
+                        name =
+                            group.Key.ClassName,
+
+                        grade =
+                            group.Key.GradeName,
+
+                        section =
+                            group.Key.SectionName,
+
+                        percentage =
+                            maximum > 0
+                                ? Math.Round(
+                                    total /
+                                    maximum *
+                                    100m,
+                                    2)
+                                : 0m
+                    };
+                })
+                .OrderByDescending(x =>
+                    x.percentage)
+                .ToList();
+
+        // ============================================================
+        // EXAM TREND
+        // ============================================================
+
+        var examTrend =
+            rows
+                .GroupBy(x => new
+                {
+                    x.ExamId,
+                    x.ExamName,
+                    x.TermId,
+                    x.TermName
+                })
+                .Select(group =>
+                {
+                    var total =
+                        group.Sum(x =>
+                            x.MarksObtained);
+
+                    var maximum =
+                        group.Sum(x =>
+                            x.MaximumMarks);
+
+                    return new
+                    {
+                        examId =
+                            group.Key.ExamId,
+
+                        examName =
+                            group.Key.ExamName,
+
+                        termId =
+                            group.Key.TermId,
+
+                        termName =
+                            group.Key.TermName,
+
+                        percentage =
+                            maximum > 0
+                                ? Math.Round(
+                                    total /
+                                    maximum *
+                                    100m,
+                                    2)
+                                : 0m
+                    };
+                })
+                .OrderBy(x =>
+                    x.termId)
+                .ThenBy(x =>
+                    x.examId)
+                .ToList();
+
+        // ============================================================
+        // TOP 5 STUDENTS
+        // ============================================================
+
+        var topStudents =
+            rows
+                .GroupBy(x => new
+                {
+                    x.StudentId,
+                    x.StudentName
+                })
+                .Select(group =>
+                {
+                    var total =
+                        group.Sum(x =>
+                            x.MarksObtained);
+
+                    var maximum =
+                        group.Sum(x =>
+                            x.MaximumMarks);
+
+                    var percentage =
+                        maximum > 0
+                            ? Math.Round(
+                                total /
+                                maximum *
+                                100m,
+                                2)
+                            : 0m;
+
+                    return new
+                    {
+                        studentId =
+                            group.Key.StudentId,
+
+                        fullName =
+                            group.Key.StudentName,
+
+                        totalMarks =
+                            total,
+
+                        maximumTotal =
+                            maximum,
+
+                        percentage
+                    };
+                })
+                .OrderByDescending(x =>
+                    x.percentage)
+                .ThenBy(x =>
+                    x.fullName)
+                .Take(5)
+                .ToList();
+
+        // ============================================================
+        // SCOPE
+        // ============================================================
+
+        string scopeType;
+
+        if (isWholeSchool)
+        {
+            scopeType = "WholeSchool";
+        }
+        else if (isSectionHead)
+        {
+            scopeType = "SectionHead";
+        }
+        else
+        {
+            scopeType = "Teacher";
+        }
+
+        return Ok(new
+        {
+            scope = new
+            {
+                type =
+                    scopeType,
+
+                staffId,
+
+                sections =
+                    allowedSectionIds,
+
+                teacherAssignments =
+                    allowedTeacherAssignmentIds
+            },
+
+            filters = new
+            {
+                academicYearId,
+                termId,
+                examId,
+                sectionId,
+                gradeId,
+                classId,
+                subjectId
+            },
+
+            overview = new
+            {
+                totalStudents,
+                publishedResultCount,
+                averagePercentage,
+                highestPercentage,
+                lowestPercentage
+            },
+
+            charts = new
+            {
+                subjectPerformance =
+                    subjects,
+
+                classPerformance =
+                    classes,
+
+                examTrend
+            },
+
+            topStudents
+        });
+    }
+
+
+    [HttpGet("filters")]
+    public async Task<IActionResult> GetAnalyticsFilters(
+    int? academicYearId,
+    int? termId,
+    int? sectionId,
+    int? gradeId,
+    int? classId)
+    {
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user =
+            await _userManager
+                .FindByIdAsync(userId);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var roles =
+            await _userManager
+                .GetRolesAsync(user);
+
+        var isWholeSchool =
+            roles.Contains("Admin") ||
+            roles.Contains("Principal") ||
+            roles.Contains("Deputy Principal");
+
+        var isSectionHead =
+            roles.Contains("Section Head");
+
+        var isTeacher =
+            roles.Contains("Teacher");
+
+        int? staffId = null;
+
+        List<int>? allowedSectionIds = null;
+        List<int>? allowedTeacherAssignmentIds = null;
+
+        var staff =
+            await _context.Staff
+                .FirstOrDefaultAsync(x =>
+                    x.ApplicationUserId == userId &&
+                    x.IsActive);
+
+        staffId = staff?.Id;
+
+        if (!isWholeSchool &&
+            staff == null)
+        {
+            return Forbid();
+        }
+
+        // ============================================================
+        // SECTION HEAD SCOPE
+        // ============================================================
+
+        if (isSectionHead &&
+            !isWholeSchool)
+        {
+            var sectionQuery =
+                _context.SectionHeadAssignments
+                    .Where(x =>
+                        x.StaffId == staffId &&
+                        x.IsActive);
+
+            if (academicYearId.HasValue)
+            {
+                sectionQuery =
+                    sectionQuery.Where(x =>
+                        x.AcademicYearId ==
+                        academicYearId.Value);
+            }
+
+            allowedSectionIds =
+                await sectionQuery
+                    .Select(x => x.SectionId)
+                    .Distinct()
+                    .ToListAsync();
+
+            if (sectionId.HasValue &&
+                !allowedSectionIds.Contains(
+                    sectionId.Value))
+            {
+                return Forbid();
+            }
+        }
+
+        // ============================================================
+        // TEACHER SCOPE
+        // ============================================================
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead)
+        {
+            var teacherAssignmentScopeQuery =
+                _context.TeacherAssignments
+                    .Where(x =>
+                        x.StaffId == staffId &&
+                        x.IsActive);
+
+            if (academicYearId.HasValue)
+            {
+                teacherAssignmentScopeQuery =
+                    teacherAssignmentScopeQuery.Where(x =>
+                        x.AcademicYearId ==
+                        academicYearId.Value);
+            }
+
+            allowedTeacherAssignmentIds =
+                await teacherAssignmentScopeQuery
+                    .Select(x => x.Id)
+                    .Distinct()
+                    .ToListAsync();
+        }
+
+        if (!isWholeSchool &&
+            !isSectionHead &&
+            !isTeacher)
+        {
+            return Forbid();
+        }
+
+        // ============================================================
+        // ACADEMIC YEARS
+        // ============================================================
+
+        var academicYearsQuery =
+            _context.AcademicYears
+                .AsNoTracking()
+                .AsQueryable();
+
+        if (isSectionHead &&
+            !isWholeSchool &&
+            staffId.HasValue)
+        {
+            academicYearsQuery =
+                academicYearsQuery
+                    .Where(year =>
+                        _context.SectionHeadAssignments
+                            .Any(x =>
+                                x.StaffId == staffId.Value &&
+                                x.AcademicYearId == year.Id &&
+                                x.IsActive));
+        }
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead &&
+            staffId.HasValue)
+        {
+            academicYearsQuery =
+                academicYearsQuery
+                    .Where(year =>
+                        _context.TeacherAssignments
+                            .Any(x =>
+                                x.StaffId == staffId.Value &&
+                                x.AcademicYearId == year.Id &&
+                                x.IsActive));
+        }
+
+        var academicYears =
+            await academicYearsQuery
+                .OrderByDescending(x =>
+                    x.StartDate)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    name = x.Name,
+                    isActive = x.IsActive
+                })
+                .ToListAsync();
+
+        // ============================================================
+        // TERMS
+        // ============================================================
+
+        var termsQuery =
+            _context.AcademicTerms
+                .AsNoTracking()
+                .AsQueryable();
+
+        if (academicYearId.HasValue)
+        {
+            termsQuery =
+                termsQuery.Where(x =>
+                    x.AcademicYearId ==
+                    academicYearId.Value);
+        }
+
+        var terms =
+            await termsQuery
+                .OrderBy(x =>
+                    x.Id)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    name = x.Name,
+                    academicYearId =
+                        x.AcademicYearId
+                })
+                .ToListAsync();
+
+        // ============================================================
+        // EXAMS
+        // ============================================================
+
+        var examsQuery =
+            _context.Exams
+                .AsNoTracking()
+                .AsQueryable();
+
+        if (termId.HasValue)
+        {
+            examsQuery =
+                examsQuery.Where(x =>
+                    x.AcademicTermId ==
+                    termId.Value);
+        }
+        else if (academicYearId.HasValue)
+        {
+            examsQuery =
+                examsQuery.Where(x =>
+                    x.AcademicTerm.AcademicYearId ==
+                    academicYearId.Value);
+        }
+
+        var exams =
+            await examsQuery
+                .OrderBy(x =>
+                    x.Id)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    name = x.Name,
+                    termId =
+                        x.AcademicTermId
+                })
+                .ToListAsync();
+
+        // ============================================================
+        // SECTION / GRADE / CLASS / SUBJECT SOURCE
+        // ============================================================
+
+        var assignmentQuery =
+            _context.TeacherAssignments
+                .AsNoTracking()
+                .Where(x =>
+                    x.IsActive);
+
+        if (academicYearId.HasValue)
+        {
+            assignmentQuery =
+                assignmentQuery.Where(x =>
+                    x.AcademicYearId ==
+                    academicYearId.Value);
+        }
+
+        if (isSectionHead &&
+            !isWholeSchool &&
+            allowedSectionIds != null)
+        {
+            assignmentQuery =
+                assignmentQuery.Where(x =>
+                    allowedSectionIds.Contains(
+                        x.SchoolClass
+                            .Grade
+                            .SectionId));
+        }
+
+        if (isTeacher &&
+            !isWholeSchool &&
+            !isSectionHead &&
+            allowedTeacherAssignmentIds != null)
+        {
+            assignmentQuery =
+                assignmentQuery.Where(x =>
+                    allowedTeacherAssignmentIds
+                        .Contains(x.Id));
+        }
+
+        // ============================================================
+        // SECTIONS
+        // ============================================================
+
+        var sections =
+            await assignmentQuery
+                .Select(x => new
+                {
+                    id =
+                        x.SchoolClass
+                            .Grade
+                            .SectionId,
+
+                    name =
+                        x.SchoolClass
+                            .Grade
+                            .Section
+                            .Name
+                })
+                .Distinct()
+                .OrderBy(x =>
+                    x.name)
+                .ToListAsync();
+
+        // ============================================================
+        // GRADES
+        // ============================================================
+
+        var gradeQuery =
+            assignmentQuery;
+
+        if (sectionId.HasValue)
+        {
+            gradeQuery =
+                gradeQuery.Where(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId ==
+                    sectionId.Value);
+        }
+
+        var grades =
+            await gradeQuery
+                .Select(x => new
+                {
+                    id =
+                        x.SchoolClass
+                            .GradeId,
+
+                    name =
+                        x.SchoolClass
+                            .Grade
+                            .Name,
+
+                    sectionId =
+                        x.SchoolClass
+                            .Grade
+                            .SectionId
+                })
+                .Distinct()
+                .OrderBy(x =>
+                    x.name)
+                .ToListAsync();
+
+        // ============================================================
+        // CLASSES
+        // ============================================================
+
+        var classQuery =
+            assignmentQuery;
+
+        if (sectionId.HasValue)
+        {
+            classQuery =
+                classQuery.Where(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId ==
+                    sectionId.Value);
+        }
+
+        if (gradeId.HasValue)
+        {
+            classQuery =
+                classQuery.Where(x =>
+                    x.SchoolClass
+                        .GradeId ==
+                    gradeId.Value);
+        }
+
+        var classes =
+            await classQuery
+                .Select(x => new
+                {
+                    id =
+                        x.SchoolClassId,
+
+                    name =
+                        x.SchoolClass
+                            .Name,
+
+                    gradeId =
+                        x.SchoolClass
+                            .GradeId
+                })
+                .Distinct()
+                .OrderBy(x =>
+                    x.name)
+                .ToListAsync();
+
+        // ============================================================
+        // SUBJECTS
+        // ============================================================
+
+        var subjectQuery =
+            assignmentQuery;
+
+        if (sectionId.HasValue)
+        {
+            subjectQuery =
+                subjectQuery.Where(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId ==
+                    sectionId.Value);
+        }
+
+        if (gradeId.HasValue)
+        {
+            subjectQuery =
+                subjectQuery.Where(x =>
+                    x.SchoolClass
+                        .GradeId ==
+                    gradeId.Value);
+        }
+
+        if (classId.HasValue)
+        {
+            subjectQuery =
+                subjectQuery.Where(x =>
+                    x.SchoolClassId ==
+                    classId.Value);
+        }
+
+        var subjects =
+            await subjectQuery
+                .Select(x => new
+                {
+                    id =
+                        x.SubjectId,
+
+                    name =
+                        x.Subject
+                            .Name
+                })
+                .Distinct()
+                .OrderBy(x =>
+                    x.name)
+                .ToListAsync();
+
+        // ============================================================
+        // SCOPE
+        // ============================================================
+
+        string scopeType;
+
+        if (isWholeSchool)
+        {
+            scopeType = "WholeSchool";
+        }
+        else if (isSectionHead)
+        {
+            scopeType = "SectionHead";
+        }
+        else
+        {
+            scopeType = "Teacher";
+        }
+
+        return Ok(new
+        {
+            scope = new
+            {
+                type =
+                    scopeType,
+
+                staffId,
+
+                sections =
+                    allowedSectionIds,
+
+                teacherAssignments =
+                    allowedTeacherAssignmentIds
+            },
+
+            selected = new
+            {
+                academicYearId,
+                termId,
+                sectionId,
+                gradeId,
+                classId
+            },
+
+            academicYears,
+
+            terms,
+
+            exams,
+
+            sections,
+
+            grades,
+
+            classes,
+
+            subjects
+        });
+    }
 }
