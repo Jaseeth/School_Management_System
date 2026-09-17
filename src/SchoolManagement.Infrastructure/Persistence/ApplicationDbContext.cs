@@ -49,6 +49,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         => Set<StudentAttendance>();
     public DbSet<StaffLeaveRequest> StaffLeaveRequests
     => Set<StaffLeaveRequest>();
+    public DbSet<Notification> Notifications
+    => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -490,6 +492,37 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(x => x.ReviewedByStaff)
                 .WithMany()
                 .HasForeignKey(x => x.ReviewedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Type)
+                .IsRequired();
+
+            entity.Property(x => x.Title)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(x => x.Message)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(x => x.ReferenceType)
+                .HasMaxLength(100);
+
+            entity.HasIndex(x => new
+            {
+                x.RecipientStaffId,
+                x.IsRead,
+                x.CreatedAt
+            });
+
+            entity.HasOne(x => x.RecipientStaff)
+                .WithMany()
+                .HasForeignKey(x => x.RecipientStaffId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
     }
