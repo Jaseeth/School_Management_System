@@ -1,0 +1,273 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        Firebase Push Test
+    </title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        button {
+            padding: 12px 20px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 250px;
+            padding: 10px;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>
+        Firebase Push Notification Test
+    </h1>
+
+    <p>
+        Click the button and allow browser notifications.
+    </p>
+
+    <button id="getTokenButton">
+        Get FCM Token
+    </button>
+
+    <div id="status"></div>
+
+    <h3>FCM Token</h3>
+
+    <textarea id="token"
+              readonly>
+    </textarea>
+
+
+    <script type="module">
+
+        import {
+            initializeApp
+        }
+        from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+
+        import {
+            getMessaging,
+            getToken,
+            onMessage
+        }
+        from "https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging.js";
+
+
+        // ========================================================
+        // FIREBASE WEB CONFIG
+        // Copy these values from:
+        //
+        // Firebase
+        // -> Project Settings
+        // -> General
+        // -> Your apps
+        // -> SchoolManagementWeb
+        // ========================================================
+
+        const firebaseConfig = {
+
+            apiKey: "AIzaSyBHoVSsN35vXoq4H3K7rO_l9jL523SA0yk",
+            authDomain: "school-management-system-2aebd.firebaseapp.com",
+            projectId: "school-management-system-2aebd",
+            storageBucket: "school-management-system-2aebd.firebasestorage.app",
+            messagingSenderId: "283178135252",
+            appId: "1:283178135252:web:b90f6a8bf4b94c73645541",
+            measurementId: "G-Y9D5W9P9TW"
+        };
+
+
+        // ========================================================
+        // VAPID PUBLIC KEY
+        //
+        // Firebase
+        // -> Project Settings
+        // -> Cloud Messaging
+        // -> Web Push certificates
+        // ========================================================
+
+        const vapidKey =
+            "BAqiVckr-5GKt09rJdTgxZL1YGAqb8R8N75k2fIW48Od_nrwp2DyE_G6AbP9ITe2pCn0_Xc5FqESJPeizJBb0ME";
+
+
+        const app =
+            initializeApp(
+                firebaseConfig
+            );
+
+        const messaging =
+            getMessaging(app);
+
+
+        const button =
+            document.getElementById(
+                "getTokenButton"
+            );
+
+        const tokenBox =
+            document.getElementById(
+                "token"
+            );
+
+        const status =
+            document.getElementById(
+                "status"
+            );
+
+
+        button.addEventListener(
+            "click",
+            async () => {
+
+                try {
+
+                    status.innerHTML =
+                        "Requesting notification permission...";
+
+
+                    // ============================================
+                    // REQUEST BROWSER PERMISSION
+                    // ============================================
+
+                    const permission =
+                        await Notification
+                            .requestPermission();
+
+
+                    if (permission !== "granted") {
+
+                        status.innerHTML =
+                            '<p class="error">' +
+                            'Notification permission was not granted.' +
+                            '</p>';
+
+                        return;
+                    }
+
+
+                    // ============================================
+                    // REGISTER SERVICE WORKER
+                    // ============================================
+
+                    const registration =
+                        await navigator
+                            .serviceWorker
+                            .register(
+                                "/firebase-messaging-sw.js"
+                            );
+
+
+                    // ============================================
+                    // GET REAL FIREBASE TOKEN
+                    // ============================================
+
+                    const token =
+                        await getToken(
+                            messaging,
+                            {
+                                vapidKey:
+                                    vapidKey,
+
+                                serviceWorkerRegistration:
+                                    registration
+                            }
+                        );
+
+
+                    if (!token) {
+
+                        status.innerHTML =
+                            '<p class="error">' +
+                            'Firebase did not return a token.' +
+                            '</p>';
+
+                        return;
+                    }
+
+
+                    tokenBox.value =
+                        token;
+
+
+                    status.innerHTML =
+                        '<p class="success">' +
+                        'FCM token generated successfully.' +
+                        '</p>';
+
+
+                    console.log(
+                        "FCM TOKEN:",
+                        token
+                    );
+
+                }
+                catch (error) {
+
+                    console.error(
+                        error
+                    );
+
+                    status.innerHTML =
+                        '<p class="error">' +
+                        error.message +
+                        '</p>';
+                }
+            }
+        );
+
+
+        // ========================================================
+        // FOREGROUND PUSH MESSAGE
+        // ========================================================
+
+        onMessage(
+            messaging,
+            (payload) => {
+
+                console.log(
+                    "Foreground Firebase message:",
+                    payload
+                );
+
+                alert(
+                    (payload.notification?.title ??
+                        "Notification")
+                    +
+                    "\n\n"
+                    +
+                    (payload.notification?.body ??
+                        "")
+                );
+            }
+        );
+
+    </script>
+
+</body>
+
+</html>

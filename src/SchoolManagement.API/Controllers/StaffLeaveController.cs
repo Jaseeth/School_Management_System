@@ -8,6 +8,7 @@ using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Claims;
+using SchoolManagement.Application.Notifications;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -18,13 +19,17 @@ public class StaffLeaveController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IPushNotificationService _pushNotificationService;
 
     public StaffLeaveController(
-        ApplicationDbContext context,
-        UserManager<ApplicationUser> userManager)
+    ApplicationDbContext context,
+    UserManager<ApplicationUser> userManager,
+    IPushNotificationService pushNotificationService)
     {
         _context = context;
         _userManager = userManager;
+        _pushNotificationService =
+            pushNotificationService;
     }
 
     // ============================================================
@@ -71,15 +76,14 @@ public class StaffLeaveController : ControllerBase
             });
         }
 
-        // Check overlapping pending/approved leave
         var overlapping =
             await _context.StaffLeaveRequests
                 .AnyAsync(x =>
                     x.StaffId == staff.Id &&
-                    (x.Status ==
-                        StaffLeaveStatus.Pending ||
-                     x.Status ==
-                        StaffLeaveStatus.Approved) &&
+                    (
+                        x.Status == StaffLeaveStatus.Pending ||
+                        x.Status == StaffLeaveStatus.Approved
+                    ) &&
                     x.FromDate <= toDate &&
                     x.ToDate >= fromDate);
 
@@ -92,29 +96,16 @@ public class StaffLeaveController : ControllerBase
             });
         }
 
-        var leave =
-            new StaffLeaveRequest
-            {
-                StaffId = staff.Id,
-
-                LeaveType =
-                    request.LeaveType,
-
-                FromDate =
-                    fromDate,
-
-                ToDate =
-                    toDate,
-
-                Reason =
-                    request.Reason.Trim(),
-
-                Status =
-                    StaffLeaveStatus.Pending,
-
-                RequestedAt =
-                    DateTime.UtcNow
-            };
+        var leave = new StaffLeaveRequest
+        {
+            StaffId = staff.Id,
+            LeaveType = request.LeaveType,
+            FromDate = fromDate,
+            ToDate = toDate,
+            Reason = request.Reason.Trim(),
+            Status = StaffLeaveStatus.Pending,
+            RequestedAt = DateTime.UtcNow
+        };
 
         _context.StaffLeaveRequests.Add(leave);
 
@@ -122,14 +113,9 @@ public class StaffLeaveController : ControllerBase
 
         return Ok(new
         {
-            message =
-                "Leave request submitted successfully.",
-
-            leaveRequestId =
-                leave.Id,
-
-            status =
-                leave.Status.ToString()
+            message = "Leave request submitted successfully.",
+            leaveRequestId = leave.Id,
+            status = leave.Status.ToString()
         });
     }
 
@@ -157,26 +143,20 @@ public class StaffLeaveController : ControllerBase
                     x.RequestedAt)
                 .Select(x => new
                 {
-                    id =
-                        x.Id,
+                    id = x.Id,
 
-                    leaveType =
-                        x.LeaveType,
+                    leaveType = x.LeaveType,
 
                     leaveTypeName =
                         x.LeaveType.ToString(),
 
-                    fromDate =
-                        x.FromDate,
+                    fromDate = x.FromDate,
 
-                    toDate =
-                        x.ToDate,
+                    toDate = x.ToDate,
 
-                    reason =
-                        x.Reason,
+                    reason = x.Reason,
 
-                    status =
-                        x.Status,
+                    status = x.Status,
 
                     statusName =
                         x.Status.ToString(),
@@ -203,8 +183,13 @@ public class StaffLeaveController : ControllerBase
     // ============================================================
     // PENDING LEAVE REQUESTS
     //
-    // Section Head -> relevant section teachers
-    // Principal / Deputy / Admin -> whole school
+    // Admin / Principal / Deputy Principal:
+    //     Whole school
+    //
+    // Section Head:
+    //     Own section teachers only
+    //
+    // Section Head can VIEW but cannot approve/reject.
     // ============================================================
 
     [HttpGet("pending")]
@@ -257,27 +242,28 @@ public class StaffLeaveController : ControllerBase
                 .AsNoTracking()
                 .Where(x =>
                     x.Status ==
-                        StaffLeaveStatus.Pending);
+                    StaffLeaveStatus.Pending);
 
-        // Section Head sees teachers connected to their section
+        // --------------------------------------------------------
+        // SECTION HEAD SCOPE
+        // --------------------------------------------------------
+
         if (isSectionHead &&
             !isWholeSchool)
         {
             var sectionIds =
-                await _context
-                    .SectionHeadAssignments
+                await _context.SectionHeadAssignments
                     .Where(x =>
-                        x.StaffId ==
-                            currentStaff.Id &&
+                        x.StaffId == currentStaff.Id &&
                         x.IsActive)
                     .Select(x =>
                         x.SectionId)
                     .Distinct()
                     .ToListAsync();
 
-            var staffIds =
-                await _context
-                    .TeacherAssignments
+            // Subject teachers
+            var teacherAssignmentStaffIds =
+                await _context.TeacherAssignments
                     .Where(x =>
                         x.IsActive &&
                         sectionIds.Contains(
@@ -289,9 +275,29 @@ public class StaffLeaveController : ControllerBase
                     .Distinct()
                     .ToListAsync();
 
+            // Permanent class teachers
+            var classTeacherStaffIds =
+                await _context.ClassTeacherAssignments
+                    .Where(x =>
+                        x.IsActive &&
+                        sectionIds.Contains(
+                            x.SchoolClass
+                                .Grade
+                                .SectionId))
+                    .Select(x =>
+                        x.StaffId)
+                    .Distinct()
+                    .ToListAsync();
+
+            var allowedStaffIds =
+                teacherAssignmentStaffIds
+                    .Union(classTeacherStaffIds)
+                    .Distinct()
+                    .ToList();
+
             query =
                 query.Where(x =>
-                    staffIds.Contains(
+                    allowedStaffIds.Contains(
                         x.StaffId));
         }
 
@@ -299,15 +305,15 @@ public class StaffLeaveController : ControllerBase
             await query
                 .OrderBy(x =>
                     x.FromDate)
+                .ThenBy(x =>
+                    x.RequestedAt)
                 .Select(x => new
                 {
-                    id =
-                        x.Id,
+                    id = x.Id,
 
                     staff = new
                     {
-                        id =
-                            x.StaffId,
+                        id = x.StaffId,
 
                         staffNumber =
                             x.Staff.StaffNumber,
@@ -319,20 +325,16 @@ public class StaffLeaveController : ControllerBase
                             x.Staff.Designation
                     },
 
-                    leaveType =
-                        x.LeaveType,
+                    leaveType = x.LeaveType,
 
                     leaveTypeName =
                         x.LeaveType.ToString(),
 
-                    fromDate =
-                        x.FromDate,
+                    fromDate = x.FromDate,
 
-                    toDate =
-                        x.ToDate,
+                    toDate = x.ToDate,
 
-                    reason =
-                        x.Reason,
+                    reason = x.Reason,
 
                     requestedAt =
                         x.RequestedAt,
@@ -344,16 +346,21 @@ public class StaffLeaveController : ControllerBase
 
         return Ok(new
         {
-            count =
-                requests.Count,
-
+            count = requests.Count,
             requests
         });
     }
 
 
     // ============================================================
-    // APPROVE / REJECT
+    // APPROVE / REJECT STAFF LEAVE
+    //
+    // ONLY:
+    // Admin
+    // Principal
+    // Deputy Principal
+    //
+    // Section Head CANNOT approve/reject.
     // ============================================================
 
     [HttpPost("{leaveRequestId:int}/review")]
@@ -381,18 +388,20 @@ public class StaffLeaveController : ControllerBase
         var roles =
             await _userManager.GetRolesAsync(user);
 
-        var isWholeSchool =
+        var canReviewLeave =
             roles.Contains("Admin") ||
             roles.Contains("Principal") ||
             roles.Contains("Deputy Principal");
 
-        var isSectionHead =
-            roles.Contains("Section Head");
-
-        if (!isWholeSchool &&
-            !isSectionHead)
+        if (!canReviewLeave)
         {
-            return Forbid();
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message =
+                        "Only Admin, Principal or Deputy Principal can approve or reject staff leave."
+                });
         }
 
         var reviewer =
@@ -428,45 +437,9 @@ public class StaffLeaveController : ControllerBase
             });
         }
 
-        // Section Head can only review teachers
-        // connected to their own section.
-        if (isSectionHead &&
-            !isWholeSchool)
-        {
-            var allowed =
-                await (
-                    from sectionHead
-                        in _context.SectionHeadAssignments
-
-                    join teacherAssignment
-                        in _context.TeacherAssignments
-
-                    on sectionHead.SectionId
-                        equals
-                       teacherAssignment
-                           .SchoolClass
-                           .Grade
-                           .SectionId
-
-                    where
-                        sectionHead.StaffId ==
-                            reviewer.Id &&
-                        sectionHead.IsActive &&
-                        teacherAssignment
-                            .StaffId ==
-                            leave.StaffId &&
-                        teacherAssignment
-                            .IsActive
-
-                    select teacherAssignment.Id
-                )
-                .AnyAsync();
-
-            if (!allowed)
-            {
-                return Forbid();
-            }
-        }
+        // --------------------------------------------------------
+        // UPDATE LEAVE STATUS
+        // --------------------------------------------------------
 
         leave.Status =
             request.Approve
@@ -485,14 +458,205 @@ public class StaffLeaveController : ControllerBase
                 ? null
                 : request.Remarks.Trim();
 
+
+        // ========================================================
+        // FIND ALL SECTIONS RELATED TO THIS TEACHER
+        //
+        // Teacher can belong through:
+        //
+        // 1. TeacherAssignment
+        // 2. ClassTeacherAssignment
+        //
+        // This fixes the previous problem where a permanent
+        // Class Teacher could be missed.
+        // ========================================================
+
+        var teacherAssignmentSectionIds =
+            await _context.TeacherAssignments
+                .Where(x =>
+                    x.StaffId ==
+                        leave.StaffId &&
+                    x.IsActive)
+                .Select(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId)
+                .Distinct()
+                .ToListAsync();
+
+        var classTeacherSectionIds =
+            await _context.ClassTeacherAssignments
+                .Where(x =>
+                    x.StaffId ==
+                        leave.StaffId &&
+                    x.IsActive)
+                .Select(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId)
+                .Distinct()
+                .ToListAsync();
+
+        var relatedSectionIds =
+            teacherAssignmentSectionIds
+                .Union(classTeacherSectionIds)
+                .Distinct()
+                .ToList();
+
+
+        // ========================================================
+        // FIND RELEVANT ACTIVE SECTION HEADS
+        // ========================================================
+
+        var sectionHeadStaffIds =
+            await _context.SectionHeadAssignments
+                .Where(x =>
+                    x.IsActive &&
+                    relatedSectionIds.Contains(
+                        x.SectionId))
+                .Select(x =>
+                    x.StaffId)
+                .Distinct()
+                .ToListAsync();
+
+
+        // ========================================================
+        // CREATE NOTIFICATIONS
+        // ========================================================
+
+        foreach (var sectionHeadStaffId
+            in sectionHeadStaffIds)
+        {
+            NotificationType notificationType;
+            string title;
+            string message;
+
+            if (leave.Status ==
+                StaffLeaveStatus.Approved)
+            {
+                notificationType =
+                    NotificationType.LeaveApproved;
+
+                title =
+                    "Teacher Leave Approved";
+
+                message =
+                    $"{leave.Staff.FullName}'s leave from " +
+                    $"{leave.FromDate:dd MMM yyyy} to " +
+                    $"{leave.ToDate:dd MMM yyyy} has been approved.";
+
+                // Only mention temporary class teacher if this
+                // teacher is actually a permanent class teacher.
+                if (classTeacherSectionIds.Count > 0)
+                {
+                    message +=
+                        " Please arrange a temporary class teacher if required.";
+                }
+            }
+            else
+            {
+                notificationType =
+                    NotificationType.LeaveRejected;
+
+                title =
+                    "Teacher Leave Rejected";
+
+                message =
+                    $"{leave.Staff.FullName}'s leave from " +
+                    $"{leave.FromDate:dd MMM yyyy} to " +
+                    $"{leave.ToDate:dd MMM yyyy} has been rejected. " +
+                    "The teacher is expected to attend.";
+            }
+
+            var notification =
+                new Notification
+                {
+                    RecipientStaffId =
+                        sectionHeadStaffId,
+
+                    Type =
+                        notificationType,
+
+                    Title =
+                        title,
+
+                    Message =
+                        message,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    ReferenceType =
+                        "StaffLeaveRequest",
+
+                    ReferenceId =
+                        leave.Id
+                };
+
+            _context.Notifications.Add(
+                notification);
+        }
+
+
+        // ========================================================
+        // SAVE LEAVE + NOTIFICATIONS TOGETHER
+        // ========================================================
+
         await _context.SaveChangesAsync();
+
+        foreach (var sectionHeadStaffId
+            in sectionHeadStaffIds)
+        {
+            string title;
+            string message;
+
+            if (leave.Status ==
+                StaffLeaveStatus.Approved)
+            {
+                title =
+                    "Teacher Leave Approved";
+
+                message =
+                    $"{leave.Staff.FullName}'s leave from " +
+                    $"{leave.FromDate:dd MMM yyyy} to " +
+                    $"{leave.ToDate:dd MMM yyyy} has been approved.";
+
+                if (classTeacherSectionIds.Count > 0)
+                {
+                    message +=
+                        " Please arrange a temporary class teacher if required.";
+                }
+            }
+            else
+            {
+                title =
+                    "Teacher Leave Rejected";
+
+                message =
+                    $"{leave.Staff.FullName}'s leave from " +
+                    $"{leave.FromDate:dd MMM yyyy} to " +
+                    $"{leave.ToDate:dd MMM yyyy} has been rejected.";
+            }
+
+            await _pushNotificationService
+                .SendToStaffAsync(
+                    sectionHeadStaffId,
+                    title,
+                    message,
+                    "StaffLeaveRequest",
+                    leave.Id);
+        }
+
 
         return Ok(new
         {
             message =
                 request.Approve
                     ? "Leave request approved successfully."
-                    : "Leave request rejected.",
+                    : "Leave request rejected successfully.",
 
             leaveRequestId =
                 leave.Id,
@@ -516,14 +680,32 @@ public class StaffLeaveController : ControllerBase
                 leave.FromDate,
 
             toDate =
-                leave.ToDate
+                leave.ToDate,
+
+            relatedSectionCount =
+                relatedSectionIds.Count,
+
+            sectionHeadsNotified =
+                sectionHeadStaffIds.Count
         });
     }
 
+
+    // ============================================================
+    // APPROVED LEAVE DASHBOARD ALERTS
+    //
+    // Section Head:
+    //      Own section
+    //
+    // Admin / Principal / Deputy:
+    //      Whole school
+    // ============================================================
+
     [HttpGet("approved/dashboard-alerts")]
-    public async Task<IActionResult> GetApprovedLeaveDashboardAlerts(
-    int? academicYearId,
-    DateTime? date)
+    public async Task<IActionResult>
+        GetApprovedLeaveDashboardAlerts(
+            int? academicYearId,
+            DateTime? date)
     {
         var userId =
             User.FindFirstValue(
@@ -570,7 +752,8 @@ public class StaffLeaveController : ControllerBase
         var targetDate =
             (date ?? DateTime.UtcNow).Date;
 
-        List<int>? allowedSectionIds = null;
+        List<int>? allowedSectionIds =
+            null;
 
         if (isSectionHead &&
             !isWholeSchool)
@@ -585,9 +768,10 @@ public class StaffLeaveController : ControllerBase
             if (academicYearId.HasValue)
             {
                 sectionAssignmentQuery =
-                    sectionAssignmentQuery.Where(x =>
-                        x.AcademicYearId ==
-                            academicYearId.Value);
+                    sectionAssignmentQuery
+                        .Where(x =>
+                            x.AcademicYearId ==
+                                academicYearId.Value);
             }
 
             allowedSectionIds =
@@ -597,6 +781,7 @@ public class StaffLeaveController : ControllerBase
                     .Distinct()
                     .ToListAsync();
         }
+
 
         var approvedLeaves =
             await _context.StaffLeaveRequests
@@ -609,7 +794,6 @@ public class StaffLeaveController : ControllerBase
                 .Select(x => new
                 {
                     x.Id,
-
                     x.StaffId,
 
                     StaffNumber =
@@ -619,15 +803,18 @@ public class StaffLeaveController : ControllerBase
                         x.Staff.FullName,
 
                     x.FromDate,
-
                     x.ToDate
                 })
                 .ToListAsync();
 
-        var result =
-            new List<ApprovedLeaveDashboardItemDto>();
 
-        foreach (var leave in approvedLeaves)
+        var result =
+            new List<
+                ApprovedLeaveDashboardItemDto>();
+
+
+        foreach (var leave
+            in approvedLeaves)
         {
             var classTeacherQuery =
                 _context.ClassTeacherAssignments
@@ -640,10 +827,12 @@ public class StaffLeaveController : ControllerBase
             if (academicYearId.HasValue)
             {
                 classTeacherQuery =
-                    classTeacherQuery.Where(x =>
-                        x.AcademicYearId ==
-                            academicYearId.Value);
+                    classTeacherQuery
+                        .Where(x =>
+                            x.AcademicYearId ==
+                                academicYearId.Value);
             }
+
 
             var classAssignments =
                 await classTeacherQuery
@@ -668,12 +857,14 @@ public class StaffLeaveController : ControllerBase
                         SectionName =
                             x.SchoolClass
                                 .Grade
-                                .Section.Name
+                                .Section
+                                .Name
                     })
                     .ToListAsync();
 
-            // If teacher is not a permanent class teacher,
-            // still return a leave alert for whole-school users.
+
+            // Staff on approved leave but not a permanent
+            // Class Teacher.
             if (classAssignments.Count == 0)
             {
                 if (isWholeSchool)
@@ -709,6 +900,7 @@ public class StaffLeaveController : ControllerBase
 
                 continue;
             }
+
 
             foreach (var assignment
                 in classAssignments)
@@ -748,6 +940,7 @@ public class StaffLeaveController : ControllerBase
                             x.ExpiresAt
                         })
                         .FirstOrDefaultAsync();
+
 
                 result.Add(
                     new ApprovedLeaveDashboardItemDto
@@ -800,10 +993,10 @@ public class StaffLeaveController : ControllerBase
             }
         }
 
+
         return Ok(new
         {
-            date =
-                targetDate,
+            date = targetDate,
 
             scope = new
             {
@@ -836,10 +1029,19 @@ public class StaffLeaveController : ControllerBase
         });
     }
 
+
+    // ============================================================
+    // APPROVED LEAVE - UNRESOLVED COUNT
+    //
+    // Counts approved Class Teacher absences where no active
+    // Temporary Class Teacher exists.
+    // ============================================================
+
     [HttpGet("approved/unresolved-count")]
-    public async Task<IActionResult> GetUnresolvedLeaveAlertCount(
-    int? academicYearId,
-    DateTime? date)
+    public async Task<IActionResult>
+        GetUnresolvedLeaveAlertCount(
+            int? academicYearId,
+            DateTime? date)
     {
         var userId =
             User.FindFirstValue(
@@ -886,7 +1088,9 @@ public class StaffLeaveController : ControllerBase
         var targetDate =
             (date ?? DateTime.UtcNow).Date;
 
-        List<int>? allowedSectionIds = null;
+        List<int>? allowedSectionIds =
+            null;
+
 
         if (isSectionHead &&
             !isWholeSchool)
@@ -901,17 +1105,20 @@ public class StaffLeaveController : ControllerBase
             if (academicYearId.HasValue)
             {
                 sectionQuery =
-                    sectionQuery.Where(x =>
-                        x.AcademicYearId ==
-                            academicYearId.Value);
+                    sectionQuery
+                        .Where(x =>
+                            x.AcademicYearId ==
+                                academicYearId.Value);
             }
 
             allowedSectionIds =
                 await sectionQuery
-                    .Select(x => x.SectionId)
+                    .Select(x =>
+                        x.SectionId)
                     .Distinct()
                     .ToListAsync();
         }
+
 
         var approvedLeaves =
             await _context.StaffLeaveRequests
@@ -928,9 +1135,12 @@ public class StaffLeaveController : ControllerBase
                 })
                 .ToListAsync();
 
+
         var unresolvedCount = 0;
 
-        foreach (var leave in approvedLeaves)
+
+        foreach (var leave
+            in approvedLeaves)
         {
             var classTeacherQuery =
                 _context.ClassTeacherAssignments
@@ -943,16 +1153,19 @@ public class StaffLeaveController : ControllerBase
             if (academicYearId.HasValue)
             {
                 classTeacherQuery =
-                    classTeacherQuery.Where(x =>
-                        x.AcademicYearId ==
-                            academicYearId.Value);
+                    classTeacherQuery
+                        .Where(x =>
+                            x.AcademicYearId ==
+                                academicYearId.Value);
             }
+
 
             var classAssignments =
                 await classTeacherQuery
                     .Select(x => new
                     {
                         x.AcademicYearId,
+
                         x.SchoolClassId,
 
                         SectionId =
@@ -962,7 +1175,9 @@ public class StaffLeaveController : ControllerBase
                     })
                     .ToListAsync();
 
-            foreach (var assignment in classAssignments)
+
+            foreach (var assignment
+                in classAssignments)
             {
                 if (isSectionHead &&
                     !isWholeSchool &&
@@ -995,10 +1210,10 @@ public class StaffLeaveController : ControllerBase
             }
         }
 
+
         return Ok(new
         {
-            date =
-                targetDate,
+            date = targetDate,
 
             scope = new
             {
@@ -1041,5 +1256,3 @@ public class StaffLeaveController : ControllerBase
                 x.IsActive);
     }
 }
-
-//changes need

@@ -11,6 +11,7 @@ using SchoolManagement.Infrastructure.Email;
 using Microsoft.AspNetCore.Authorization;
 using SchoolManagement.Infrastructure.Authorization;
 using SchoolManagement.API.Middleware;
+using SchoolManagement.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -124,6 +125,9 @@ builder.Services.AddScoped<
 
 builder.Services.AddScoped<DevelopmentDataSeeder>();
 
+builder.Services.AddNotificationInfrastructure(
+    builder.Configuration);
+
 var app = builder.Build();
 
 // =====================================
@@ -143,6 +147,8 @@ if (app.Environment.IsDevelopment())
 
     await seeder.SeedAsync();
 }
+
+app.UseStaticFiles();
 
 app.UseHttpsRedirection();
 

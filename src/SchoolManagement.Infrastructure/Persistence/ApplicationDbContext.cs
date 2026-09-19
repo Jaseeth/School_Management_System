@@ -51,6 +51,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     => Set<StaffLeaveRequest>();
     public DbSet<Notification> Notifications
     => Set<Notification>();
+    public DbSet<StaffDeviceToken> StaffDeviceTokens =>
+    Set<StaffDeviceToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -524,6 +526,35 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(x => x.RecipientStaffId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<StaffDeviceToken>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Token)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(x => x.Platform)
+                .IsRequired();
+
+            entity.Property(x => x.DeviceName)
+                .HasMaxLength(200);
+
+            entity.HasIndex(x => x.Token)
+                .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.IsActive
+            });
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
