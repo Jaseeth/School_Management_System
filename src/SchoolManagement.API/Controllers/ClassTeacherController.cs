@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SchoolManagement.Application.ClassTeachers.DTOs;
+using SchoolManagement.Application.Notifications;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Identity;
@@ -17,13 +19,16 @@ public class ClassTeacherController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IPushNotificationService _pushNotificationService;
 
     public ClassTeacherController(
         ApplicationDbContext context,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IPushNotificationService pushNotificationService)
     {
         _context = context;
         _userManager = userManager;
+        _pushNotificationService = pushNotificationService;
     }
 
     // ============================================================
@@ -802,6 +807,55 @@ public class ClassTeacherController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // ========================================================
+        // NOTIFY TEMPORARY TEACHER
+        // ========================================================
+
+        var directAssignTitle =
+            "Temporary Class Access Assigned";
+
+        var directAssignMessage =
+            $"You have been assigned temporary access to " +
+            $"Grade {schoolClass.Grade.Name} - Class {schoolClass.Name}. " +
+            $"Access is valid for 2 hours.";
+
+        _context.Notifications.Add(
+            new Notification
+            {
+                RecipientStaffId =
+                    teacher.Id,
+
+                Type =
+                    NotificationType.TemporaryAccessApproved,
+
+                Title =
+                    directAssignTitle,
+
+                Message =
+                    directAssignMessage,
+
+                IsRead =
+                    false,
+
+                CreatedAt =
+                    DateTime.UtcNow,
+
+                ReferenceType =
+                    "TemporaryClassTeacherAssignment",
+
+                ReferenceId =
+                    temporaryAssignment.Id
+            });
+
+        await _context.SaveChangesAsync();
+
+        await _pushNotificationService.SendToStaffAsync(
+            teacher.Id,
+            directAssignTitle,
+            directAssignMessage,
+            "TemporaryClassTeacherAssignment",
+            temporaryAssignment.Id);
+
         return Ok(new
         {
             message =
@@ -1221,7 +1275,91 @@ public class ClassTeacherController : ControllerBase
             .TemporaryClassTeacherAccessRequests
             .Add(accessRequest);
 
+        // Save first so accessRequest.Id is generated.
         await _context.SaveChangesAsync();
+
+        // ========================================================
+        // FIND SECTION HEADS FOR THIS CLASS
+        // ========================================================
+
+        var sectionHeadStaffIds =
+            await _context.SectionHeadAssignments
+                .Where(x =>
+                    x.SectionId ==
+                        schoolClass.Grade.SectionId &&
+                    x.AcademicYearId ==
+                        request.AcademicYearId &&
+                    x.IsActive)
+                .Select(x =>
+                    x.StaffId)
+                .Distinct()
+                .ToListAsync();
+
+        // ========================================================
+        // CREATE INTERNAL NOTIFICATIONS
+        // ========================================================
+
+        var requestNotificationTitle =
+            "Temporary Class Access Requested";
+
+        var requestNotificationMessage =
+            $"{staff.FullName} requested temporary access to " +
+            $"Grade {schoolClass.Grade.Name} - Class {schoolClass.Name}.";
+
+        if (!string.IsNullOrWhiteSpace(accessRequest.Reason))
+        {
+            requestNotificationMessage +=
+                $" Reason: {accessRequest.Reason}";
+        }
+
+        foreach (var sectionHeadStaffId
+            in sectionHeadStaffIds)
+        {
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientStaffId =
+                        sectionHeadStaffId,
+
+                    Type =
+                        NotificationType.TemporaryAccessRequested,
+
+                    Title =
+                        requestNotificationTitle,
+
+                    Message =
+                        requestNotificationMessage,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    ReferenceType =
+                        "TemporaryClassTeacherAccessRequest",
+
+                    ReferenceId =
+                        accessRequest.Id
+                });
+        }
+
+        await _context.SaveChangesAsync();
+
+        // ========================================================
+        // FIREBASE PUSH TO SECTION HEADS
+        // ========================================================
+
+        foreach (var sectionHeadStaffId
+            in sectionHeadStaffIds)
+        {
+            await _pushNotificationService.SendToStaffAsync(
+                sectionHeadStaffId,
+                requestNotificationTitle,
+                requestNotificationMessage,
+                "TemporaryClassTeacherAccessRequest",
+                accessRequest.Id);
+        }
 
         return Ok(new
         {
@@ -1233,6 +1371,9 @@ public class ClassTeacherController : ControllerBase
 
             status =
                 accessRequest.Status.ToString(),
+
+            sectionHeadsNotified =
+                sectionHeadStaffIds.Count,
 
             schoolClass = new
             {
@@ -1522,6 +1663,9 @@ public class ClassTeacherController : ControllerBase
 
         if (!request.Approve)
         {
+            var rejectedAt =
+                DateTime.UtcNow;
+
             accessRequest.Status =
                 TemporaryClassTeacherRequestStatus.Rejected;
 
@@ -1529,7 +1673,7 @@ public class ClassTeacherController : ControllerBase
                 reviewingStaff.Id;
 
             accessRequest.ReviewedAt =
-                DateTime.UtcNow;
+                rejectedAt;
 
             accessRequest.ReviewRemarks =
                 string.IsNullOrWhiteSpace(
@@ -1537,7 +1681,57 @@ public class ClassTeacherController : ControllerBase
                     ? null
                     : request.Remarks.Trim();
 
+            var rejectionTitle =
+                "Temporary Class Access Rejected";
+
+            var rejectionMessage =
+                $"Your temporary access request for " +
+                $"Grade {accessRequest.SchoolClass.Grade.Name} - " +
+                $"Class {accessRequest.SchoolClass.Name} was rejected.";
+
+            if (!string.IsNullOrWhiteSpace(
+                accessRequest.ReviewRemarks))
+            {
+                rejectionMessage +=
+                    $" Remarks: {accessRequest.ReviewRemarks}";
+            }
+
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientStaffId =
+                        accessRequest.RequestedByStaffId,
+
+                    Type =
+                        NotificationType.TemporaryAccessRejected,
+
+                    Title =
+                        rejectionTitle,
+
+                    Message =
+                        rejectionMessage,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        rejectedAt,
+
+                    ReferenceType =
+                        "TemporaryClassTeacherAccessRequest",
+
+                    ReferenceId =
+                        accessRequest.Id
+                });
+
             await _context.SaveChangesAsync();
+
+            await _pushNotificationService.SendToStaffAsync(
+                accessRequest.RequestedByStaffId,
+                rejectionTitle,
+                rejectionMessage,
+                "TemporaryClassTeacherAccessRequest",
+                accessRequest.Id);
 
             return Ok(new
             {
@@ -1548,7 +1742,10 @@ public class ClassTeacherController : ControllerBase
                     accessRequest.Id,
 
                 status =
-                    accessRequest.Status.ToString()
+                    accessRequest.Status.ToString(),
+
+                teacherNotified =
+                    true
             });
         }
 
@@ -1614,7 +1811,9 @@ public class ClassTeacherController : ControllerBase
             .TemporaryClassTeacherAssignments
             .Add(temporaryAssignment);
 
-        await _context.SaveChangesAsync();
+        // ========================================================
+        // COMPLETE REQUEST + CREATE INTERNAL NOTIFICATION
+        // ========================================================
 
         accessRequest.Status =
             TemporaryClassTeacherRequestStatus.Approved;
@@ -1631,11 +1830,61 @@ public class ClassTeacherController : ControllerBase
                 ? null
                 : request.Remarks.Trim();
 
-        accessRequest
-            .TemporaryClassTeacherAssignmentId =
-                temporaryAssignment.Id;
+        var approvalTitle =
+            "Temporary Class Access Approved";
+
+        var approvalMessage =
+            $"Your temporary access request for " +
+            $"Grade {accessRequest.SchoolClass.Grade.Name} - " +
+            $"Class {accessRequest.SchoolClass.Name} was approved. " +
+            $"Access is valid for 2 hours.";
+
+        _context.Notifications.Add(
+            new Notification
+            {
+                RecipientStaffId =
+                    accessRequest.RequestedByStaffId,
+
+                Type =
+                    NotificationType.TemporaryAccessApproved,
+
+                Title =
+                    approvalTitle,
+
+                Message =
+                    approvalMessage,
+
+                IsRead =
+                    false,
+
+                CreatedAt =
+                    now,
+
+                ReferenceType =
+                    "TemporaryClassTeacherAccessRequest",
+
+                ReferenceId =
+                    accessRequest.Id
+            });
+
+        // First save generates temporaryAssignment.Id.
+        await _context.SaveChangesAsync();
+
+        accessRequest.TemporaryClassTeacherAssignmentId =
+            temporaryAssignment.Id;
 
         await _context.SaveChangesAsync();
+
+        // ========================================================
+        // FIREBASE PUSH TO REQUESTING TEACHER
+        // ========================================================
+
+        await _pushNotificationService.SendToStaffAsync(
+            accessRequest.RequestedByStaffId,
+            approvalTitle,
+            approvalMessage,
+            "TemporaryClassTeacherAccessRequest",
+            accessRequest.Id);
 
         return Ok(new
         {
@@ -1697,48 +1946,10 @@ public class ClassTeacherController : ControllerBase
                 temporaryAssignment.ExpiresAt,
 
             validForMinutes =
-                120
+                120,
+
+            teacherNotified =
+                true
         });
     }
-}
-
-
-// ================================================================
-// REQUEST DTO
-// ================================================================
-
-public class AssignClassTeacherRequest
-{
-    public int AcademicYearId { get; set; }
-
-    public int SchoolClassId { get; set; }
-
-    public int StaffId { get; set; }
-}
-
-public class AssignTemporaryClassTeacherRequest
-{
-    public int AcademicYearId { get; set; }
-
-    public int SchoolClassId { get; set; }
-
-    public int StaffId { get; set; }
-
-    public string? Reason { get; set; }
-}
-
-public class RequestTemporaryClassAccessRequest
-{
-    public int AcademicYearId { get; set; }
-
-    public int SchoolClassId { get; set; }
-
-    public string? Reason { get; set; }
-}
-
-public class ReviewTemporaryClassAccessRequest
-{
-    public bool Approve { get; set; }
-
-    public string? Remarks { get; set; }
 }
