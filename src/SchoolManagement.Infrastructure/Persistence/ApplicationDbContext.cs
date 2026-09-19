@@ -53,6 +53,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     => Set<Notification>();
     public DbSet<StaffDeviceToken> StaffDeviceTokens =>
     Set<StaffDeviceToken>();
+    public DbSet<TimetableEntry> TimetableEntries => Set<TimetableEntry>();
+
+    public DbSet<SpecialClassSession> SpecialClassSessions => Set<SpecialClassSession>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -555,6 +558,137 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(x => x.StaffId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TimetableEntry>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Room)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Day)
+                .HasConversion<int>();
+
+            entity.HasOne(x => x.AcademicYear)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AcademicTerm)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicTermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.SchoolClass)
+                .WithMany()
+                .HasForeignKey(x => x.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Subject)
+                .WithMany()
+                .HasForeignKey(x => x.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CreatedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicYearId,
+                x.AcademicTermId,
+                x.SchoolClassId,
+                x.Day,
+                x.StartTime
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.Day,
+                x.StartTime
+            });
+        });
+
+        builder.Entity<SpecialClassSession>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Room)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Reason)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.Remarks)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.ReviewRemarks)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.Status)
+                .HasConversion<int>();
+
+            entity.HasOne(x => x.AcademicYear)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AcademicTerm)
+                .WithMany()
+                .HasForeignKey(x => x.AcademicTermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.SchoolClass)
+                .WithMany()
+                .HasForeignKey(x => x.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Subject)
+                .WithMany()
+                .HasForeignKey(x => x.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CreatedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.ReviewedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.ReviewedByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CancelledByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.CancelledByStaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => new
+            {
+                x.ClassDate,
+                x.SchoolClassId,
+                x.StartTime
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.ClassDate,
+                x.StartTime
+            });
         });
     }
 }
