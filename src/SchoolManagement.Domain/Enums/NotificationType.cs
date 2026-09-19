@@ -8,5 +8,10 @@ public enum NotificationType
     TemporaryClassTeacherRequired = 4,
     TemporaryAccessRequested = 5,
     TemporaryAccessApproved = 6,
-    TemporaryAccessRejected = 7
+    TemporaryAccessRejected = 7,
+    SpecialClassRequested = 8,
+    SpecialClassApproved = 9,
+    SpecialClassRejected = 10,
+    SpecialClassCancelled = 11,
+    SpecialClassRescheduled = 12
 }
