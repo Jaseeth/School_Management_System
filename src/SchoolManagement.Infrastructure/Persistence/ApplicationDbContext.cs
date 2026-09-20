@@ -58,6 +58,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SpecialClassSession> SpecialClassSessions => Set<SpecialClassSession>();
     public DbSet<StudentDeviceToken> StudentDeviceTokens =>
     Set<StudentDeviceToken>();
+    public DbSet<StudentRegistrationCode> StudentRegistrationCodes
+    => Set<StudentRegistrationCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -774,6 +776,54 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(x => x.StudentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<StudentRegistrationCode>(entity =>
+        {
+            entity.ToTable("StudentRegistrationCodes");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.CodeHash)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(x => x.ExpiresAt)
+                .IsRequired();
+
+            entity.Property(x => x.IsUsed)
+                .IsRequired();
+
+            entity.Property(x => x.FailedAttempts)
+                .IsRequired();
+
+            entity.Property(x => x.MaxAttempts)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.IsActive)
+                .IsRequired();
+
+            entity.HasIndex(x => new
+            {
+                x.StudentId,
+                x.IsActive,
+                x.IsUsed
+            });
+
+            entity.HasIndex(x => x.ExpiresAt);
+
+            entity.HasOne(x => x.Student)
+                .WithMany()
+                .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.CreatedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }
