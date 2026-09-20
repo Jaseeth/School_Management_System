@@ -96,7 +96,6 @@ public class SpecialClassController : ControllerBase
             });
         }
 
-        // Weekend only
         if (!IsWeekend(request.ClassDate))
         {
             return BadRequest(new
@@ -175,7 +174,6 @@ public class SpecialClassController : ControllerBase
             });
         }
 
-        // Section Head own section only
         if (isSectionHead &&
             !isWholeSchool)
         {
@@ -323,7 +321,6 @@ public class SpecialClassController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Notify assigned teacher
         var title =
             "Special Class Scheduled";
 
@@ -1047,7 +1044,6 @@ public class SpecialClassController : ControllerBase
 
         if (request.Approve)
         {
-            // Re-check conflicts before approving
             var conflict =
                 await CheckConflictAsync(
                     session.AcademicYearId,
@@ -1108,6 +1104,10 @@ public class SpecialClassController : ControllerBase
                 NotificationType.SpecialClassRejected;
         }
 
+        // ============================================================
+        // NOTIFY TEACHER
+        // ============================================================
+
         _context.Notifications.Add(
             new Notification
             {
@@ -1136,6 +1136,72 @@ public class SpecialClassController : ControllerBase
                     session.Id
             });
 
+        // ============================================================
+        // IF APPROVED, ALSO NOTIFY STUDENTS IN THAT CLASS
+        // ============================================================
+
+        List<int> studentIds =
+            new();
+
+        string? studentTitle =
+            null;
+
+        string? studentMessage =
+            null;
+
+        if (request.Approve)
+        {
+            studentIds =
+                await _context.Students
+                    .Where(x =>
+                        x.SchoolClassId ==
+                            session.SchoolClassId &&
+                        x.IsActive)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+
+            studentTitle =
+                "Special Class Scheduled";
+
+            studentMessage =
+                $"{session.Subject.Name} special class has been scheduled for " +
+                $"{session.ClassDate:dd MMM yyyy} from " +
+                $"{session.StartTime:HH\\:mm} to " +
+                $"{session.EndTime:HH\\:mm}.";
+
+            foreach (var studentId in studentIds)
+            {
+                _context.Notifications.Add(
+                    new Notification
+                    {
+                        RecipientStudentId =
+                            studentId,
+
+                        Type =
+                            NotificationType.SpecialClassApproved,
+
+                        Title =
+                            studentTitle,
+
+                        Message =
+                            studentMessage,
+
+                        IsRead =
+                            false,
+
+                        CreatedAt =
+                            now,
+
+                        ReferenceType =
+                            "SpecialClassSession",
+
+                        ReferenceId =
+                            session.Id
+                    });
+            }
+        }
+
         await _context.SaveChangesAsync();
 
         await _pushNotificationService
@@ -1145,6 +1211,22 @@ public class SpecialClassController : ControllerBase
                 message,
                 "SpecialClassSession",
                 session.Id);
+
+        if (request.Approve &&
+            studentTitle != null &&
+            studentMessage != null)
+        {
+            foreach (var studentId in studentIds)
+            {
+                await _pushNotificationService
+                    .SendToStudentAsync(
+                        studentId,
+                        studentTitle,
+                        studentMessage,
+                        "SpecialClassSession",
+                        session.Id);
+            }
+        }
 
         return Ok(new
         {
@@ -1160,7 +1242,12 @@ public class SpecialClassController : ControllerBase
                 session.Status.ToString(),
 
             teacherNotified =
-                true
+                true,
+
+            studentsNotified =
+                request.Approve
+                    ? studentIds.Count
+                    : 0
         });
     }
 

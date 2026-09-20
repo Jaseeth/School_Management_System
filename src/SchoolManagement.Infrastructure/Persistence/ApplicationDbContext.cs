@@ -56,6 +56,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TimetableEntry> TimetableEntries => Set<TimetableEntry>();
 
     public DbSet<SpecialClassSession> SpecialClassSessions => Set<SpecialClassSession>();
+    public DbSet<StudentDeviceToken> StudentDeviceTokens =>
+    Set<StudentDeviceToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -504,6 +506,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(x => x.Id);
 
+
+            // ========================================================
+            // NOTIFICATION DETAILS
+            // ========================================================
+
             entity.Property(x => x.Type)
                 .IsRequired();
 
@@ -518,6 +525,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(x => x.ReferenceType)
                 .HasMaxLength(100);
 
+
+            // ========================================================
+            // STAFF NOTIFICATION INDEX
+            // ========================================================
+
             entity.HasIndex(x => new
             {
                 x.RecipientStaffId,
@@ -525,10 +537,54 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 x.CreatedAt
             });
 
+
+            // ========================================================
+            // STUDENT NOTIFICATION INDEX
+            // ========================================================
+
+            entity.HasIndex(x => new
+            {
+                x.RecipientStudentId,
+                x.IsRead,
+                x.CreatedAt
+            });
+
+
+            // ========================================================
+            // STAFF RECIPIENT
+            // ========================================================
+
             entity.HasOne(x => x.RecipientStaff)
                 .WithMany()
                 .HasForeignKey(x => x.RecipientStaffId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+
+            // ========================================================
+            // STUDENT RECIPIENT
+            // ========================================================
+
+            entity.HasOne(x => x.RecipientStudent)
+                .WithMany()
+                .HasForeignKey(x => x.RecipientStudentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+
+            // ========================================================
+            // EXACTLY ONE RECIPIENT
+            //
+            // Staff OR Student
+            // Never both
+            // Never neither
+            // ========================================================
+
+            entity.ToTable(table =>
+                table.HasCheckConstraint(
+                    "CK_Notifications_Recipient",
+                    "([RecipientStaffId] IS NOT NULL AND [RecipientStudentId] IS NULL) " +
+                    "OR " +
+                    "([RecipientStaffId] IS NULL AND [RecipientStudentId] IS NOT NULL)"
+                ));
         });
 
         builder.Entity<StaffDeviceToken>(entity =>
@@ -689,6 +745,35 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 x.ClassDate,
                 x.StartTime
             });
+        });
+
+        builder.Entity<StudentDeviceToken>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Token)
+                .HasMaxLength(1000)
+                .IsRequired();
+
+            entity.Property(x => x.Platform)
+                .IsRequired();
+
+            entity.Property(x => x.DeviceName)
+                .HasMaxLength(200);
+
+            entity.HasIndex(x => x.Token)
+                .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.StudentId,
+                x.IsActive
+            });
+
+            entity.HasOne(x => x.Student)
+                .WithMany()
+                .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

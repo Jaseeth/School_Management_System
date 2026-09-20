@@ -8,4 +8,11 @@ public interface IPushNotificationService
         string message,
         string? referenceType = null,
         int? referenceId = null);
+
+    Task SendToStudentAsync(
+        int studentId,
+        string title,
+        string message,
+        string? referenceType = null,
+        int? referenceId = null);
 }
