@@ -322,7 +322,7 @@ public class SpecialClassController : ControllerBase
         await _context.SaveChangesAsync();
 
         var title =
-            "Special Class Scheduled";
+    "Special Class Scheduled";
 
         var message =
             $"{subject.Name} special class has been scheduled for " +
@@ -330,6 +330,14 @@ public class SpecialClassController : ControllerBase
             $"{request.StartTime:HH\\:mm} to " +
             $"{request.EndTime:HH\\:mm} for Grade " +
             $"{schoolClass.Grade.Name} - Class {schoolClass.Name}.";
+
+        var now =
+            DateTime.UtcNow;
+
+
+        // ============================================================
+        // NOTIFY TEACHER
+        // ============================================================
 
         _context.Notifications.Add(
             new Notification
@@ -350,7 +358,7 @@ public class SpecialClassController : ControllerBase
                     false,
 
                 CreatedAt =
-                    DateTime.UtcNow,
+                    now,
 
                 ReferenceType =
                     "SpecialClassSession",
@@ -359,7 +367,68 @@ public class SpecialClassController : ControllerBase
                     session.Id
             });
 
+
+        // ============================================================
+        // FIND ACTIVE STUDENTS IN THIS CLASS
+        // ============================================================
+
+        var studentIds =
+            await _context.Students
+                .Where(x =>
+                    x.SchoolClassId ==
+                        session.SchoolClassId &&
+                    x.IsActive)
+                .Select(x =>
+                    x.Id)
+                .ToListAsync();
+
+
+        // ============================================================
+        // INTERNAL NOTIFICATION → STUDENTS
+        // ============================================================
+
+        foreach (var studentId in studentIds)
+        {
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientStudentId =
+                        studentId,
+
+                    Type =
+                        NotificationType.SpecialClassApproved,
+
+                    Title =
+                        title,
+
+                    Message =
+                        message,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        now,
+
+                    ReferenceType =
+                        "SpecialClassSession",
+
+                    ReferenceId =
+                        session.Id
+                });
+        }
+
+
+        // ============================================================
+        // SAVE INTERNAL NOTIFICATIONS
+        // ============================================================
+
         await _context.SaveChangesAsync();
+
+
+        // ============================================================
+        // FIREBASE → TEACHER
+        // ============================================================
 
         await _pushNotificationService
             .SendToStaffAsync(
@@ -368,6 +437,22 @@ public class SpecialClassController : ControllerBase
                 message,
                 "SpecialClassSession",
                 session.Id);
+
+
+        // ============================================================
+        // FIREBASE → STUDENTS
+        // ============================================================
+
+        foreach (var studentId in studentIds)
+        {
+            await _pushNotificationService
+                .SendToStudentAsync(
+                    studentId,
+                    title,
+                    message,
+                    "SpecialClassSession",
+                    session.Id);
+        }
 
         return Ok(new
         {
@@ -423,7 +508,13 @@ public class SpecialClassController : ControllerBase
                 session.StartTime,
 
             endTime =
-                session.EndTime
+                session.EndTime,
+
+            teacherNotified =
+                true,
+
+            studentsNotified =
+                studentIds.Count
         });
     }
 
@@ -1497,8 +1588,8 @@ public class SpecialClassController : ControllerBase
 
     [HttpPost("{id:int}/cancel")]
     public async Task<IActionResult> Cancel(
-        int id,
-        CancelSpecialClassRequest request)
+    int id,
+    CancelSpecialClassRequest request)
     {
         var userId =
             User.FindFirstValue(
@@ -1588,6 +1679,7 @@ public class SpecialClassController : ControllerBase
             });
         }
 
+
         // ========================================================
         // TEACHER CAN CANCEL ONLY OWN PENDING REQUEST
         // ========================================================
@@ -1612,6 +1704,7 @@ public class SpecialClassController : ControllerBase
                 });
             }
         }
+
 
         // ========================================================
         // SECTION HEAD OWN SECTION ONLY
@@ -1640,11 +1733,20 @@ public class SpecialClassController : ControllerBase
             }
         }
 
+
         var previousStatus =
             session.Status;
 
         var now =
             DateTime.UtcNow;
+
+        var cancellationReason =
+            Clean(request.Reason);
+
+
+        // ========================================================
+        // CANCEL SESSION
+        // ========================================================
 
         session.Status =
             SpecialClassStatus.Cancelled;
@@ -1658,33 +1760,43 @@ public class SpecialClassController : ControllerBase
         session.IsActive =
             false;
 
-        var cancellationReason =
-            Clean(request.Reason);
 
         // ========================================================
-        // NOTIFY TEACHER IF SOMEONE ELSE CANCELLED
+        // BUILD NOTIFICATION
         // ========================================================
 
-        if (session.StaffId != currentStaff.Id)
+        var title =
+            "Special Class Cancelled";
+
+        var message =
+            $"{session.Subject.Name} special class for " +
+            $"Grade {session.SchoolClass.Grade.Name} - " +
+            $"Class {session.SchoolClass.Name} on " +
+            $"{session.ClassDate:dd MMM yyyy} from " +
+            $"{session.StartTime:HH\\:mm} to " +
+            $"{session.EndTime:HH\\:mm} has been cancelled.";
+
+        if (!string.IsNullOrWhiteSpace(
+            cancellationReason))
         {
-            var title =
-                "Special Class Cancelled";
+            message +=
+                $" Reason: {cancellationReason}";
+        }
 
-            var message =
-                $"{session.Subject.Name} special class for " +
-                $"Grade {session.SchoolClass.Grade.Name} - " +
-                $"Class {session.SchoolClass.Name} on " +
-                $"{session.ClassDate:dd MMM yyyy} from " +
-                $"{session.StartTime:HH\\:mm} to " +
-                $"{session.EndTime:HH\\:mm} has been cancelled.";
 
-            if (!string.IsNullOrWhiteSpace(
-                cancellationReason))
-            {
-                message +=
-                    $" Reason: {cancellationReason}";
-            }
+        // ========================================================
+        // NOTIFY TEACHER
+        //
+        // Only when another staff member cancels it.
+        // Do not notify teacher about their own pending cancellation.
+        // ========================================================
 
+        var teacherNotified =
+            false;
+
+        if (session.StaffId !=
+            currentStaff.Id)
+        {
             _context.Notifications.Add(
                 new Notification
                 {
@@ -1714,8 +1826,81 @@ public class SpecialClassController : ControllerBase
                         session.Id
                 });
 
-            await _context.SaveChangesAsync();
+            teacherNotified =
+                true;
+        }
 
+
+        // ========================================================
+        // NOTIFY STUDENTS ONLY IF CLASS WAS APPROVED
+        //
+        // Students never knew about a Pending request,
+        // therefore pending cancellations must not notify them.
+        // ========================================================
+
+        List<int> studentIds =
+            new();
+
+        if (previousStatus ==
+            SpecialClassStatus.Approved)
+        {
+            studentIds =
+                await _context.Students
+                    .Where(x =>
+                        x.SchoolClassId ==
+                            session.SchoolClassId &&
+                        x.IsActive)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+
+            foreach (var studentId in studentIds)
+            {
+                _context.Notifications.Add(
+                    new Notification
+                    {
+                        RecipientStudentId =
+                            studentId,
+
+                        Type =
+                            NotificationType
+                                .SpecialClassCancelled,
+
+                        Title =
+                            title,
+
+                        Message =
+                            message,
+
+                        IsRead =
+                            false,
+
+                        CreatedAt =
+                            now,
+
+                        ReferenceType =
+                            "SpecialClassSession",
+
+                        ReferenceId =
+                            session.Id
+                    });
+            }
+        }
+
+
+        // ========================================================
+        // SAVE
+        // ========================================================
+
+        await _context.SaveChangesAsync();
+
+
+        // ========================================================
+        // FIREBASE → TEACHER
+        // ========================================================
+
+        if (teacherNotified)
+        {
             await _pushNotificationService
                 .SendToStaffAsync(
                     session.StaffId,
@@ -1724,10 +1909,23 @@ public class SpecialClassController : ControllerBase
                     "SpecialClassSession",
                     session.Id);
         }
-        else
+
+
+        // ========================================================
+        // FIREBASE → STUDENTS
+        // ========================================================
+
+        foreach (var studentId in studentIds)
         {
-            await _context.SaveChangesAsync();
+            await _pushNotificationService
+                .SendToStudentAsync(
+                    studentId,
+                    title,
+                    message,
+                    "SpecialClassSession",
+                    session.Id);
         }
+
 
         return Ok(new
         {
@@ -1742,6 +1940,9 @@ public class SpecialClassController : ControllerBase
 
             status =
                 session.Status.ToString(),
+
+            previousStatus =
+                previousStatus.ToString(),
 
             cancelledAt =
                 session.CancelledAt,
@@ -1759,7 +1960,13 @@ public class SpecialClassController : ControllerBase
             },
 
             reason =
-                cancellationReason
+                cancellationReason,
+
+            teacherNotified =
+                teacherNotified,
+
+            studentsNotified =
+                studentIds.Count
         });
     }
 
@@ -1778,8 +1985,8 @@ public class SpecialClassController : ControllerBase
 
     [HttpPut("{id:int}/reschedule")]
     public async Task<IActionResult> Reschedule(
-        int id,
-        RescheduleSpecialClassRequest request)
+    int id,
+    RescheduleSpecialClassRequest request)
     {
         var userId =
             User.FindFirstValue(
@@ -1949,6 +2156,9 @@ public class SpecialClassController : ControllerBase
         var oldEndTime =
             session.EndTime;
 
+        var oldRoom =
+            session.Room;
+
         session.ClassDate =
             request.ClassDate;
 
@@ -1986,6 +2196,13 @@ public class SpecialClassController : ControllerBase
             $"{session.StartTime:HH\\:mm} - " +
             $"{session.EndTime:HH\\:mm}.";
 
+        if (!string.IsNullOrWhiteSpace(
+            session.Room))
+        {
+            message +=
+                $" Room: {session.Room}.";
+        }
+
         _context.Notifications.Add(
             new Notification
             {
@@ -2015,7 +2232,61 @@ public class SpecialClassController : ControllerBase
                     session.Id
             });
 
+        // ========================================================
+        // STUDENTS IN THIS CLASS
+        // ========================================================
+
+        var studentIds =
+            await _context.Students
+                .Where(x =>
+                    x.SchoolClassId ==
+                        session.SchoolClassId &&
+                    x.IsActive)
+                .Select(x =>
+                    x.Id)
+                .ToListAsync();
+
+        foreach (var studentId in studentIds)
+        {
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientStudentId =
+                        studentId,
+
+                    Type =
+                        NotificationType
+                            .SpecialClassRescheduled,
+
+                    Title =
+                        title,
+
+                    Message =
+                        message,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        now,
+
+                    ReferenceType =
+                        "SpecialClassSession",
+
+                    ReferenceId =
+                        session.Id
+                });
+        }
+
+        // ========================================================
+        // SAVE CLASS CHANGES + INTERNAL NOTIFICATIONS
+        // ========================================================
+
         await _context.SaveChangesAsync();
+
+        // ========================================================
+        // FIREBASE → TEACHER
+        // ========================================================
 
         await _pushNotificationService
             .SendToStaffAsync(
@@ -2024,6 +2295,21 @@ public class SpecialClassController : ControllerBase
                 message,
                 "SpecialClassSession",
                 session.Id);
+
+        // ========================================================
+        // FIREBASE → STUDENTS
+        // ========================================================
+
+        foreach (var studentId in studentIds)
+        {
+            await _pushNotificationService
+                .SendToStudentAsync(
+                    studentId,
+                    title,
+                    message,
+                    "SpecialClassSession",
+                    session.Id);
+        }
 
         return Ok(new
         {
@@ -2042,7 +2328,10 @@ public class SpecialClassController : ControllerBase
                     oldStartTime,
 
                 endTime =
-                    oldEndTime
+                    oldEndTime,
+
+                room =
+                    oldRoom
             },
 
             newSchedule = new
@@ -2061,7 +2350,10 @@ public class SpecialClassController : ControllerBase
             },
 
             teacherNotified =
-                true
+                true,
+
+            studentsNotified =
+                studentIds.Count
         });
     }
 
