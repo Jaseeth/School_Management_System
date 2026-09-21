@@ -1122,4 +1122,419 @@ public class UnifiedScheduleController : ControllerBase
                 orderedResult
         });
     }
+
+    // ============================================================
+    // GET TODAY'S UNIFIED SCHEDULE
+    // ============================================================
+
+    [HttpGet("today")]
+    public async Task<IActionResult> GetToday(
+        int academicYearId,
+        int academicTermId,
+        int? classId)
+    {
+        var today =
+            DateOnly.FromDateTime(
+                DateTime.Now);
+
+        return await GetByDate(
+            academicYearId,
+            academicTermId,
+            today,
+            classId);
+    }
+
+
+    // ============================================================
+    // GET UPCOMING SPECIAL CLASSES
+    //
+    // Returns only:
+    // - Active
+    // - Approved
+    // - Today or future
+    //
+    // Role scoped:
+    // Student      -> own class
+    // Teacher      -> own special classes
+    // Section Head -> own section
+    // Admin etc.   -> broader scope
+    // ============================================================
+
+    [HttpGet("upcoming")]
+    public async Task<IActionResult> GetUpcoming(
+        int academicYearId,
+        int academicTermId,
+        int? classId,
+        int take = 10)
+    {
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user =
+            await _userManager.FindByIdAsync(
+                userId);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        var roles =
+            await _userManager.GetRolesAsync(
+                user);
+
+
+        // ========================================================
+        // LIMIT TAKE
+        // ========================================================
+
+        if (take < 1)
+        {
+            take = 10;
+        }
+
+        if (take > 50)
+        {
+            take = 50;
+        }
+
+
+        // ========================================================
+        // ROLE FLAGS
+        // ========================================================
+
+        var isStudent =
+            roles.Any(x =>
+                x.Equals(
+                    "Student",
+                    StringComparison.OrdinalIgnoreCase));
+
+        var isTeacher =
+            roles.Any(x =>
+                x.Equals(
+                    "Teacher",
+                    StringComparison.OrdinalIgnoreCase));
+
+        var isSectionHead =
+            roles.Any(x =>
+                x.Equals(
+                    "Section Head",
+                    StringComparison.OrdinalIgnoreCase));
+
+        var isAdmin =
+            roles.Any(x =>
+                x.Equals(
+                    "Admin",
+                    StringComparison.OrdinalIgnoreCase));
+
+        var isPrincipal =
+            roles.Any(x =>
+                x.Equals(
+                    "Principal",
+                    StringComparison.OrdinalIgnoreCase));
+
+        var isDeputyPrincipal =
+            roles.Any(x =>
+                x.Equals(
+                    "Deputy Principal",
+                    StringComparison.OrdinalIgnoreCase));
+
+
+        int? forcedClassId = null;
+        int? forcedStaffId = null;
+        int? forcedSectionId = null;
+
+
+        // ========================================================
+        // STUDENT
+        // ========================================================
+
+        if (isStudent)
+        {
+            var student =
+                await _context.Students
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.ApplicationUserId ==
+                            userId &&
+                        x.IsActive);
+
+            if (student == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Logged-in account is not linked to an active student."
+                });
+            }
+
+            forcedClassId =
+                student.SchoolClassId;
+        }
+
+
+        // ========================================================
+        // TEACHER
+        // ========================================================
+
+        else if (isTeacher)
+        {
+            var staff =
+                await _context.Staff
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.ApplicationUserId ==
+                            userId &&
+                        x.IsActive);
+
+            if (staff == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Logged-in account is not linked to an active staff record."
+                });
+            }
+
+            forcedStaffId =
+                staff.Id;
+        }
+
+
+        // ========================================================
+        // SECTION HEAD
+        // ========================================================
+
+        else if (isSectionHead)
+        {
+            var staff =
+                await _context.Staff
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.ApplicationUserId ==
+                            userId &&
+                        x.IsActive);
+
+            if (staff == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Logged-in account is not linked to an active staff record."
+                });
+            }
+
+            var sectionHeadAssignment =
+                await _context.SectionHeadAssignments
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.StaffId ==
+                            staff.Id &&
+                        x.AcademicYearId ==
+                            academicYearId &&
+                        x.IsActive);
+
+            if (sectionHeadAssignment == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "No active section-head assignment found for this academic year."
+                });
+            }
+
+            forcedSectionId =
+                sectionHeadAssignment.SectionId;
+        }
+
+
+        // ========================================================
+        // FULL SCHOOL ROLES
+        // ========================================================
+
+        else if (
+            isAdmin ||
+            isPrincipal ||
+            isDeputyPrincipal)
+        {
+            // Full school scope.
+        }
+
+        else
+        {
+            return Forbid();
+        }
+
+
+        var today =
+            DateOnly.FromDateTime(
+                DateTime.Now);
+
+
+        // ========================================================
+        // UPCOMING APPROVED SPECIAL CLASSES
+        // ========================================================
+
+        var query =
+            _context.SpecialClassSessions
+                .AsNoTracking()
+                .Where(x =>
+                    x.IsActive &&
+                    x.Status ==
+                        SpecialClassStatus.Approved &&
+                    x.AcademicYearId ==
+                        academicYearId &&
+                    x.AcademicTermId ==
+                        academicTermId &&
+                    x.ClassDate >=
+                        today);
+
+
+        if (forcedClassId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SchoolClassId ==
+                        forcedClassId.Value);
+        }
+        else if (forcedStaffId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.StaffId ==
+                        forcedStaffId.Value);
+        }
+        else if (forcedSectionId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId ==
+                    forcedSectionId.Value);
+        }
+        else if (classId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.SchoolClassId ==
+                        classId.Value);
+        }
+
+
+        var upcoming =
+            await query
+                .OrderBy(x =>
+                    x.ClassDate)
+                .ThenBy(x =>
+                    x.StartTime)
+                .Take(take)
+                .Select(x =>
+                    new UnifiedScheduleItemDto
+                    {
+                        Id =
+                            x.Id,
+
+                        ScheduleType =
+                            "SpecialClass",
+
+                        AcademicYearId =
+                            x.AcademicYearId,
+
+                        AcademicTermId =
+                            x.AcademicTermId,
+
+                        SchoolClassId =
+                            x.SchoolClassId,
+
+                        ClassName =
+                            x.SchoolClass.Name,
+
+                        GradeName =
+                            x.SchoolClass
+                                .Grade.Name,
+
+                        SectionName =
+                            x.SchoolClass
+                                .Grade
+                                .Section.Name,
+
+                        SubjectId =
+                            x.SubjectId,
+
+                        SubjectName =
+                            x.Subject.Name,
+
+                        StaffId =
+                            x.StaffId,
+
+                        StaffNumber =
+                            x.Staff.StaffNumber,
+
+                        TeacherName =
+                            x.Staff.FullName,
+
+                        ScheduleDate =
+                            x.ClassDate,
+
+                        Day =
+                            (int)x.ClassDate.DayOfWeek,
+
+                        StartTime =
+                            x.StartTime,
+
+                        EndTime =
+                            x.EndTime,
+
+                        Room =
+                            x.Room,
+
+                        Reason =
+                            x.Reason,
+
+                        IsSpecialClass =
+                            true
+                    })
+                .ToListAsync();
+
+
+        return Ok(new
+        {
+            academicYearId,
+
+            academicTermId,
+
+            fromDate =
+                today,
+
+            requestedClassId =
+                classId,
+
+            appliedClassId =
+                forcedClassId ??
+                classId,
+
+            appliedStaffId =
+                forcedStaffId,
+
+            appliedSectionId =
+                forcedSectionId,
+
+            roles,
+
+            take,
+
+            totalCount =
+                upcoming.Count,
+
+            schedule =
+                upcoming
+        });
+    }
 }
