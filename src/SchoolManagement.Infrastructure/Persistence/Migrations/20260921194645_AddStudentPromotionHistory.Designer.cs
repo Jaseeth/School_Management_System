@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SchoolManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SchoolManagement.Infrastructure.Persistence;
 namespace SchoolManagement.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921194645_AddStudentPromotionHistory")]
+    partial class AddStudentPromotionHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -952,12 +955,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("GraduationAcademicYearId")
-                        .HasColumnType("int");
-
-                    b.Property<DateOnly?>("GraduationDate")
-                        .HasColumnType("date");
-
                     b.Property<string>("IndexNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -965,15 +962,10 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsGraduated")
-                        .HasColumnType("bit");
-
                     b.Property<int>("SchoolClassId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("GraduationAcademicYearId");
 
                     b.HasIndex("IndexNumber")
                         .IsUnique();
@@ -1274,46 +1266,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("StudentId", "IsActive", "IsUsed");
 
                     b.ToTable("StudentRegistrationCodes", (string)null);
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.StudentSubjectEnrollment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AcademicYearId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("EnrolledAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("EnrolledByStaffId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SubjectId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("EnrolledByStaffId");
-
-                    b.HasIndex("SubjectId");
-
-                    b.HasIndex("StudentId", "AcademicYearId", "SubjectId")
-                        .IsUnique();
-
-                    b.ToTable("StudentSubjectEnrollments");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Subject", b =>
@@ -2002,18 +1954,11 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Student", b =>
                 {
-                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", "GraduationAcademicYear")
-                        .WithMany()
-                        .HasForeignKey("GraduationAcademicYearId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", "SchoolClass")
                         .WithMany()
                         .HasForeignKey("SchoolClassId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.Navigation("GraduationAcademicYear");
 
                     b.Navigation("SchoolClass");
                 });
@@ -2193,41 +2138,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("CreatedByStaff");
 
                     b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.StudentSubjectEnrollment", b =>
-                {
-                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "EnrolledByStaff")
-                        .WithMany()
-                        .HasForeignKey("EnrolledByStaffId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Subject", "Subject")
-                        .WithMany()
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("AcademicYear");
-
-                    b.Navigation("EnrolledByStaff");
-
-                    b.Navigation("Student");
-
-                    b.Navigation("Subject");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.TeacherAssignment", b =>

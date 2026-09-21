@@ -17,4 +17,12 @@ public class Student
     public string? ApplicationUserId { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    public bool IsGraduated { get; set; } = false;
+
+    public DateOnly? GraduationDate { get; set; }
+
+    public int? GraduationAcademicYearId { get; set; }
+
+    public AcademicYear? GraduationAcademicYear { get; set; }
 }

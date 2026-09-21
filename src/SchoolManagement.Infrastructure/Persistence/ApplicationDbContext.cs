@@ -63,6 +63,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<StaffPasswordResetCode> StaffPasswordResetCodes
     => Set<StaffPasswordResetCode>();
 
+    public DbSet<StudentAcademicEnrollment> StudentAcademicEnrollments =>
+        Set<StudentAcademicEnrollment>();
+
+    public DbSet<StudentPromotionHistory> StudentPromotionHistories =>
+    Set<StudentPromotionHistory>();
+
+    public DbSet<StudentSubjectEnrollment> StudentSubjectEnrollments =>
+    Set<StudentSubjectEnrollment>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -874,5 +883,151 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasForeignKey(x => x.StaffId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
+
+        builder.Entity<StudentAcademicEnrollment>(
+    entity =>
+    {
+        entity.HasKey(x =>
+            x.Id);
+
+
+        // ==========================================
+        // STUDENT
+        // ==========================================
+
+        entity.HasOne(x =>
+                x.Student)
+            .WithMany()
+            .HasForeignKey(x =>
+                x.StudentId)
+            .OnDelete(
+                DeleteBehavior.NoAction);
+
+
+        // ==========================================
+        // ACADEMIC YEAR
+        // ==========================================
+
+        entity.HasOne(x =>
+                x.AcademicYear)
+            .WithMany()
+            .HasForeignKey(x =>
+                x.AcademicYearId)
+            .OnDelete(
+                DeleteBehavior.NoAction);
+
+
+        // ==========================================
+        // SCHOOL CLASS
+        // ==========================================
+
+        entity.HasOne(x =>
+                x.SchoolClass)
+            .WithMany()
+            .HasForeignKey(x =>
+                x.SchoolClassId)
+            .OnDelete(
+                DeleteBehavior.NoAction);
+
+
+        // ==========================================
+        // CREATED BY STAFF
+        // ==========================================
+
+        entity.HasOne(x =>
+                x.CreatedByStaff)
+            .WithMany()
+            .HasForeignKey(x =>
+                x.CreatedByStaffId)
+            .OnDelete(
+                DeleteBehavior.NoAction);
+
+
+        // ==========================================
+        // ONE ENROLLMENT PER STUDENT
+        // PER ACADEMIC YEAR
+        // ==========================================
+
+        entity.HasIndex(x => new
+        {
+            x.StudentId,
+            x.AcademicYearId
+        })
+        .IsUnique();
+    });
+
+        builder.Entity<StudentPromotionHistory>()
+    .HasOne(x => x.Student)
+    .WithMany()
+    .HasForeignKey(x => x.StudentId)
+    .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentPromotionHistory>()
+            .HasOne(x => x.FromAcademicYear)
+            .WithMany()
+            .HasForeignKey(x => x.FromAcademicYearId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentPromotionHistory>()
+            .HasOne(x => x.ToAcademicYear)
+            .WithMany()
+            .HasForeignKey(x => x.ToAcademicYearId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentPromotionHistory>()
+            .HasOne(x => x.FromSchoolClass)
+            .WithMany()
+            .HasForeignKey(x => x.FromSchoolClassId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentPromotionHistory>()
+            .HasOne(x => x.ToSchoolClass)
+            .WithMany()
+            .HasForeignKey(x => x.ToSchoolClassId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentPromotionHistory>()
+            .HasOne(x => x.ProcessedByStaff)
+            .WithMany()
+            .HasForeignKey(x => x.ProcessedByStaffId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<Student>()
+            .HasOne(x => x.GraduationAcademicYear)
+            .WithMany()
+            .HasForeignKey(x => x.GraduationAcademicYearId)
+            .OnDelete(DeleteBehavior.NoAction);
+        builder.Entity<StudentSubjectEnrollment>()
+    .HasOne(x => x.Student)
+    .WithMany()
+    .HasForeignKey(x => x.StudentId)
+    .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentSubjectEnrollment>()
+            .HasOne(x => x.AcademicYear)
+            .WithMany()
+            .HasForeignKey(x => x.AcademicYearId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentSubjectEnrollment>()
+            .HasOne(x => x.Subject)
+            .WithMany()
+            .HasForeignKey(x => x.SubjectId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentSubjectEnrollment>()
+            .HasOne(x => x.EnrolledByStaff)
+            .WithMany()
+            .HasForeignKey(x => x.EnrolledByStaffId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<StudentSubjectEnrollment>()
+            .HasIndex(x => new
+            {
+                x.StudentId,
+                x.AcademicYearId,
+                x.SubjectId
+            })
+            .IsUnique();
     }
 }
