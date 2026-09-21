@@ -336,7 +336,7 @@ public class DevelopmentDataSeeder
         await CreateDevelopmentStaffAsync(
             staffNumber: "T001",
             fullName: "Test Teacher",
-            email: "teacher@school.com",
+            email: "teacher1@school.com",
             designation: "Test Teacher",
             roleName: "Teacher",
             password: teacherPassword);

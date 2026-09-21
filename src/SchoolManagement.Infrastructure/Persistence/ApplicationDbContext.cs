@@ -60,6 +60,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     Set<StudentDeviceToken>();
     public DbSet<StudentRegistrationCode> StudentRegistrationCodes
     => Set<StudentRegistrationCode>();
+    public DbSet<StaffPasswordResetCode> StaffPasswordResetCodes
+    => Set<StaffPasswordResetCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -823,6 +825,53 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(x => x.CreatedByStaff)
                 .WithMany()
                 .HasForeignKey(x => x.CreatedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<StaffPasswordResetCode>(entity =>
+        {
+            entity.ToTable("StaffPasswordResetCodes");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.CodeHash)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(x => x.CreatedByApplicationUserId)
+                .IsRequired()
+                .HasMaxLength(450);
+
+            entity.Property(x => x.ExpiresAt)
+                .IsRequired();
+
+            entity.Property(x => x.IsUsed)
+                .IsRequired();
+
+            entity.Property(x => x.FailedAttempts)
+                .IsRequired();
+
+            entity.Property(x => x.MaxAttempts)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.IsActive)
+                .IsRequired();
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.IsActive,
+                x.IsUsed
+            });
+
+            entity.HasIndex(x => x.ExpiresAt);
+
+            entity.HasOne(x => x.Staff)
+                .WithMany()
+                .HasForeignKey(x => x.StaffId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
     }
