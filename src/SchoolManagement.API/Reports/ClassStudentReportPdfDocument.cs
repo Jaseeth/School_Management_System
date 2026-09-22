@@ -1,0 +1,250 @@
+﻿using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
+using SchoolManagement.Application.Reports.DTOs;
+
+namespace SchoolManagement.API.Reports;
+
+public class ClassStudentReportPdfDocument : IDocument
+{
+    private readonly ClassStudentReportDto _report;
+    private readonly string _logoPath;
+
+    public ClassStudentReportPdfDocument(
+        ClassStudentReportDto report,
+        string logoPath)
+    {
+        _report = report;
+        _logoPath = logoPath;
+    }
+
+    public DocumentMetadata GetMetadata()
+    {
+        return DocumentMetadata.Default;
+    }
+
+    public void Compose(
+        IDocumentContainer container)
+    {
+        container.Page(page =>
+        {
+            page.Margin(30);
+
+            page.DefaultTextStyle(x =>
+                x.FontSize(9));
+
+            page.Content()
+                .Column(column =>
+                {
+                    // Header only on first page
+                    column.Item()
+                        .Element(ComposeHeader);
+
+                    column.Item()
+                        .PaddingTop(15)
+                        .Element(ComposeContent);
+                });
+
+            page.Footer()
+                .AlignCenter()
+                .Text(text =>
+                {
+                    text.Span("Page ");
+                    text.CurrentPageNumber();
+                    text.Span(" of ");
+                    text.TotalPages();
+                });
+        });
+    }
+
+    private void ComposeHeader(
+        IContainer container)
+    {
+        container.Column(column =>
+        {
+            column.Item()
+                .AlignCenter()
+                .Height(30)
+                .Element(logoContainer =>
+                {
+                    if (!string.IsNullOrWhiteSpace(
+                            _logoPath) &&
+                        File.Exists(_logoPath))
+                    {
+                        var logoBytes =
+                            File.ReadAllBytes(
+                                _logoPath);
+
+                        logoContainer
+                            .AlignCenter()
+                            .AlignMiddle()
+                            .Image(logoBytes)
+                            .FitArea();
+                    }
+                });
+
+            column.Item()
+                .PaddingTop(5)
+                .AlignCenter()
+                .Text("AL MANAR NATIONAL SCHOOL")
+                .FontSize(18)
+                .Bold();
+
+            column.Item()
+                .PaddingTop(4)
+                .AlignCenter()
+                .Text("Class Student Report")
+                .FontSize(14)
+                .Bold();
+
+            column.Item()
+                .PaddingTop(3)
+                .AlignCenter()
+                .Text(
+                    $"{_report.AcademicYearName} | " +
+                    $"{_report.SectionName} | " +
+                    $"Grade {_report.GradeName} | " +
+                    $"Class {_report.ClassName}")
+                .FontSize(10);
+
+            column.Item()
+                .PaddingTop(2)
+                .AlignCenter()
+                .Text(
+                    $"Generated: {DateTime.Now:dd MMM yyyy}")
+                .FontSize(9);
+
+            column.Item()
+                .PaddingTop(10)
+                .LineHorizontal(1);
+        });
+    }
+
+    private void ComposeContent(
+        IContainer container)
+    {
+        container.Column(column =>
+        {
+            column.Item()
+                .PaddingBottom(10)
+                .Text(
+                    $"Total Students: {_report.TotalStudents}")
+                .FontSize(11)
+                .Bold();
+
+            column.Item()
+                .Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.ConstantColumn(35);
+                        columns.RelativeColumn();
+                        columns.RelativeColumn(1.5f);
+                        columns.ConstantColumn(60);
+                        columns.ConstantColumn(65);
+                        columns.ConstantColumn(60);
+                        columns.ConstantColumn(60);
+                        columns.ConstantColumn(70);
+                    });
+
+                    AddHeaderCell(
+                        table,
+                        "No.");
+
+                    AddHeaderCell(
+                        table,
+                        "Index");
+
+                    AddHeaderCell(
+                        table,
+                        "Student Name");
+
+                    AddHeaderCell(
+                        table,
+                        "Active");
+
+                    AddHeaderCell(
+                        table,
+                        "Completed");
+
+                    AddHeaderCell(
+                        table,
+                        "Subjects");
+
+                    AddHeaderCell(
+                        table,
+                        "Present");
+
+                    AddHeaderCell(
+                        table,
+                        "Attendance %");
+
+                    var number = 1;
+
+                    foreach (var student
+                             in _report.Students)
+                    {
+                        AddCell(
+                            table,
+                            number.ToString());
+
+                        AddCell(
+                            table,
+                            student.IndexNumber);
+
+                        AddCell(
+                            table,
+                            student.FullName);
+
+                        AddCell(
+                            table,
+                            student.IsActive
+                                ? "Yes"
+                                : "No");
+
+                        AddCell(
+                            table,
+                            student.IsCompleted
+                                ? "Yes"
+                                : "No");
+
+                        AddCell(
+                            table,
+                            student.SubjectCount
+                                .ToString());
+
+                        AddCell(
+                            table,
+                            student.PresentDays
+                                .ToString());
+
+                        AddCell(
+                            table,
+                            $"{student.AttendancePercentage:0.##}%");
+
+                        number++;
+                    }
+                });
+        });
+    }
+
+    private static void AddHeaderCell(
+        TableDescriptor table,
+        string value)
+    {
+        table.Cell()
+            .Border(1)
+            .Padding(4)
+            .Text(value)
+            .Bold();
+    }
+
+    private static void AddCell(
+        TableDescriptor table,
+        string value)
+    {
+        table.Cell()
+            .Border(1)
+            .Padding(4)
+            .Text(value);
+    }
+}
