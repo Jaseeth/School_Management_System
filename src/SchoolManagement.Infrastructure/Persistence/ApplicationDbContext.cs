@@ -73,6 +73,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     Set<StudentSubjectEnrollment>();
     public DbSet<SchoolAnnouncement> SchoolAnnouncements =>
     Set<SchoolAnnouncement>();
+    public DbSet<ParentGuardian> ParentGuardians =>
+    Set<ParentGuardian>();
+
+    public DbSet<StudentParentGuardian> StudentParentGuardians =>
+        Set<StudentParentGuardian>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1069,6 +1074,61 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(x => x.CreatedByStaff)
                 .WithMany()
                 .HasForeignKey(x => x.CreatedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<ParentGuardian>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.ParentNumber)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.HasIndex(x => x.ParentNumber)
+                .IsUnique();
+
+            entity.Property(x => x.FullName)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(x => x.Email)
+                .HasMaxLength(256);
+
+            entity.Property(x => x.PhoneNumber)
+                .HasMaxLength(50);
+
+            entity.Property(x => x.ApplicationUserId)
+                .HasMaxLength(450);
+
+            entity.HasIndex(x => x.ApplicationUserId)
+                .IsUnique()
+                .HasFilter("[ApplicationUserId] IS NOT NULL");
+        });
+
+        builder.Entity<StudentParentGuardian>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Relationship)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.HasIndex(x => new
+            {
+                x.StudentId,
+                x.ParentGuardianId
+            })
+            .IsUnique();
+
+            entity.HasOne(x => x.Student)
+                .WithMany()
+                .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.ParentGuardian)
+                .WithMany(x => x.StudentRelationships)
+                .HasForeignKey(x => x.ParentGuardianId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
     }
