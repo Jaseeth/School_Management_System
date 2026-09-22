@@ -1393,6 +1393,15 @@ public class SchoolAnnouncementsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // ========================================================
+        // NOTIFY USERS THAT ANNOUNCEMENT WAS UPDATED
+        // ========================================================
+
+        await NotifyAnnouncementAudienceAsync(
+            announcement,
+            $"Announcement Updated: {announcement.Title}",
+            announcement.Message);
+
         return Ok(new
         {
             message =
@@ -1416,8 +1425,8 @@ public class SchoolAnnouncementsController : ControllerBase
     }
 
 
-    // ============================================================
-    // DISABLE ANNOUNCEMENT
+    /// ============================================================
+    // DISABLE / CANCEL ANNOUNCEMENT
     // ============================================================
 
     [HttpPatch("{id:int}/disable")]
@@ -1434,7 +1443,8 @@ public class SchoolAnnouncementsController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Announcement not found."
+                message =
+                    "Announcement not found."
             });
         }
 
@@ -1452,13 +1462,25 @@ public class SchoolAnnouncementsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // ========================================================
+        // NOTIFY USERS THAT ANNOUNCEMENT WAS CANCELLED
+        // ========================================================
+
+        await NotifyAnnouncementAudienceAsync(
+            announcement,
+            $"Announcement Cancelled: {announcement.Title}",
+            "This announcement has been cancelled and is no longer active.");
+
         return Ok(new
         {
             message =
                 "Announcement disabled successfully.",
 
             announcementId =
-                announcement.Id
+                announcement.Id,
+
+            notification =
+                "Cancellation notification sent to the announcement audience."
         });
     }
 
@@ -1485,6 +1507,23 @@ public class SchoolAnnouncementsController : ControllerBase
             });
         }
 
+        // ========================================================
+        // ACTIVE ANNOUNCEMENT CANNOT BE DELETED DIRECTLY
+        // ========================================================
+
+        if (announcement.IsActive)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Active announcements cannot be deleted directly. Disable the announcement first so recipients are informed that it has been cancelled."
+            });
+        }
+
+        // ========================================================
+        // DELETE RELATED INTERNAL NOTIFICATIONS
+        // ========================================================
+
         var relatedNotifications =
             await _context.Notifications
                 .Where(x =>
@@ -1500,6 +1539,10 @@ public class SchoolAnnouncementsController : ControllerBase
                 .RemoveRange(
                     relatedNotifications);
         }
+
+        // ========================================================
+        // DELETE ANNOUNCEMENT
+        // ========================================================
 
         _context.SchoolAnnouncements
             .Remove(
@@ -1518,5 +1561,268 @@ public class SchoolAnnouncementsController : ControllerBase
             deletedNotifications =
                 relatedNotifications.Count
         });
+    }
+
+    // ============================================================
+    // NOTIFY ANNOUNCEMENT AUDIENCE
+    // Used for update / cancellation notifications
+    // ============================================================
+
+    private async Task NotifyAnnouncementAudienceAsync(
+        SchoolAnnouncement announcement,
+        string notificationTitle,
+        string notificationMessage)
+    {
+        var studentIds =
+            new List<int>();
+
+        var staffIds =
+            new List<int>();
+
+        // ========================================================
+        // ALL STUDENTS
+        // ========================================================
+
+        if (announcement.AudienceType.Equals(
+            "AllStudents",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            studentIds =
+                await _context.Students
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.IsActive)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+        }
+
+        // ========================================================
+        // ALL STAFF
+        // ========================================================
+
+        else if (announcement.AudienceType.Equals(
+            "AllStaff",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            staffIds =
+                await _context.Staff
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.IsActive)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+        }
+
+        // ========================================================
+        // ROLE STAFF
+        // ========================================================
+
+        else if (announcement.AudienceType.Equals(
+            "Role",
+            StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(
+                announcement.RoleName))
+        {
+            var role =
+                await _context.Roles
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.Name ==
+                            announcement.RoleName);
+
+            if (role != null)
+            {
+                var userIds =
+                    await _context.UserRoles
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.RoleId ==
+                                role.Id)
+                        .Select(x =>
+                            x.UserId)
+                        .ToListAsync();
+
+                staffIds =
+                    await _context.Staff
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.IsActive &&
+                            x.ApplicationUserId != null &&
+                            userIds.Contains(
+                                x.ApplicationUserId))
+                        .Select(x =>
+                            x.Id)
+                        .ToListAsync();
+            }
+        }
+
+        // ========================================================
+        // SECTION STUDENTS
+        // ========================================================
+
+        else if (announcement.AudienceType.Equals(
+            "Section",
+            StringComparison.OrdinalIgnoreCase) &&
+            announcement.SectionId.HasValue)
+        {
+            studentIds =
+                await _context.Students
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.IsActive &&
+                        x.SchoolClass
+                            .Grade
+                            .SectionId ==
+                            announcement.SectionId.Value)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+        }
+
+        // ========================================================
+        // GRADE STUDENTS
+        // ========================================================
+
+        else if (announcement.AudienceType.Equals(
+            "Grade",
+            StringComparison.OrdinalIgnoreCase) &&
+            announcement.GradeId.HasValue)
+        {
+            studentIds =
+                await _context.Students
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.IsActive &&
+                        x.SchoolClass.GradeId ==
+                            announcement.GradeId.Value)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+        }
+
+        // ========================================================
+        // CLASS STUDENTS
+        // ========================================================
+
+        else if (announcement.AudienceType.Equals(
+            "Class",
+            StringComparison.OrdinalIgnoreCase) &&
+            announcement.SchoolClassId.HasValue)
+        {
+            studentIds =
+                await _context.Students
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.IsActive &&
+                        x.SchoolClassId ==
+                            announcement.SchoolClassId.Value)
+                    .Select(x =>
+                        x.Id)
+                    .ToListAsync();
+        }
+
+        // ========================================================
+        // INTERNAL STUDENT NOTIFICATIONS
+        // ========================================================
+
+        foreach (var studentId in studentIds)
+        {
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientStudentId =
+                        studentId,
+
+                    Type =
+                        NotificationType.General,
+
+                    Title =
+                        notificationTitle,
+
+                    Message =
+                        notificationMessage,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    ReferenceType =
+                        "SchoolAnnouncement",
+
+                    ReferenceId =
+                        announcement.Id
+                });
+        }
+
+        // ========================================================
+        // INTERNAL STAFF NOTIFICATIONS
+        // ========================================================
+
+        foreach (var staffId in staffIds)
+        {
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientStaffId =
+                        staffId,
+
+                    Type =
+                        NotificationType.General,
+
+                    Title =
+                        notificationTitle,
+
+                    Message =
+                        notificationMessage,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    ReferenceType =
+                        "SchoolAnnouncement",
+
+                    ReferenceId =
+                        announcement.Id
+                });
+        }
+
+        await _context.SaveChangesAsync();
+
+        // ========================================================
+        // FIREBASE STUDENT PUSH
+        // ========================================================
+
+        foreach (var studentId in studentIds)
+        {
+            await _pushNotificationService
+                .SendToStudentAsync(
+                    studentId,
+                    notificationTitle,
+                    notificationMessage,
+                    "SchoolAnnouncement",
+                    announcement.Id);
+        }
+
+        // ========================================================
+        // FIREBASE STAFF PUSH
+        // ========================================================
+
+        foreach (var staffId in staffIds)
+        {
+            await _pushNotificationService
+                .SendToStaffAsync(
+                    staffId,
+                    notificationTitle,
+                    notificationMessage,
+                    "SchoolAnnouncement",
+                    announcement.Id);
+        }
     }
 }
