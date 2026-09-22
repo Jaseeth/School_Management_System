@@ -71,6 +71,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<StudentSubjectEnrollment> StudentSubjectEnrollments =>
     Set<StudentSubjectEnrollment>();
+    public DbSet<SchoolAnnouncement> SchoolAnnouncements =>
+    Set<SchoolAnnouncement>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1029,5 +1031,45 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 x.SubjectId
             })
             .IsUnique();
+
+        builder.Entity<SchoolAnnouncement>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Title)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(x => x.Message)
+                .IsRequired()
+                .HasMaxLength(2000);
+
+            entity.Property(x => x.AudienceType)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(x => x.RoleName)
+                .HasMaxLength(100);
+
+            entity.HasOne(x => x.Section)
+                .WithMany()
+                .HasForeignKey(x => x.SectionId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.Grade)
+                .WithMany()
+                .HasForeignKey(x => x.GradeId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.SchoolClass)
+                .WithMany()
+                .HasForeignKey(x => x.SchoolClassId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.CreatedByStaff)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
     }
 }
