@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Fluent;
+using SchoolManagement.API.Reports;
 using SchoolManagement.Application.Reports.DTOs;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
@@ -13,20 +16,111 @@ namespace SchoolManagement.API.Controllers;
 public class ReportsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IWebHostEnvironment _environment;
 
     public ReportsController(
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        IWebHostEnvironment environment)
     {
         _context = context;
+        _environment = environment;
     }
 
     // ============================================================
-    // STUDENT ACADEMIC PROFILE REPORT
+    // STUDENT ACADEMIC PROFILE JSON REPORT
     // ============================================================
 
     [HttpGet("students/{studentId:int}/academic-profile")]
     public async Task<IActionResult> GetStudentAcademicProfile(
         int studentId)
+    {
+        var report =
+            await BuildStudentAcademicProfileAsync(
+                studentId);
+
+        if (report == null)
+        {
+            return NotFound(new
+            {
+                message = "Student not found."
+            });
+        }
+
+        return Ok(report);
+    }
+
+
+    // ============================================================
+    // STUDENT ACADEMIC PROFILE PDF REPORT
+    // ============================================================
+
+    [HttpGet("students/{studentId:int}/academic-profile/pdf")]
+    public async Task<IActionResult> GetStudentAcademicProfilePdf(
+        int studentId)
+    {
+        var report =
+            await BuildStudentAcademicProfileAsync(
+                studentId);
+
+        if (report == null)
+        {
+            return NotFound(new
+            {
+                message = "Student not found."
+            });
+        }
+
+        // ========================================================
+        // SCHOOL LOGO
+        // ========================================================
+
+        var webRootPath =
+            _environment.WebRootPath;
+
+        var logoPath =
+            string.IsNullOrWhiteSpace(webRootPath)
+                ? string.Empty
+                : Path.Combine(
+                    webRootPath,
+                    "images",
+                    "school-logo.png");
+
+        if (string.IsNullOrWhiteSpace(logoPath) ||
+            !System.IO.File.Exists(logoPath))
+        {
+            logoPath =
+                string.Empty;
+        }
+
+        // ========================================================
+        // GENERATE PDF
+        // ========================================================
+
+        var document =
+            new StudentAcademicProfilePdfDocument(
+                report,
+                logoPath);
+
+        var pdfBytes =
+            document.GeneratePdf();
+
+        var fileName =
+            $"Student-Academic-Profile-{report.IndexNumber}.pdf";
+
+        return File(
+            pdfBytes,
+            "application/pdf",
+            fileName);
+    }
+
+
+    // ============================================================
+    // BUILD STUDENT ACADEMIC PROFILE
+    // ============================================================
+
+    private async Task<StudentAcademicProfileReportDto?>
+        BuildStudentAcademicProfileAsync(
+            int studentId)
     {
         // ========================================================
         // STUDENT
@@ -42,11 +136,9 @@ public class ReportsController : ControllerBase
 
         if (student == null)
         {
-            return NotFound(new
-            {
-                message = "Student not found."
-            });
+            return null;
         }
+
 
         // ========================================================
         // CURRENT ENROLLMENT
@@ -84,6 +176,7 @@ public class ReportsController : ControllerBase
                                 .Section.Name
                     })
                 .FirstOrDefaultAsync();
+
 
         // ========================================================
         // ENROLLMENT HISTORY
@@ -125,6 +218,7 @@ public class ReportsController : ControllerBase
                             x.IsCurrent
                     })
                 .ToListAsync();
+
 
         // ========================================================
         // PROMOTION HISTORY
@@ -179,8 +273,9 @@ public class ReportsController : ControllerBase
                     })
                 .ToListAsync();
 
+
         // ========================================================
-        // STUDENT SUBJECTS
+        // SUBJECTS
         // ========================================================
 
         var subjects =
@@ -211,6 +306,7 @@ public class ReportsController : ControllerBase
                             x.IsActive
                     })
                 .ToListAsync();
+
 
         // ========================================================
         // ATTENDANCE
@@ -243,6 +339,7 @@ public class ReportsController : ControllerBase
                     (decimal)presentDays /
                     totalDays * 100,
                     2);
+
 
         // ========================================================
         // PUBLISHED RESULTS
@@ -285,8 +382,9 @@ public class ReportsController : ControllerBase
                     })
                 .ToListAsync();
 
+
         // ========================================================
-        // BUILD REPORT
+        // BUILD FINAL REPORT DTO
         // ========================================================
 
         var report =
@@ -352,6 +450,6 @@ public class ReportsController : ControllerBase
                     publishedResults
             };
 
-        return Ok(report);
+        return report;
     }
 }

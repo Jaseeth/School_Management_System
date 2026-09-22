@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using SchoolManagement.Infrastructure.Authorization;
 using SchoolManagement.API.Middleware;
 using SchoolManagement.Infrastructure;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -160,5 +161,8 @@ app.UseMiddleware<ForcePasswordChangeMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+
+QuestPDF.Settings.License =
+    QuestPDF.Infrastructure.LicenseType.Community;
 
 app.Run();
