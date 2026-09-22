@@ -78,6 +78,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<StudentParentGuardian> StudentParentGuardians =>
         Set<StudentParentGuardian>();
+    public DbSet<ParentDeviceToken> ParentDeviceTokens =>
+    Set<ParentDeviceToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -598,13 +600,31 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             // Never neither
             // ========================================================
 
-            entity.ToTable(table =>
-                table.HasCheckConstraint(
-                    "CK_Notifications_Recipient",
-                    "([RecipientStaffId] IS NOT NULL AND [RecipientStudentId] IS NULL) " +
-                    "OR " +
-                    "([RecipientStaffId] IS NULL AND [RecipientStudentId] IS NOT NULL)"
-                ));
+            entity.ToTable(t =>
+    t.HasCheckConstraint(
+        "CK_Notifications_Recipient",
+        @"(
+            ([RecipientStaffId] IS NOT NULL
+                AND [RecipientStudentId] IS NULL
+                AND [RecipientParentGuardianId] IS NULL)
+
+            OR
+
+            ([RecipientStaffId] IS NULL
+                AND [RecipientStudentId] IS NOT NULL
+                AND [RecipientParentGuardianId] IS NULL)
+
+            OR
+
+            ([RecipientStaffId] IS NULL
+                AND [RecipientStudentId] IS NULL
+                AND [RecipientParentGuardianId] IS NOT NULL)
+        )"));
+
+            entity.HasOne(x => x.RecipientParentGuardian)
+                .WithMany()
+                .HasForeignKey(x => x.RecipientParentGuardianId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         builder.Entity<StaffDeviceToken>(entity =>
@@ -1128,6 +1148,29 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             entity.HasOne(x => x.ParentGuardian)
                 .WithMany(x => x.StudentRelationships)
+                .HasForeignKey(x => x.ParentGuardianId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<ParentDeviceToken>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Token)
+                .IsRequired()
+                .HasMaxLength(1000);
+
+            entity.HasIndex(x => x.Token)
+                .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.ParentGuardianId,
+                x.IsActive
+            });
+
+            entity.HasOne(x => x.ParentGuardian)
+                .WithMany()
                 .HasForeignKey(x => x.ParentGuardianId)
                 .OnDelete(DeleteBehavior.NoAction);
         });

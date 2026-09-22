@@ -6,6 +6,7 @@ using SchoolManagement.Application.Marks.DTOs;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
+using SchoolManagement.Application.Notifications;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -14,11 +15,14 @@ namespace SchoolManagement.API.Controllers;
 public class MarksReviewController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IPushNotificationService _pushNotificationService;
 
     public MarksReviewController(
-        ApplicationDbContext context)
+    ApplicationDbContext context,
+    IPushNotificationService pushNotificationService)
     {
         _context = context;
+        _pushNotificationService = pushNotificationService;
     }
 
     // =====================================
@@ -697,9 +701,16 @@ public class MarksReviewController : ControllerBase
 
         var submission =
             await _context.MarksSubmissions
+
+                .Include(x => x.Exam)
+
+                .Include(x => x.TeacherAssignment)
+                    .ThenInclude(x => x.Subject)
+
                 .Include(x => x.TeacherAssignment)
                     .ThenInclude(x => x.SchoolClass)
                         .ThenInclude(x => x.Grade)
+
                 .FirstOrDefaultAsync(x =>
                     x.Id == submissionId);
 
@@ -770,8 +781,13 @@ public class MarksReviewController : ControllerBase
         submission.PublishedAt =
             publishedAt;
 
+        // ---------------------------------
+        // Publish student marks
+        // ---------------------------------
+
         var marks =
             await _context.StudentMarks
+                .Include(x => x.Student)
                 .Where(x =>
                     x.ExamId ==
                         submission.ExamId &&
@@ -782,13 +798,93 @@ public class MarksReviewController : ControllerBase
 
         foreach (var mark in marks)
         {
-            mark.IsPublished = true;
+            mark.IsPublished =
+                true;
 
             mark.UpdatedAt =
                 publishedAt;
         }
 
         await _context.SaveChangesAsync();
+
+        // ---------------------------------
+        // Notify linked parents
+        // ---------------------------------
+
+        foreach (var mark in marks)
+        {
+            var parentIds =
+                await _context.StudentParentGuardians
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.StudentId ==
+                            mark.StudentId &&
+
+                        x.IsActive &&
+
+                        x.ParentGuardian.IsActive)
+                    .Select(x =>
+                        x.ParentGuardianId)
+                    .Distinct()
+                    .ToListAsync();
+
+            if (parentIds.Count == 0)
+            {
+                continue;
+            }
+
+            var notificationTitle =
+                "Result Published";
+
+            var notificationMessage =
+                $"{mark.Student.FullName}'s " +
+                $"{submission.TeacherAssignment.Subject.Name} result " +
+                $"for {submission.Exam.Name} has been published.";
+
+            foreach (var parentId in parentIds)
+            {
+                _context.Notifications.Add(
+                    new Notification
+                    {
+                        RecipientParentGuardianId =
+                            parentId,
+
+                        Type =
+                            NotificationType.General,
+
+                        Title =
+                            notificationTitle,
+
+                        Message =
+                            notificationMessage,
+
+                        IsRead =
+                            false,
+
+                        CreatedAt =
+                            DateTime.UtcNow,
+
+                        ReferenceType =
+                            "StudentMark",
+
+                        ReferenceId =
+                            mark.Id
+                    });
+            }
+
+            await _context.SaveChangesAsync();
+
+            foreach (var parentId in parentIds)
+            {
+                await _pushNotificationService
+                    .SendToParentAsync(
+                        parentId,
+                        notificationTitle,
+                        notificationMessage,
+                        "StudentMark",
+                        mark.Id);
+            }
+        }
 
         return Ok(new
         {

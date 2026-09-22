@@ -41,4 +41,8 @@ public class Notification
     public string? ReferenceType { get; set; }
 
     public int? ReferenceId { get; set; }
+
+    public int? RecipientParentGuardianId { get; set; }
+
+    public ParentGuardian? RecipientParentGuardian { get; set; }
 }

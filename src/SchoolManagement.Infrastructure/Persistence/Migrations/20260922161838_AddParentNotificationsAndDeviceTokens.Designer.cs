@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SchoolManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SchoolManagement.Infrastructure.Persistence;
 namespace SchoolManagement.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260922161838_AddParentNotificationsAndDeviceTokens")]
+    partial class AddParentNotificationsAndDeviceTokens
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -448,7 +451,7 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
 
                     b.ToTable("Notifications", t =>
                         {
-                            t.HasCheckConstraint("CK_Notifications_Recipient", "(\r\n            ([RecipientStaffId] IS NOT NULL\r\n                AND [RecipientStudentId] IS NULL\r\n                AND [RecipientParentGuardianId] IS NULL)\r\n\r\n            OR\r\n\r\n            ([RecipientStaffId] IS NULL\r\n                AND [RecipientStudentId] IS NOT NULL\r\n                AND [RecipientParentGuardianId] IS NULL)\r\n\r\n            OR\r\n\r\n            ([RecipientStaffId] IS NULL\r\n                AND [RecipientStudentId] IS NULL\r\n                AND [RecipientParentGuardianId] IS NOT NULL)\r\n        )");
+                            t.HasCheckConstraint("CK_Notifications_Recipient", "([RecipientStaffId] IS NOT NULL AND [RecipientStudentId] IS NULL) OR ([RecipientStaffId] IS NULL AND [RecipientStudentId] IS NOT NULL)");
                         });
                 });
 

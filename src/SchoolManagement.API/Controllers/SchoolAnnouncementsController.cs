@@ -869,6 +869,15 @@ public class SchoolAnnouncementsController : ControllerBase
         await _context.SaveChangesAsync();
 
         // ========================================================
+        // NOTIFY PARENTS
+        // ========================================================
+
+        await NotifyAnnouncementParentsAsync(
+            announcement,
+            notificationTitle,
+            notificationMessage);
+
+        // ========================================================
         // RESPONSE
         // ========================================================
 
@@ -1793,6 +1802,8 @@ public class SchoolAnnouncementsController : ControllerBase
                 });
         }
 
+
+
         await _context.SaveChangesAsync();
 
         // ========================================================
@@ -1824,5 +1835,177 @@ public class SchoolAnnouncementsController : ControllerBase
                     "SchoolAnnouncement",
                     announcement.Id);
         }
+
+        // ========================================================
+        // NOTIFY LINKED PARENTS
+        // ========================================================
+
+        await NotifyAnnouncementParentsAsync(
+            announcement,
+            notificationTitle,
+            notificationMessage);
     }
+
+
+    // ============================================================
+    // NOTIFY PARENTS FOR STUDENT-TARGETED ANNOUNCEMENT
+    // ============================================================
+
+    private async Task NotifyAnnouncementParentsAsync(
+        SchoolAnnouncement announcement,
+        string notificationTitle,
+        string notificationMessage)
+    {
+        var isStudentAudience =
+            announcement.AudienceType.Equals(
+                "AllStudents",
+                StringComparison.OrdinalIgnoreCase) ||
+
+            announcement.AudienceType.Equals(
+                "Section",
+                StringComparison.OrdinalIgnoreCase) ||
+
+            announcement.AudienceType.Equals(
+                "Grade",
+                StringComparison.OrdinalIgnoreCase) ||
+
+            announcement.AudienceType.Equals(
+                "Class",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!isStudentAudience)
+        {
+            return;
+        }
+
+        // ========================================================
+        // FIND TARGET STUDENTS
+        // ========================================================
+
+        var studentQuery =
+            _context.Students
+                .AsNoTracking()
+                .Where(x =>
+                    x.IsActive);
+
+        if (announcement.AudienceType.Equals(
+            "Section",
+            StringComparison.OrdinalIgnoreCase) &&
+            announcement.SectionId.HasValue)
+        {
+            studentQuery =
+                studentQuery.Where(x =>
+                    x.SchoolClass
+                        .Grade
+                        .SectionId ==
+                    announcement.SectionId.Value);
+        }
+        else if (announcement.AudienceType.Equals(
+            "Grade",
+            StringComparison.OrdinalIgnoreCase) &&
+            announcement.GradeId.HasValue)
+        {
+            studentQuery =
+                studentQuery.Where(x =>
+                    x.SchoolClass.GradeId ==
+                    announcement.GradeId.Value);
+        }
+        else if (announcement.AudienceType.Equals(
+            "Class",
+            StringComparison.OrdinalIgnoreCase) &&
+            announcement.SchoolClassId.HasValue)
+        {
+            studentQuery =
+                studentQuery.Where(x =>
+                    x.SchoolClassId ==
+                    announcement.SchoolClassId.Value);
+        }
+
+        var studentIds =
+            await studentQuery
+                .Select(x =>
+                    x.Id)
+                .ToListAsync();
+
+        if (studentIds.Count == 0)
+        {
+            return;
+        }
+
+        // ========================================================
+        // FIND ACTIVE LINKED PARENTS
+        // DISTINCT PREVENTS DUPLICATE NOTIFICATIONS
+        // ========================================================
+
+        var parentIds =
+            await _context.StudentParentGuardians
+                .AsNoTracking()
+                .Where(x =>
+                    x.IsActive &&
+                    studentIds.Contains(
+                        x.StudentId) &&
+                    x.ParentGuardian.IsActive)
+                .Select(x =>
+                    x.ParentGuardianId)
+                .Distinct()
+                .ToListAsync();
+
+        if (parentIds.Count == 0)
+        {
+            return;
+        }
+
+        // ========================================================
+        // INTERNAL PARENT NOTIFICATIONS
+        // ========================================================
+
+        foreach (var parentId in parentIds)
+        {
+            _context.Notifications.Add(
+                new Notification
+                {
+                    RecipientParentGuardianId =
+                        parentId,
+
+                    Type =
+                        NotificationType.General,
+
+                    Title =
+                        notificationTitle,
+
+                    Message =
+                        notificationMessage,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    ReferenceType =
+                        "SchoolAnnouncement",
+
+                    ReferenceId =
+                        announcement.Id
+                });
+        }
+
+        await _context.SaveChangesAsync();
+
+        // ========================================================
+        // FIREBASE PUSH -> PARENTS
+        // ========================================================
+
+        foreach (var parentId in parentIds)
+        {
+            await _pushNotificationService
+                .SendToParentAsync(
+                    parentId,
+                    notificationTitle,
+                    notificationMessage,
+                    "SchoolAnnouncement",
+                    announcement.Id);
+        }
+    }
+
 }

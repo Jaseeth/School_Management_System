@@ -15,4 +15,11 @@ public interface IPushNotificationService
         string message,
         string? referenceType = null,
         int? referenceId = null);
+
+    Task SendToParentAsync(
+        int parentGuardianId,
+        string title,
+        string message,
+        string? referenceType = null,
+        int? referenceId = null);
 }

@@ -143,6 +143,58 @@ public class FirebasePushNotificationService
         await _context.SaveChangesAsync();
     }
 
+    // ============================================================
+    // SEND PUSH TO PARENT
+    // ============================================================
+
+    public async Task SendToParentAsync(
+        int parentGuardianId,
+        string title,
+        string message,
+        string? referenceType = null,
+        int? referenceId = null)
+    {
+        var deviceTokens =
+            await _context.ParentDeviceTokens
+                .Where(x =>
+                    x.ParentGuardianId ==
+                        parentGuardianId &&
+                    x.IsActive)
+                .ToListAsync();
+
+        if (deviceTokens.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var deviceToken in deviceTokens)
+        {
+            var result =
+                await SendFirebaseMessageAsync(
+                    deviceToken.Token,
+                    title,
+                    message,
+                    referenceType,
+                    referenceId);
+
+            if (result.ShouldDeactivateToken)
+            {
+                deviceToken.IsActive =
+                    false;
+
+                deviceToken.UpdatedAt =
+                    DateTime.UtcNow;
+            }
+            else if (result.Success)
+            {
+                deviceToken.LastUsedAt =
+                    DateTime.UtcNow;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
 
     // ============================================================
     // COMMON FIREBASE SEND METHOD
