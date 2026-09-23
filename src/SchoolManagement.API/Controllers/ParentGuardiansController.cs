@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Notifications;
+using SchoolManagement.Application.Auditing;
 using SchoolManagement.Application.Parents.DTOs;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Identity;
@@ -19,17 +20,20 @@ public class ParentGuardiansController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IPushNotificationService _pushNotificationService;
+    private readonly IAuditLogService _auditLogService;
 
     public ParentGuardiansController(
-    ApplicationDbContext context,
-    UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole> roleManager,
-    IPushNotificationService pushNotificationService)
+        ApplicationDbContext context,
+        UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager,
+        IPushNotificationService pushNotificationService,
+        IAuditLogService auditLogService)
     {
         _context = context;
         _userManager = userManager;
         _roleManager = roleManager;
         _pushNotificationService = pushNotificationService;
+        _auditLogService = auditLogService;
     }
 
     // ============================================================
@@ -133,6 +137,21 @@ public class ParentGuardiansController : ControllerBase
             .Add(parent);
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Create",
+            entityName: "ParentGuardian",
+            entityId: parent.Id.ToString(),
+            description:
+                $"Parent/guardian {parent.ParentNumber} - {parent.FullName} was created.",
+            newValues: new
+            {
+                parent.ParentNumber,
+                parent.FullName,
+                parent.Email,
+                parent.PhoneNumber,
+                parent.IsActive
+            });
 
         return Ok(new
         {
@@ -290,6 +309,22 @@ public class ParentGuardiansController : ControllerBase
             .Add(relationship);
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Link",
+            entityName: "StudentParentGuardian",
+            entityId: relationship.Id.ToString(),
+            description:
+                $"Parent {parent.ParentNumber} linked to student {student.IndexNumber}.",
+            newValues: new
+            {
+                relationship.StudentId,
+                relationship.ParentGuardianId,
+                relationship.Relationship,
+                relationship.IsPrimaryGuardian,
+                relationship.IsEmergencyContact,
+                relationship.IsActive
+            });
 
         return Ok(new
         {
@@ -553,6 +588,14 @@ public class ParentGuardiansController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            parent.FullName,
+            parent.Email,
+            parent.PhoneNumber,
+            parent.IsActive
+        };
+
         if (!string.IsNullOrWhiteSpace(
             request.Email))
         {
@@ -597,6 +640,21 @@ public class ParentGuardiansController : ControllerBase
             request.IsActive;
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Update",
+            entityName: "ParentGuardian",
+            entityId: parent.Id.ToString(),
+            description:
+                $"Parent/guardian {parent.ParentNumber} was updated.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                parent.FullName,
+                parent.Email,
+                parent.PhoneNumber,
+                parent.IsActive
+            });
 
         return Ok(new
         {
@@ -653,6 +711,14 @@ public class ParentGuardiansController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            relationship.Relationship,
+            relationship.IsPrimaryGuardian,
+            relationship.IsEmergencyContact,
+            relationship.IsActive
+        };
+
         // ========================================================
         // PRIMARY GUARDIAN HANDLING
         // ========================================================
@@ -694,6 +760,21 @@ public class ParentGuardiansController : ControllerBase
             request.IsActive;
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Update",
+            entityName: "StudentParentGuardian",
+            entityId: relationship.Id.ToString(),
+            description:
+                $"Student-parent relationship {relationship.Id} was updated.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                relationship.Relationship,
+                relationship.IsPrimaryGuardian,
+                relationship.IsEmergencyContact,
+                relationship.IsActive
+            });
 
         return Ok(new
         {
@@ -758,6 +839,13 @@ public class ParentGuardiansController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            relationship.IsActive,
+            relationship.IsPrimaryGuardian,
+            relationship.IsEmergencyContact
+        };
+
         relationship.IsActive =
             false;
 
@@ -768,6 +856,20 @@ public class ParentGuardiansController : ControllerBase
             false;
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Disable",
+            entityName: "StudentParentGuardian",
+            entityId: relationship.Id.ToString(),
+            description:
+                $"Student-parent relationship {relationship.Id} was disabled.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                relationship.IsActive,
+                relationship.IsPrimaryGuardian,
+                relationship.IsEmergencyContact
+            });
 
         return Ok(new
         {
@@ -1003,6 +1105,22 @@ public class ParentGuardiansController : ControllerBase
             user.Id;
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "CreateAccount",
+            entityName: "ParentGuardian",
+            entityId: parent.Id.ToString(),
+            description:
+                $"Login account was created for parent/guardian {parent.ParentNumber} - {parent.FullName}.",
+            newValues: new
+            {
+                parent.ParentNumber,
+                parent.FullName,
+                parent.Email,
+                parent.PhoneNumber,
+                parent.IsActive,
+                Role = parentRole
+            });
 
         // ========================================================
         // RESPONSE

@@ -2,6 +2,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using SchoolManagement.Application.Notifications;
 using SchoolManagement.Infrastructure.Notifications;
+using SchoolManagement.Application.Auditing;
+using SchoolManagement.Infrastructure.Auditing;
 
 namespace SchoolManagement.Infrastructure;
 
@@ -20,6 +22,12 @@ public static class DependencyInjection
         services.AddScoped<
             IPushNotificationService,
             FirebasePushNotificationService>();
+
+        services.AddHttpContextAccessor();
+
+        services.AddScoped<
+            IAuditLogService,
+            AuditLogService>();
 
         return services;
     }

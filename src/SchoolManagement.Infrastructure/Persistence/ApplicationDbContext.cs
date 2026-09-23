@@ -81,6 +81,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ParentDeviceToken> ParentDeviceTokens =>
     Set<ParentDeviceToken>();
 
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -1173,6 +1175,46 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(x => x.ParentGuardianId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.UserId)
+                .HasMaxLength(450);
+
+            entity.Property(x => x.Action)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.EntityName)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(x => x.EntityId)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.IpAddress)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.UserAgent)
+                .HasMaxLength(1000);
+
+            entity.HasIndex(x => x.UserId);
+
+            entity.HasIndex(x => x.StaffId);
+
+            entity.HasIndex(x => x.StudentId);
+
+            entity.HasIndex(x => x.ParentGuardianId);
+
+            entity.HasIndex(x => x.EntityName);
+
+            entity.HasIndex(x => x.CreatedAt);
         });
     }
 }
