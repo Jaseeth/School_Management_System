@@ -1,10 +1,12 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SchoolManagement.Application.Notifications;
-using SchoolManagement.Infrastructure.Notifications;
 using SchoolManagement.Application.Auditing;
-using SchoolManagement.Infrastructure.Auditing;
+using SchoolManagement.Application.Notifications;
+using SchoolManagement.Application.Students.Export;
 using SchoolManagement.Application.Students.Import;
+using SchoolManagement.Infrastructure.Auditing;
+using SchoolManagement.Infrastructure.Notifications;
+using SchoolManagement.Infrastructure.Students.Export;
 using SchoolManagement.Infrastructure.Students.Import;
 
 namespace SchoolManagement.Infrastructure;
@@ -50,6 +52,10 @@ public static class DependencyInjection
         services.AddScoped<
             IStudentImportErrorReportService,
             StudentImportErrorReportService>();
+
+        services.AddScoped<
+            IStudentExportService,
+            StudentExportService>();
 
         return services;
     }
