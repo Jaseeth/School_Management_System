@@ -7,6 +7,7 @@ using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Cryptography;
+using SchoolManagement.Application.Auditing;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -18,17 +19,20 @@ public class StudentRegistrationController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IEmailService _emailService;
+    private readonly IAuditLogService _auditLogService;
 
     public StudentRegistrationController(
-        ApplicationDbContext context,
-        UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole> roleManager,
-        IEmailService emailService)
+    ApplicationDbContext context,
+    UserManager<ApplicationUser> userManager,
+    RoleManager<IdentityRole> roleManager,
+    IEmailService emailService,
+    IAuditLogService auditLogService)
     {
         _context = context;
         _userManager = userManager;
         _roleManager = roleManager;
         _emailService = emailService;
+        _auditLogService = auditLogService;
     }
 
 
@@ -1229,7 +1233,22 @@ public class StudentRegistrationController : ControllerBase
         // --------------------------------------------------------
 
         await _userManager
-            .ResetAccessFailedCountAsync(user);
+    .ResetAccessFailedCountAsync(
+        user);
+
+        await _auditLogService.LogAsync(
+            action: "ResetPassword",
+            entityName: "Student",
+            entityId: student.Id.ToString(),
+            description:
+                $"Password was reset for student {student.IndexNumber} - {student.FullName}.",
+            newValues: new
+            {
+                student.IndexNumber,
+                student.FullName,
+                Email = user.Email,
+                user.MustChangePassword
+            });
 
         return Ok(new
         {
