@@ -8,6 +8,7 @@ using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Cryptography;
 using SchoolManagement.Application.Auditing;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -46,6 +47,7 @@ public class StudentRegistrationController : ControllerBase
     // Verify Student and Send Registration OTP
     // ============================================================
 
+    [EnableRateLimiting("RegistrationPolicy")]
     [HttpPost("start")]
     public async Task<IActionResult> StartRegistration(
         StudentRegistrationStartRequest request)
@@ -240,6 +242,7 @@ public class StudentRegistrationController : ControllerBase
     // Verify Registration OTP
     // ============================================================
 
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("verify-otp")]
     public async Task<IActionResult> VerifyOtp(
         VerifyOtpRequest request)
@@ -337,6 +340,7 @@ public class StudentRegistrationController : ControllerBase
     // Complete Student Registration
     // ============================================================
 
+    [EnableRateLimiting("RegistrationPolicy")]
     [HttpPost("complete")]
     public async Task<IActionResult> CompleteRegistration(
         CompleteStudentRegistrationRequest request)
@@ -623,6 +627,7 @@ public class StudentRegistrationController : ControllerBase
     // Request Password Reset OTP
     // ============================================================
 
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("forgot-password/request-otp")]
     public async Task<IActionResult>
         RequestForgotPasswordOtp(
@@ -859,6 +864,7 @@ public class StudentRegistrationController : ControllerBase
     // Verify Password Reset OTP
     // ============================================================
 
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("forgot-password/verify-otp")]
     public async Task<IActionResult>
         VerifyForgotPasswordOtp(
@@ -1023,6 +1029,7 @@ public class StudentRegistrationController : ControllerBase
     // Reset Student Password
     // ============================================================
 
+    [EnableRateLimiting("AuthPolicy")]
     [HttpPost("forgot-password/reset-password")]
     public async Task<IActionResult>
         ResetStudentPassword(

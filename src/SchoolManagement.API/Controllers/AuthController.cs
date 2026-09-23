@@ -10,6 +10,7 @@ using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -42,6 +43,7 @@ public class AuthController : ControllerBase
     // LOGIN
     // ============================================================
 
+    [EnableRateLimiting("AuthPolicy")]
     [HttpPost("login")]
     public async Task<IActionResult> Login(
         LoginRequest request)
@@ -229,6 +231,7 @@ public class AuthController : ControllerBase
     // REQUEST OTP
     // ============================================================
 
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("staff-forgot-password/request-otp")]
     public async Task<IActionResult>
         RequestStaffForgotPasswordOtp(
@@ -476,6 +479,7 @@ public class AuthController : ControllerBase
     // VERIFY OTP
     // ============================================================
 
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("staff-forgot-password/verify-otp")]
     public async Task<IActionResult>
         VerifyStaffForgotPasswordOtp(

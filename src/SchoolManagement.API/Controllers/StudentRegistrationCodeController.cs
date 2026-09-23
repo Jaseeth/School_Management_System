@@ -11,6 +11,7 @@ using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -243,6 +244,7 @@ public class StudentRegistrationCodeController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting("RegistrationPolicy")]
     [HttpPost("validate")]
     public async Task<IActionResult> Validate(
     ValidateStudentRegistrationCodeRequest request)
@@ -395,6 +397,7 @@ public class StudentRegistrationCodeController : ControllerBase
 
 
     [AllowAnonymous]
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("request-email-otp")]
     public async Task<IActionResult> RequestEmailOtp(
     RequestStudentRegistrationEmailOtpRequest request)
@@ -714,6 +717,7 @@ public class StudentRegistrationCodeController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting("OtpPolicy")]
     [HttpPost("verify-email-otp")]
     public async Task<IActionResult> VerifyEmailOtp(
     VerifyStudentRegistrationEmailOtpRequest request)
@@ -923,6 +927,7 @@ public class StudentRegistrationCodeController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting("RegistrationPolicy")]
     [HttpPost("complete")]
     public async Task<IActionResult> CompleteRegistration(
     CompleteStudentRegistrationWithCodeRequest request)
