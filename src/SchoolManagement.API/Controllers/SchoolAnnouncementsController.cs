@@ -7,6 +7,7 @@ using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Claims;
 using SchoolManagement.Application.Notifications;
+using SchoolManagement.Application.Auditing;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -16,13 +17,16 @@ public class SchoolAnnouncementsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IPushNotificationService _pushNotificationService;
+    private readonly IAuditLogService _auditLogService;
 
     public SchoolAnnouncementsController(
-    ApplicationDbContext context,
-    IPushNotificationService pushNotificationService)
+        ApplicationDbContext context,
+        IPushNotificationService pushNotificationService,
+        IAuditLogService auditLogService)
     {
         _context = context;
         _pushNotificationService = pushNotificationService;
+        _auditLogService = auditLogService;
     }
 
     // ============================================================
@@ -298,6 +302,26 @@ public class SchoolAnnouncementsController : ControllerBase
             .Add(announcement);
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Create",
+            entityName: "SchoolAnnouncement",
+            entityId: announcement.Id.ToString(),
+            description:
+                $"School announcement '{announcement.Title}' was created.",
+            newValues: new
+            {
+                announcement.Title,
+                announcement.Message,
+                announcement.AudienceType,
+                announcement.SectionId,
+                announcement.GradeId,
+                announcement.SchoolClassId,
+                announcement.RoleName,
+                announcement.PublishAt,
+                announcement.ExpiresAt,
+                announcement.IsActive
+            });
 
 
         // ========================================================
@@ -1352,6 +1376,20 @@ public class SchoolAnnouncementsController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            announcement.Title,
+            announcement.Message,
+            announcement.AudienceType,
+            announcement.SectionId,
+            announcement.GradeId,
+            announcement.SchoolClassId,
+            announcement.RoleName,
+            announcement.PublishAt,
+            announcement.ExpiresAt,
+            announcement.IsActive
+        };
+
         if (string.IsNullOrWhiteSpace(
             request.Title))
         {
@@ -1401,6 +1439,27 @@ public class SchoolAnnouncementsController : ControllerBase
             request.IsActive;
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Update",
+            entityName: "SchoolAnnouncement",
+            entityId: announcement.Id.ToString(),
+            description:
+                $"School announcement '{announcement.Title}' was updated.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                announcement.Title,
+                announcement.Message,
+                announcement.AudienceType,
+                announcement.SectionId,
+                announcement.GradeId,
+                announcement.SchoolClassId,
+                announcement.RoleName,
+                announcement.PublishAt,
+                announcement.ExpiresAt,
+                announcement.IsActive
+            });
 
         // ========================================================
         // NOTIFY USERS THAT ANNOUNCEMENT WAS UPDATED
@@ -1466,10 +1525,27 @@ public class SchoolAnnouncementsController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            announcement.IsActive
+        };
+
         announcement.IsActive =
             false;
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Disable",
+            entityName: "SchoolAnnouncement",
+            entityId: announcement.Id.ToString(),
+            description:
+                $"School announcement '{announcement.Title}' was disabled.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                announcement.IsActive
+            });
 
         // ========================================================
         // NOTIFY USERS THAT ANNOUNCEMENT WAS CANCELLED
@@ -1553,11 +1629,34 @@ public class SchoolAnnouncementsController : ControllerBase
         // DELETE ANNOUNCEMENT
         // ========================================================
 
+        var deletedValues = new
+        {
+            announcement.Id,
+            announcement.Title,
+            announcement.Message,
+            announcement.AudienceType,
+            announcement.SectionId,
+            announcement.GradeId,
+            announcement.SchoolClassId,
+            announcement.RoleName,
+            announcement.PublishAt,
+            announcement.ExpiresAt,
+            announcement.IsActive
+        };
+
         _context.SchoolAnnouncements
             .Remove(
                 announcement);
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "Delete",
+            entityName: "SchoolAnnouncement",
+            entityId: id.ToString(),
+            description:
+                $"School announcement '{deletedValues.Title}' was deleted.",
+            oldValues: deletedValues);
 
         return Ok(new
         {

@@ -7,6 +7,7 @@ using SchoolManagement.Domain.Entities;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
 using SchoolManagement.Application.Notifications;
+using SchoolManagement.Application.Auditing;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -16,13 +17,16 @@ public class MarksReviewController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IPushNotificationService _pushNotificationService;
+    private readonly IAuditLogService _auditLogService;
 
     public MarksReviewController(
     ApplicationDbContext context,
-    IPushNotificationService pushNotificationService)
+    IPushNotificationService pushNotificationService,
+    IAuditLogService auditLogService)
     {
         _context = context;
         _pushNotificationService = pushNotificationService;
+        _auditLogService = auditLogService;
     }
 
     // =====================================
@@ -484,6 +488,16 @@ public class MarksReviewController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            Status =
+        submission.Status.ToString(),
+
+            submission.ReviewedByStaffId,
+            submission.ReviewedAt,
+            submission.ReviewComment
+        };
+
         // ---------------------------------
         // Approve
         // ---------------------------------
@@ -504,6 +518,23 @@ public class MarksReviewController : ControllerBase
                 : request.Comment.Trim();
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+    action: "Approve",
+    entityName: "MarksSubmission",
+    entityId: submission.Id.ToString(),
+    description:
+        $"Marks submission {submission.Id} was approved.",
+    oldValues: oldValues,
+    newValues: new
+    {
+        Status =
+            submission.Status.ToString(),
+
+        submission.ReviewedByStaffId,
+        submission.ReviewedAt,
+        submission.ReviewComment
+    });
 
         return Ok(new
         {
@@ -623,6 +654,16 @@ public class MarksReviewController : ControllerBase
             });
         }
 
+        var oldValues = new
+        {
+            Status =
+        submission.Status.ToString(),
+
+            submission.ReviewedByStaffId,
+            submission.ReviewedAt,
+            submission.ReviewComment
+        };
+
         // ---------------------------------
         // Return for correction
         // ---------------------------------
@@ -665,6 +706,23 @@ public class MarksReviewController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+    action: "Reject",
+    entityName: "MarksSubmission",
+    entityId: submission.Id.ToString(),
+    description:
+        $"Marks submission {submission.Id} was returned for correction.",
+    oldValues: oldValues,
+    newValues: new
+    {
+        Status =
+            submission.Status.ToString(),
+
+        submission.ReviewedByStaffId,
+        submission.ReviewedAt,
+        submission.ReviewComment
+    });
 
         return Ok(new
         {
@@ -772,6 +830,15 @@ public class MarksReviewController : ControllerBase
         var publishedAt =
             DateTime.UtcNow;
 
+        var oldValues = new
+        {
+            Status =
+        submission.Status.ToString(),
+
+            submission.PublishedByStaffId,
+            submission.PublishedAt
+        };
+
         submission.Status =
             MarksSubmissionStatus.Published;
 
@@ -806,6 +873,25 @@ public class MarksReviewController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+    action: "Publish",
+    entityName: "MarksSubmission",
+    entityId: submission.Id.ToString(),
+    description:
+        $"Marks submission {submission.Id} was published.",
+    oldValues: oldValues,
+    newValues: new
+    {
+        Status =
+            submission.Status.ToString(),
+
+        submission.PublishedByStaffId,
+        submission.PublishedAt,
+
+        PublishedMarks =
+            marks.Count
+    });
 
         // ---------------------------------
         // Notify linked parents

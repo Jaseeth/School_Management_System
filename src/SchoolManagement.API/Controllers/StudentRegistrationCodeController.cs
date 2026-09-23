@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Authentication.DTOs;
+using SchoolManagement.Application.Auditing;
 using SchoolManagement.Application.Common.Interfaces;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Identity;
@@ -22,17 +23,20 @@ public class StudentRegistrationCodeController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IEmailService _emailService;
+    private readonly IAuditLogService _auditLogService;
 
     public StudentRegistrationCodeController(
-    ApplicationDbContext context,
-    UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole> roleManager,
-    IEmailService emailService)
+        ApplicationDbContext context,
+        UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager,
+        IEmailService emailService,
+        IAuditLogService auditLogService)
     {
         _context = context;
         _userManager = userManager;
         _roleManager = roleManager;
         _emailService = emailService;
+        _auditLogService = auditLogService;
     }
 
     // ============================================================
@@ -186,6 +190,21 @@ public class StudentRegistrationCodeController : ControllerBase
             registration);
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "GenerateRegistrationCode",
+            entityName: "StudentRegistrationCode",
+            entityId: registration.Id.ToString(),
+            description:
+                $"A student registration code was generated for {student.IndexNumber} - {student.FullName}.",
+            newValues: new
+            {
+                registration.StudentId,
+                student.IndexNumber,
+                registration.ExpiresAt,
+                registration.MaxAttempts,
+                registration.IsActive
+            });
 
 
         // ========================================================
@@ -1239,6 +1258,21 @@ public class StudentRegistrationCodeController : ControllerBase
 
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "CreateAccount",
+            entityName: "Student",
+            entityId: student.Id.ToString(),
+            description:
+                $"Student account {student.IndexNumber} - {student.FullName} was created.",
+            newValues: new
+            {
+                student.IndexNumber,
+                student.FullName,
+                Email = email,
+                Role = "Student",
+                student.IsActive
+            });
 
 
         return Ok(new

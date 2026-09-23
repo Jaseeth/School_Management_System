@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Authentication.DTOs;
+using SchoolManagement.Application.Auditing;
 using SchoolManagement.Application.Common.Interfaces;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Identity;
@@ -20,17 +21,20 @@ public class AuthController : ControllerBase
     private readonly JwtTokenService _jwtTokenService;
     private readonly ApplicationDbContext _context;
     private readonly IEmailService _emailService;
+    private readonly IAuditLogService _auditLogService;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         JwtTokenService jwtTokenService,
         ApplicationDbContext context,
-        IEmailService emailService)
+        IEmailService emailService,
+        IAuditLogService auditLogService)
     {
         _userManager = userManager;
         _jwtTokenService = jwtTokenService;
         _context = context;
         _emailService = emailService;
+        _auditLogService = auditLogService;
     }
 
 
@@ -197,6 +201,17 @@ public class AuthController : ControllerBase
 
         await _userManager
             .UpdateAsync(user);
+
+        await _auditLogService.LogAsync(
+            action: "ChangePassword",
+            entityName: "ApplicationUser",
+            entityId: user.Id,
+            description:
+                $"Password was changed for account {user.Email}.",
+            newValues: new
+            {
+                user.MustChangePassword
+            });
 
         return Ok(new
         {
@@ -802,6 +817,20 @@ public class AuthController : ControllerBase
 
         await _userManager
             .ResetAccessFailedCountAsync(user);
+
+        await _auditLogService.LogAsync(
+            action: "ResetPassword",
+            entityName: "Staff",
+            entityId: staff.Id.ToString(),
+            description:
+                $"Password was reset for staff {staff.StaffNumber} - {staff.FullName}.",
+            newValues: new
+            {
+                staff.StaffNumber,
+                staff.FullName,
+                Email = user.Email,
+                user.MustChangePassword
+            });
 
         return Ok(new
         {

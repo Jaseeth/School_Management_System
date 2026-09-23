@@ -1,11 +1,12 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SchoolManagement.Application.Auditing;
 using SchoolManagement.Application.Staff.DTOs;
 using SchoolManagement.Domain.Entities;
+using SchoolManagement.Infrastructure.Authorization;
 using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
-using SchoolManagement.Infrastructure.Authorization;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -16,21 +17,24 @@ public class StaffController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly IAuditLogService _auditLogService;
 
     public StaffController(
         ApplicationDbContext context,
         UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole> roleManager)
+        RoleManager<IdentityRole> roleManager,
+        IAuditLogService auditLogService)
     {
         _context = context;
         _userManager = userManager;
         _roleManager = roleManager;
+        _auditLogService = auditLogService;
     }
 
     [HasPermission("Staff.Create")]
     [HttpPost]
     public async Task<IActionResult> CreateStaff(
-    CreateStaffRequest request)
+        CreateStaffRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.StaffNumber))
         {
@@ -146,6 +150,23 @@ public class StaffController : ControllerBase
         _context.Staff.Add(staff);
 
         await _context.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            action: "CreateAccount",
+            entityName: "Staff",
+            entityId: staff.Id.ToString(),
+            description:
+                $"Staff account {staff.StaffNumber} - {staff.FullName} was created.",
+            newValues: new
+            {
+                staff.StaffNumber,
+                staff.FullName,
+                staff.Designation,
+                Email = user.Email,
+                Role = role.Name,
+                staff.IsActive,
+                user.MustChangePassword
+            });
 
         return Ok(new
         {
