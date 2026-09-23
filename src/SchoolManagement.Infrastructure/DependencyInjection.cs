@@ -4,6 +4,8 @@ using SchoolManagement.Application.Notifications;
 using SchoolManagement.Infrastructure.Notifications;
 using SchoolManagement.Application.Auditing;
 using SchoolManagement.Infrastructure.Auditing;
+using SchoolManagement.Application.Students.Import;
+using SchoolManagement.Infrastructure.Students.Import;
 
 namespace SchoolManagement.Infrastructure;
 
@@ -28,6 +30,26 @@ public static class DependencyInjection
         services.AddScoped<
             IAuditLogService,
             AuditLogService>();
+
+        services.AddScoped<
+            IStudentImportExcelReader,
+            StudentImportExcelReader>();
+
+        services.AddScoped<
+            IStudentImportValidationService,
+            StudentImportValidationService>();
+
+        services.AddScoped<
+            IStudentImportReferenceResolver,
+            StudentImportReferenceResolver>();
+
+        services.AddScoped<
+            IStudentImportService,
+            StudentImportService>();
+
+        services.AddScoped<
+            IStudentImportErrorReportService,
+            StudentImportErrorReportService>();
 
         return services;
     }
