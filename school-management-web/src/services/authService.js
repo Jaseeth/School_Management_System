@@ -23,8 +23,7 @@ export const authService = {
                 fullName: data.fullName,
                 email: data.email,
                 roles: data.roles,
-                mustChangePassword:
-                    data.mustChangePassword,
+                mustChangePassword: data.mustChangePassword,
                 expiresAt: data.expiresAt,
             })
         );
@@ -33,26 +32,16 @@ export const authService = {
     },
 
     logout() {
-        localStorage.removeItem(
-            ACCESS_TOKEN_KEY
-        );
-
-        localStorage.removeItem(
-            USER_KEY
-        );
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
     },
 
     getToken() {
-        return localStorage.getItem(
-            ACCESS_TOKEN_KEY
-        );
+        return localStorage.getItem(ACCESS_TOKEN_KEY);
     },
 
     getUser() {
-        const user =
-            localStorage.getItem(
-                USER_KEY
-            );
+        const user = localStorage.getItem(USER_KEY);
 
         if (!user) {
             return null;
@@ -66,22 +55,11 @@ export const authService = {
     },
 
     isAuthenticated() {
-        const token =
-            localStorage.getItem(
-                ACCESS_TOKEN_KEY
-            );
-
-        return !!token;
+        return !!localStorage.getItem(ACCESS_TOKEN_KEY);
     },
 
     hasRole(role) {
-        const user =
-            this.getUser();
-
-        if (!user?.roles) {
-            return false;
-        }
-
-        return user.roles.includes(role);
+        const user = this.getUser();
+        return user?.roles?.includes(role) ?? false;
     },
 };
