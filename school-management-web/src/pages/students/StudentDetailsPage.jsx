@@ -2,12 +2,16 @@
     ArrowLeft,
     BookOpen,
     CalendarDays,
+    CheckCircle2,
+    Copy,
     GraduationCap,
+    KeyRound,
     Mail,
     Phone,
     ShieldCheck,
     UserRound,
     Users,
+    X,
 } from "lucide-react";
 
 import {
@@ -21,6 +25,9 @@ import {
 } from "react-router-dom";
 
 import { studentsApi } from "../../api/studentsApi";
+import {
+    studentRegistrationApi,
+} from "../../api/studentRegistrationApi";
 
 export default function StudentDetailsPage() {
     const {
@@ -44,6 +51,26 @@ export default function StudentDetailsPage() {
         error,
         setError,
     ] = useState("");
+
+    const [
+        generatingCode,
+        setGeneratingCode,
+    ] = useState(false);
+
+    const [
+        registrationData,
+        setRegistrationData,
+    ] = useState(null);
+
+    const [
+        registrationError,
+        setRegistrationError,
+    ] = useState("");
+
+    const [
+        copied,
+        setCopied,
+    ] = useState(false);
 
     useEffect(() => {
         loadStudentDetails();
@@ -159,6 +186,76 @@ export default function StudentDetailsPage() {
         data?.guardians ??
         [];
 
+    const handleGenerateRegistrationCode =
+        async () => {
+
+            try {
+
+                setGeneratingCode(true);
+                setRegistrationError("");
+                setRegistrationData(null);
+
+                const response =
+                    await studentRegistrationApi
+                        .generateCode({
+                            indexNumber:
+                                student.indexNumber,
+                        });
+
+                setRegistrationData(
+                    response.data
+                );
+
+            }
+            catch (err) {
+
+                console.error(
+                    "Failed to generate registration code:",
+                    err
+                );
+
+                setRegistrationError(
+                    err?.response
+                        ?.data
+                        ?.message ||
+                    "Unable to generate registration code."
+                );
+
+            }
+            finally {
+
+                setGeneratingCode(false);
+
+            }
+
+        };
+
+
+    const handleCopyCode =
+        async () => {
+
+            const code =
+                registrationData
+                    ?.registrationCode;
+
+            if (!code) {
+                return;
+            }
+
+            await navigator.clipboard
+                .writeText(code);
+
+            setCopied(true);
+
+            setTimeout(
+                () => {
+                    setCopied(false);
+                },
+                1500
+            );
+
+        };
+
     return (
         <div className="mx-auto w-full max-w-[1500px]">
 
@@ -210,8 +307,8 @@ export default function StudentDetailsPage() {
 
                                 <span
                                     className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${student?.isActive
-                                            ? "bg-emerald-50 text-emerald-700"
-                                            : "bg-slate-100 text-slate-600"
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : "bg-slate-100 text-slate-600"
                                         }`}
                                 >
                                     {student?.isActive
@@ -240,9 +337,46 @@ export default function StudentDetailsPage() {
 
                     </div>
 
+                    <div className="flex shrink-0">
+
+                        <button
+                            type="button"
+                            onClick={
+                                handleGenerateRegistrationCode
+                            }
+                            disabled={
+                                generatingCode
+                            }
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+
+                            {generatingCode ? (
+                                <>
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                    Generating...
+                                </>
+                            ) : (
+                                <>
+                                    <KeyRound className="h-4 w-4" />
+                                    Generate Registration Code
+                                </>
+                            )}
+
+                        </button>
+
+                    </div>
+
                 </div>
 
             </div>
+
+            {registrationError && (
+
+                <div className="mt-6 rounded-xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
+                    {registrationError}
+                </div>
+
+            )}
 
             {/* ====================================================
                 BASIC + CURRENT ACADEMIC
@@ -739,8 +873,8 @@ export default function StudentDetailsPage() {
 
                                                 <span
                                                     className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.isCurrent
-                                                            ? "bg-blue-50 text-blue-700"
-                                                            : "bg-slate-100 text-slate-600"
+                                                        ? "bg-blue-50 text-blue-700"
+                                                        : "bg-slate-100 text-slate-600"
                                                         }`}
                                                 >
                                                     {item.isCurrent
@@ -767,6 +901,144 @@ export default function StudentDetailsPage() {
                 )}
 
             </div>
+
+            {registrationData && (
+
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
+
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+
+                        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+
+                            <div>
+
+                                <h2 className="text-lg font-bold text-slate-950">
+                                    Registration Code
+                                </h2>
+
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Give this code securely to the student.
+                                </p>
+
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setRegistrationData(
+                                        null
+                                    )
+                                }
+                                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+
+                        </div>
+
+                        <div className="p-6">
+
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 text-center">
+
+                                <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                                    Registration Code
+                                </p>
+
+                                <div className="mt-3 flex items-center justify-center gap-3">
+
+                                    <span className="text-3xl font-bold tracking-[0.2em] text-slate-950">
+                                        {
+                                            registrationData
+                                                .registrationCode
+                                        }
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            handleCopyCode
+                                        }
+                                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm transition hover:bg-blue-100"
+                                        title="Copy code"
+                                    >
+                                        {copied ? (
+                                            <CheckCircle2 className="h-5 w-5" />
+                                        ) : (
+                                            <Copy className="h-5 w-5" />
+                                        )}
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                            <div className="mt-6 space-y-4">
+
+                                <ModalInfoRow
+                                    label="Student"
+                                    value={
+                                        registrationData
+                                            ?.student
+                                            ?.fullName
+                                    }
+                                />
+
+                                <ModalInfoRow
+                                    label="Index Number"
+                                    value={
+                                        registrationData
+                                            ?.student
+                                            ?.indexNumber
+                                    }
+                                />
+
+                                <ModalInfoRow
+                                    label="Registered Email"
+                                    value={
+                                        registrationData
+                                            ?.student
+                                            ?.maskedEmail
+                                    }
+                                />
+
+                                <ModalInfoRow
+                                    label="Expires In"
+                                    value={`${registrationData?.expiresInMinutes ?? 30} minutes`}
+                                />
+
+                                <ModalInfoRow
+                                    label="Maximum Attempts"
+                                    value={
+                                        registrationData
+                                            ?.maxAttempts
+                                    }
+                                />
+
+                            </div>
+
+                            <div className="mt-6 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-700">
+                                This code is temporary. If a new code is generated, the previous unused code becomes invalid.
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setRegistrationData(
+                                        null
+                                    )
+                                }
+                                className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                            >
+                                Done
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            )}
 
         </div>
     );
@@ -842,6 +1114,29 @@ function EmptyState({
 }
 
 // ============================================================
+// MODAL INFO ROW
+// ============================================================
+
+function ModalInfoRow({
+    label,
+    value,
+}) {
+    return (
+        <div className="flex items-center justify-between gap-6 border-b border-slate-100 pb-3 last:border-b-0">
+
+            <span className="text-sm text-slate-500">
+                {label}
+            </span>
+
+            <span className="text-right text-sm font-semibold text-slate-900">
+                {value || "—"}
+            </span>
+
+        </div>
+    );
+}
+
+// ============================================================
 // TABLE HELPERS
 // ============================================================
 
@@ -862,8 +1157,8 @@ function TableCell({
     return (
         <td
             className={`px-6 py-4 text-sm ${strong
-                    ? "font-semibold text-slate-800"
-                    : "text-slate-600"
+                ? "font-semibold text-slate-800"
+                : "text-slate-600"
                 }`}
         >
             {children}

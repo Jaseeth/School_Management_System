@@ -73,6 +73,31 @@ public class StudentsController : ControllerBase
             });
         }
 
+        if (!string.IsNullOrWhiteSpace(
+    request.Email))
+        {
+            var email =
+                request.Email
+                    .Trim()
+                    .ToLowerInvariant();
+
+            var duplicateEmail =
+                await _context.Students
+                    .AnyAsync(x =>
+                        x.Email != null &&
+                        x.Email.ToLower() ==
+                            email);
+
+            if (duplicateEmail)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Student email is already assigned to another student."
+                });
+            }
+        }
+
         var userId =
             User.FindFirst(
                 System.Security.Claims
@@ -124,27 +149,41 @@ public class StudentsController : ControllerBase
                 try
                 {
                     var student =
-                        new Student
-                        {
-                            IndexNumber =
-                                indexNumber,
+    new Student
+    {
+        IndexNumber =
+            indexNumber,
 
-                            FullName =
-                                request
-                                    .FullName
-                                    .Trim(),
+        FullName =
+            request
+                .FullName
+                .Trim(),
 
-                            DateOfBirth =
-                                request
-                                    .DateOfBirth,
+        DateOfBirth =
+            request
+                .DateOfBirth,
 
-                            SchoolClassId =
-                                request
-                                    .SchoolClassId,
+        Email =
+            string.IsNullOrWhiteSpace(
+                request.Email)
+                ? null
+                : request.Email
+                    .Trim()
+                    .ToLowerInvariant(),
 
-                            IsActive =
-                                true
-                        };
+        Mobile =
+            string.IsNullOrWhiteSpace(
+                request.Mobile)
+                ? null
+                : request.Mobile.Trim(),
+
+        SchoolClassId =
+            request
+                .SchoolClassId,
+
+        IsActive =
+            true
+    };
 
                     _context.Students.Add(
                         student);

@@ -10,6 +10,10 @@ public class Student
 
     public DateTime? DateOfBirth { get; set; }
 
+    public string? Email { get; set; }
+
+    public string? Mobile { get; set; }
+
     public int SchoolClassId { get; set; }
 
     public SchoolClass SchoolClass { get; set; } = null!;

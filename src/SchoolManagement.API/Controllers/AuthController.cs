@@ -118,6 +118,179 @@ public class AuthController : ControllerBase
 
 
     // ============================================================
+    // STUDENT LOGIN
+    // ============================================================
+
+    [EnableRateLimiting("AuthPolicy")]
+    [HttpPost("student-login")]
+    public async Task<IActionResult> StudentLogin(
+        StudentLoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(
+            request.IndexNumber))
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Index number is required."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            request.Password))
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Password is required."
+            });
+        }
+
+
+        var indexNumber =
+            request.IndexNumber.Trim();
+
+
+        // ========================================================
+        // FIND STUDENT
+        // ========================================================
+
+        var student =
+            await _context.Students
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.IndexNumber == indexNumber &&
+                    x.IsActive);
+
+        if (student == null)
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid index number or password."
+            });
+        }
+
+
+        // ========================================================
+        // STUDENT MUST HAVE REGISTERED ACCOUNT
+        // ========================================================
+
+        if (string.IsNullOrWhiteSpace(
+            student.ApplicationUserId))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Student account has not been activated."
+            });
+        }
+
+
+        // ========================================================
+        // FIND IDENTITY USER
+        // ========================================================
+
+        var user =
+            await _userManager
+                .FindByIdAsync(
+                    student.ApplicationUserId);
+
+        if (user == null)
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid index number or password."
+            });
+        }
+
+
+        if (!user.IsActive)
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Account is inactive."
+            });
+        }
+
+
+        // ========================================================
+        // STUDENT ROLE ONLY
+        // ========================================================
+
+        var roles =
+            await _userManager
+                .GetRolesAsync(user);
+
+        if (!roles.Contains(
+            "Student"))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "This account is not a student account."
+            });
+        }
+
+
+        // ========================================================
+        // PASSWORD
+        // ========================================================
+
+        var passwordValid =
+            await _userManager
+                .CheckPasswordAsync(
+                    user,
+                    request.Password);
+
+        if (!passwordValid)
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid index number or password."
+            });
+        }
+
+
+        // ========================================================
+        // JWT
+        // ========================================================
+
+        var tokenResult =
+            await _jwtTokenService
+                .GenerateTokenAsync(user);
+
+
+        return Ok(new
+        {
+            token =
+                tokenResult.Token,
+
+            expiresAt =
+                tokenResult.ExpiresAt,
+
+            fullName =
+                student.FullName,
+
+            indexNumber =
+                student.IndexNumber,
+
+            email =
+                user.Email ??
+                string.Empty,
+
+            roles,
+
+            studentId =
+                student.Id
+        });
+    }
+
+
+    // ============================================================
     // CHANGE PASSWORD
     //
     // Used when logged-in user knows current password.

@@ -1,6 +1,7 @@
 ﻿import api from "./axios";
 
 export const academicApi = {
+
     getAcademicYears() {
         return api.get(
             "/academic/academic-years"
@@ -22,6 +23,12 @@ export const academicApi = {
     getClasses(gradeId) {
         return api.get(
             `/academic/classes/${gradeId}`
+        );
+    },
+
+    getSubjects() {
+        return api.get(
+            "/academic/subjects"
         );
     },
 };
