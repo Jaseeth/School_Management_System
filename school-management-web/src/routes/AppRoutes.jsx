@@ -32,6 +32,7 @@ import StudentEnrollmentHistoryPage from "../pages/students/StudentEnrollmentHis
 import StudentGuardiansPage from "../pages/students/StudentGuardiansPage";
 import StudentChangePasswordPage from "../pages/students/StudentChangePasswordPage";
 import StudentForgotPasswordPage from "../pages/students/StudentForgotPasswordPage";
+import AdminResetStudentPasswordPage from "../pages/students/AdminResetStudentPasswordPage";
 
 export default function AppRoutes() {
     return (
@@ -86,6 +87,11 @@ export default function AppRoutes() {
                 <Route
                     path="/students/:id"
                     element={<StudentDetailsPage />}
+                />
+
+                <Route
+                    path="/students/:id/reset-password"
+                    element={<AdminResetStudentPasswordPage />}
                 />
 
                 {/*

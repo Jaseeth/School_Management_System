@@ -5,6 +5,17 @@ import { studentAuthApi } from "../../api/studentAuthApi";
 
 export default function StudentChangePasswordPage() {
     const navigate = useNavigate();
+
+    const [mustChangePassword, setMustChangePassword] = useState(() => {
+        try {
+            return JSON.parse(
+                localStorage.getItem("studentUser") || "null"
+            )?.mustChangePassword === true;
+        } catch {
+            return false;
+        }
+    });
+
     const [form, setForm] = useState({
         currentPassword: "",
         newPassword: "",
@@ -26,7 +37,11 @@ export default function StudentChangePasswordPage() {
         setError("");
         setSuccess("");
 
-        if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
+        if (
+            !form.currentPassword ||
+            !form.newPassword ||
+            !form.confirmPassword
+        ) {
             setError("Please fill in all three password fields.");
             return;
         }
@@ -38,17 +53,37 @@ export default function StudentChangePasswordPage() {
 
         try {
             setSaving(true);
+
             const response = await studentAuthApi.changePassword(form);
+
+            const student = JSON.parse(
+                localStorage.getItem("studentUser") || "null"
+            );
+
+            if (student) {
+                localStorage.setItem(
+                    "studentUser",
+                    JSON.stringify({
+                        ...student,
+                        mustChangePassword: false,
+                    })
+                );
+            }
+
+            setMustChangePassword(false);
             setForm({
                 currentPassword: "",
                 newPassword: "",
                 confirmPassword: "",
             });
-            setSuccess(response.data?.message || "Password changed successfully.");
+            setSuccess(
+                response.data?.message || "Password changed successfully."
+            );
         } catch (err) {
             const details = err?.response?.data;
             setError(
-                details?.errors?.join(" ") ||
+                (Array.isArray(details?.errors) &&
+                    details.errors.join(" ")) ||
                 details?.message ||
                 "Unable to change password. Please try again."
             );
@@ -65,29 +100,39 @@ export default function StudentChangePasswordPage() {
                         <GraduationCap className="h-5 w-5" />
                     </div>
                     <div>
-                        <p className="font-bold text-slate-950">School Management</p>
-                        <p className="text-xs text-slate-500">Student Portal</p>
+                        <p className="font-bold text-slate-950">
+                            School Management
+                        </p>
+                        <p className="text-xs text-slate-500">
+                            Student Portal
+                        </p>
                     </div>
                 </div>
             </header>
 
             <main className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-7 lg:px-8 lg:py-10">
-                <button
-                    type="button"
-                    onClick={() => navigate("/student/dashboard")}
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Dashboard
-                </button>
+                {!mustChangePassword && (
+                    <button
+                        type="button"
+                        onClick={() => navigate("/student/dashboard")}
+                        className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Dashboard
+                    </button>
+                )}
 
                 <div className="mx-auto mt-6 max-w-xl">
-                    <p className="text-sm font-semibold text-blue-600">Account Security</p>
+                    <p className="text-sm font-semibold text-blue-600">
+                        Account Security
+                    </p>
                     <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
                         Change Password
                     </h1>
                     <p className="mt-2 text-sm text-slate-500">
-                        Enter your current password and choose a new one.
+                        {mustChangePassword
+                            ? "Enter your temporary password and choose a new one before using the student portal."
+                            : "Enter your current password and choose a new one."}
                     </p>
 
                     <form
@@ -99,7 +144,11 @@ export default function StudentChangePasswordPage() {
                         </div>
 
                         <PasswordField
-                            label="Current Password"
+                            label={
+                                mustChangePassword
+                                    ? "Temporary Password"
+                                    : "Current Password"
+                            }
                             name="currentPassword"
                             value={form.currentPassword}
                             onChange={updateField}
@@ -121,12 +170,19 @@ export default function StudentChangePasswordPage() {
                         />
 
                         {error && (
-                            <p role="alert" className="mb-5 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+                            <p
+                                role="alert"
+                                className="mb-5 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700"
+                            >
                                 {error}
                             </p>
                         )}
+
                         {success && (
-                            <p role="status" className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-700">
+                            <p
+                                role="status"
+                                className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-700"
+                            >
                                 {success}
                             </p>
                         )}
@@ -145,7 +201,13 @@ export default function StudentChangePasswordPage() {
     );
 }
 
-function PasswordField({ label, name, value, onChange, autoComplete }) {
+function PasswordField({
+    label,
+    name,
+    value,
+    onChange,
+    autoComplete,
+}) {
     return (
         <label className="mb-5 block text-sm font-semibold text-slate-700">
             {label}

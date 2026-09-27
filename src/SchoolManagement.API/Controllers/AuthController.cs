@@ -285,7 +285,10 @@ public class AuthController : ControllerBase
             roles,
 
             studentId =
-                student.Id
+                student.Id,
+
+            mustChangePassword =
+                user.MustChangePassword
         });
     }
 

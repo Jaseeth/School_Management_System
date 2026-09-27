@@ -28,4 +28,8 @@ export const studentsApi = {
             data
         );
     },
+
+    resetStudentPassword(indexNumber) {
+        return api.post("/student-password-admin/reset", { indexNumber });
+    },
 };
