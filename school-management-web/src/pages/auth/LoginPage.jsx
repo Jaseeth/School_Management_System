@@ -190,7 +190,8 @@ export default function LoginPage() {
 
                                     <button
                                         type="button"
-                                        className="text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                                        onClick={() => navigate("/staff/forgot-password")}
+                                        className="cursor-pointer text-sm font-medium text-blue-600 transition hover:text-blue-700"
                                     >
                                         Forgot password?
                                     </button>

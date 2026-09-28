@@ -45,6 +45,14 @@ import ParentChangePasswordPage from "../pages/parents/ParentChangePasswordPage"
 import ParentProfilePage from "../pages/parents/ParentProfilePage";
 
 import StaffProfilePage from "../pages/staff/StaffProfilePage";
+import StaffForgotPasswordPage from "../pages/auth/StaffForgotPasswordPage";
+import StaffForcedChangePasswordPage from "../pages/auth/StaffForcedChangePasswordPage";
+
+import PortalLandingPage from "../pages/public/PortalLandingPage";
+
+import TeacherTimetablePage from "../pages/teachers/TeacherTimetablePage";
+import TeacherDailyClassesPage from "../pages/teachers/TeacherDailyClassesPage";
+import TeacherAttendancePage from "../pages/teachers/TeacherAttendancePage";
 
 export default function AppRoutes() {
     return (
@@ -53,6 +61,8 @@ export default function AppRoutes() {
             {/* ================================================
                 PUBLIC ROUTES
             ================================================ */}
+
+            <Route path="/" element={<PortalLandingPage />} />
 
             <Route
                 path="/login"
@@ -107,6 +117,21 @@ export default function AppRoutes() {
                 />
 
                 <Route path="/staff/my-profile" element={<StaffProfilePage />} />
+
+                <Route
+                    path="/teacher/timetable"
+                    element={<TeacherTimetablePage />}
+                />
+
+                <Route
+                    path="/teacher/today"
+                    element={<TeacherDailyClassesPage />}
+                />
+
+                <Route
+                    path="/teacher/attendance"
+                    element={<TeacherAttendancePage />}
+                />
 
                 {/*
                     FUTURE PAGES MUST ALSO GO HERE
@@ -263,6 +288,15 @@ export default function AppRoutes() {
             <Route path="/parent/login" element={<ParentLoginPage />} />
 
             <Route
+                path="/change-password"
+                element={
+                    <ProtectedRoute>
+                        <StaffForcedChangePasswordPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
                 path="/parent/dashboard"
                 element={
                     <ParentProtectedRoute>
@@ -323,6 +357,11 @@ export default function AppRoutes() {
                         <ParentProfilePage />
                     </ParentProtectedRoute>
                 }
+            />
+
+            <Route
+                path="/staff/forgot-password"
+                element={<StaffForgotPasswordPage />}
             />
 
         </Routes>

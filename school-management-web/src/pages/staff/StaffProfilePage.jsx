@@ -70,32 +70,18 @@ export default function StaffProfilePage() {
 
         setError("");
         setSuccess("");
+        setSaving(true);
+
+        let response;
 
         try {
-            setSaving(true);
-
-            const { data } = await staffProfileApi.updateProfile({
+            response = await staffProfileApi.updateProfile({
                 fullName: form.fullName.trim(),
                 email: form.email.trim(),
                 currentPassword: emailChanged
                     ? form.currentPassword
                     : null,
             });
-
-            setProfile((current) => ({
-                ...current,
-                ...data.profile,
-            }));
-
-            setForm({
-                fullName: data.profile.fullName,
-                email: data.profile.email,
-                currentPassword: "",
-            });
-
-            updateAccountDetails(data.profile);
-            setSuccess(data.message || "Profile updated successfully.");
-            setEditing(false);
         } catch (err) {
             const details = err?.response?.data;
 
@@ -106,9 +92,38 @@ export default function StaffProfilePage() {
                 details?.message ||
                 "Unable to save staff profile."
             );
-        } finally {
             setSaving(false);
+            return;
         }
+
+        setSaving(false);
+
+        const savedProfile = response.data?.profile;
+
+        if (!savedProfile) {
+            setEditing(false);
+            setSuccess(
+                "The server saved your changes. Refresh the page to see the updated profile."
+            );
+            return;
+        }
+
+        setProfile((current) => ({
+            ...current,
+            ...savedProfile,
+        }));
+
+        setForm({
+            fullName: savedProfile.fullName ?? "",
+            email: savedProfile.email ?? "",
+            currentPassword: "",
+        });
+
+        updateAccountDetails(savedProfile);
+        setSuccess(
+            response.data?.message || "Profile updated successfully."
+        );
+        setEditing(false);
     };
 
     return (
@@ -148,7 +163,10 @@ export default function StaffProfilePage() {
             )}
 
             {loadingError && (
-                <p role="alert" className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+                <p
+                    role="alert"
+                    className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+                >
                     {loadingError}
                 </p>
             )}
@@ -173,7 +191,10 @@ export default function StaffProfilePage() {
                                 autoComplete="name"
                             />
                         ) : (
-                            <Detail label="Full Name" value={profile.fullName} />
+                            <Detail
+                                label="Full Name"
+                                value={profile.fullName}
+                            />
                         )}
 
                         <Detail
@@ -230,13 +251,19 @@ export default function StaffProfilePage() {
                     )}
 
                     {error && (
-                        <p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+                        <p
+                            role="alert"
+                            className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+                        >
                             {error}
                         </p>
                     )}
 
                     {success && (
-                        <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">
+                        <p
+                            role="status"
+                            className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700"
+                        >
                             {success}
                         </p>
                     )}

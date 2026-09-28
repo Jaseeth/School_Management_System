@@ -31,6 +31,108 @@ public class AttendanceController : ControllerBase
     // Permanent class teacher OR active temporary class teacher
     // ============================================================
 
+    // Classes where this staff member has permanent or current temporary
+    // class-teacher access. Uses the same access rules as marking attendance.
+    [HttpGet("my/classes")]
+    public async Task<IActionResult> GetMyAttendanceClasses()
+    {
+        var staffResult = await GetCurrentStaffAsync();
+
+        if (staffResult.Staff == null)
+            return staffResult.ErrorResult!;
+
+        var staffId = staffResult.Staff.Id;
+        var now = DateTime.UtcNow;
+
+        var permanent = await _context.ClassTeacherAssignments
+            .AsNoTracking()
+            .Where(x => x.StaffId == staffId && x.IsActive)
+            .Select(x => new
+            {
+                x.AcademicYearId,
+                x.SchoolClassId
+            })
+            .ToListAsync();
+
+        var temporary = await _context.TemporaryClassTeacherAssignments
+            .AsNoTracking()
+            .Where(x =>
+                x.StaffId == staffId &&
+                !x.IsRevoked &&
+                x.ExpiresAt > now)
+            .Select(x => new
+            {
+                x.AcademicYearId,
+                x.SchoolClassId
+            })
+            .ToListAsync();
+
+        var allowed = permanent
+            .Concat(temporary)
+            .Distinct()
+            .ToList();
+
+        var classIds = allowed
+            .Select(x => x.SchoolClassId)
+            .Distinct()
+            .ToList();
+
+        var yearIds = allowed
+            .Select(x => x.AcademicYearId)
+            .Distinct()
+            .ToList();
+
+        var classes = await _context.SchoolClasses
+            .AsNoTracking()
+            .Where(x => classIds.Contains(x.Id) && x.IsActive)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                Grade = x.Grade.Name,
+                Section = x.Grade.Section.Name
+            })
+            .ToDictionaryAsync(x => x.Id);
+
+        var years = await _context.AcademicYears
+            .AsNoTracking()
+            .Where(x => yearIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+
+        var result = allowed
+            .Where(x =>
+                classes.ContainsKey(x.SchoolClassId) &&
+                years.ContainsKey(x.AcademicYearId))
+            .OrderByDescending(x =>
+                years[x.AcademicYearId].StartDate)
+            .ThenBy(x =>
+                classes[x.SchoolClassId].Section)
+            .ThenBy(x =>
+                classes[x.SchoolClassId].Grade)
+            .ThenBy(x =>
+                classes[x.SchoolClassId].Name)
+            .Select(x => new
+            {
+                academicYearId = x.AcademicYearId,
+                academicYearName = years[x.AcademicYearId].Name,
+                academicYearStartDate =
+                    years[x.AcademicYearId].StartDate,
+                academicYearEndDate =
+                    years[x.AcademicYearId].EndDate,
+                schoolClassId = x.SchoolClassId,
+                className = classes[x.SchoolClassId].Name,
+                gradeName = classes[x.SchoolClassId].Grade,
+                sectionName = classes[x.SchoolClassId].Section
+            })
+            .ToList();
+
+        return Ok(new
+        {
+            count = result.Count,
+            classes = result
+        });
+    }
+
     [HttpGet("class/{classId:int}/students")]
     public async Task<IActionResult> GetStudentsForAttendance(
         int classId,
