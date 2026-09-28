@@ -31,7 +31,7 @@ export default function LoginPage() {
 
         if (!email.trim() || !password.trim()) {
             setError(
-                "Please enter your email and password."
+                "Please enter your staff ID or email and password."
             );
 
             return;
@@ -160,22 +160,22 @@ export default function LoginPage() {
                             {/* EMAIL */}
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-700">
-                                    Email address
+                                    Staff ID or email address
                                 </label>
 
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
                                     <input
-                                        type="email"
+                                        type="text"
                                         value={email}
                                         onChange={(e) =>
                                             setEmail(
                                                 e.target.value
                                             )
                                         }
-                                        placeholder="name@school.com"
-                                        autoComplete="email"
+                                        placeholder="Staff ID or name@school.com"
+                                        autoComplete="username"
                                         className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                                     />
                                 </div>

@@ -57,6 +57,9 @@ export default function StudentLoginPage() {
                 return;
             }
 
+            localStorage.removeItem("authUser");
+            localStorage.removeItem("parentUser");
+
             localStorage.setItem("accessToken", data.token);
             localStorage.setItem(
                 "studentUser",

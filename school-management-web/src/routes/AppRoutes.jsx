@@ -34,6 +34,16 @@ import StudentChangePasswordPage from "../pages/students/StudentChangePasswordPa
 import StudentForgotPasswordPage from "../pages/students/StudentForgotPasswordPage";
 import AdminResetStudentPasswordPage from "../pages/students/AdminResetStudentPasswordPage";
 
+import ParentLoginPage from "../pages/parents/ParentLoginPage";
+import ParentDashboardPage from "../pages/parents/ParentDashboardPage";
+import ParentProtectedRoute from "./ParentProtectedRoute";
+import ParentAttendancePage from "../pages/parents/ParentAttendancePage";
+import ParentResultsPage from "../pages/parents/ParentResultsPage";
+import ParentAcademicProfilePage from "../pages/parents/ParentAcademicProfilePage";
+import ParentNotificationsPage from "../pages/parents/ParentNotificationsPage";
+import ParentChangePasswordPage from "../pages/parents/ParentChangePasswordPage";
+import ParentProfilePage from "../pages/parents/ParentProfilePage";
+
 export default function AppRoutes() {
     return (
         <Routes>
@@ -244,6 +254,71 @@ export default function AppRoutes() {
             <Route
                 path="/student/forgot-password"
                 element={<StudentForgotPasswordPage />}
+            />
+
+            <Route path="/parent/login" element={<ParentLoginPage />} />
+
+            <Route
+                path="/parent/dashboard"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentDashboardPage />
+                    </ParentProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/parent/children/:studentId/attendance"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentAttendancePage />
+                    </ParentProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/parent/children/:studentId/results"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentResultsPage />
+                    </ParentProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/parent/children/:studentId/academic-profile"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentAcademicProfilePage />
+                    </ParentProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/parent/notifications"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentNotificationsPage />
+                    </ParentProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/parent/change-password"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentChangePasswordPage />
+                    </ParentProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/parent/profile"
+                element={
+                    <ParentProtectedRoute>
+                        <ParentProfilePage />
+                    </ParentProtectedRoute>
+                }
             />
 
         </Routes>

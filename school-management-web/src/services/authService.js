@@ -12,6 +12,9 @@ export const authService = {
 
         const data = response.data;
 
+        localStorage.removeItem("parentUser");
+        localStorage.removeItem("studentUser");
+
         localStorage.setItem(
             ACCESS_TOKEN_KEY,
             data.token

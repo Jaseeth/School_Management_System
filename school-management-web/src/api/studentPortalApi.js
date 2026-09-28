@@ -82,4 +82,8 @@ export const studentPortalApi = {
         );
     },
 
+    updateProfile(payload) {
+        return api.put("/student-portal/profile", payload);
+    },
+
 };

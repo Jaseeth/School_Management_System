@@ -45,19 +45,42 @@ public class AuthController : ControllerBase
 
     [EnableRateLimiting("AuthPolicy")]
     [HttpPost("login")]
-    public async Task<IActionResult> Login(
-        LoginRequest request)
+    public async Task<IActionResult> Login(LoginRequest request)
     {
-        var user =
-            await _userManager.FindByEmailAsync(
-                request.Email);
+        var identifier = request.Email?.Trim();
+
+        if (string.IsNullOrWhiteSpace(identifier) ||
+            string.IsNullOrWhiteSpace(request.Password))
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid ID/email or password."
+            });
+        }
+
+        ApplicationUser? user;
+
+        if (identifier.Contains('@'))
+        {
+            user = await _userManager.FindByEmailAsync(identifier);
+        }
+        else
+        {
+            var staff = await _context.Staff
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.StaffNumber == identifier && x.IsActive);
+
+            user = staff?.ApplicationUserId == null
+                ? null
+                : await _userManager.FindByIdAsync(staff.ApplicationUserId);
+        }
 
         if (user == null)
         {
             return Unauthorized(new
             {
-                message =
-                    "Invalid email or password."
+                message = "Invalid ID/email or password."
             });
         }
 
@@ -65,55 +88,30 @@ public class AuthController : ControllerBase
         {
             return Unauthorized(new
             {
-                message =
-                    "Account is inactive."
+                message = "Account is inactive."
             });
         }
 
-        var passwordValid =
-            await _userManager.CheckPasswordAsync(
-                user,
-                request.Password);
-
-        if (!passwordValid)
+        if (!await _userManager.CheckPasswordAsync(user, request.Password))
         {
             return Unauthorized(new
             {
-                message =
-                    "Invalid email or password."
+                message = "Invalid ID/email or password."
             });
         }
 
-        var roles =
-            await _userManager.GetRolesAsync(
-                user);
+        var roles = await _userManager.GetRolesAsync(user);
+        var tokenResult = await _jwtTokenService.GenerateTokenAsync(user);
 
-        var tokenResult =
-            await _jwtTokenService
-                .GenerateTokenAsync(user);
-
-        return Ok(
-            new LoginResponse
-            {
-                Token =
-                    tokenResult.Token,
-
-                ExpiresAt =
-                    tokenResult.ExpiresAt,
-
-                FullName =
-                    user.FullName,
-
-                Email =
-                    user.Email ??
-                    string.Empty,
-
-                Roles =
-                    roles,
-
-                MustChangePassword =
-                    user.MustChangePassword
-            });
+        return Ok(new LoginResponse
+        {
+            Token = tokenResult.Token,
+            ExpiresAt = tokenResult.ExpiresAt,
+            FullName = user.FullName,
+            Email = user.Email ?? string.Empty,
+            Roles = roles,
+            MustChangePassword = user.MustChangePassword
+        });
     }
 
 

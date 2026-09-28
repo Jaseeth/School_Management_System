@@ -2434,4 +2434,206 @@ public class ParentGuardiansController : ControllerBase
             notification.ReadAt
         });
     }
+
+    [HttpPut("my/profile")]
+    [Authorize(Roles = "Parent")]
+    public async Task<IActionResult> UpdateMyProfile(
+    UpdateMyParentProfileRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var parent = await _context.ParentGuardians
+            .FirstOrDefaultAsync(x =>
+                x.ApplicationUserId == userId &&
+                x.IsActive);
+
+        if (parent == null)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Logged-in account is not linked to an active parent or guardian."
+            });
+        }
+
+        var fullName = request.FullName?.Trim();
+        var phoneNumber = request.PhoneNumber?.Trim();
+        var email = request.Email?.Trim();
+
+        if (string.IsNullOrWhiteSpace(fullName) ||
+            fullName.Length > 200)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Full name is required and must not exceed 200 characters."
+            });
+        }
+
+        if (phoneNumber?.Length > 50)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Phone number must not exceed 50 characters."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(email) ||
+            email.Length > 256 ||
+            !System.Net.Mail.MailAddress.TryCreate(
+                email,
+                out var parsedEmail) ||
+            !string.Equals(
+                parsedEmail.Address,
+                email,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new
+            {
+                message = "Enter a valid email address."
+            });
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+
+        if (user == null || !user.IsActive)
+            return Unauthorized();
+
+        var emailChanged = !string.Equals(
+            user.Email,
+            email,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (emailChanged)
+        {
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword) ||
+                !await _userManager.CheckPasswordAsync(
+                    user,
+                    request.CurrentPassword))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Enter your correct current password to change your email."
+                });
+            }
+
+            var existingUser =
+                await _userManager.FindByEmailAsync(email);
+
+            if (existingUser != null &&
+                existingUser.Id != user.Id)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This email address is already registered."
+                });
+            }
+
+            var anotherParentHasEmail =
+                await _context.ParentGuardians.AnyAsync(x =>
+                    x.Id != parent.Id &&
+                    x.Email != null &&
+                    x.Email == email);
+
+            if (anotherParentHasEmail)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Email is already assigned to another parent or guardian."
+                });
+            }
+        }
+
+        var previousValues = new
+        {
+            parent.FullName,
+            parent.PhoneNumber,
+            parent.Email
+        };
+
+        // Run the whole transaction inside SQL Server's retry strategy.
+        var strategy =
+            _context.Database.CreateExecutionStrategy();
+
+        var identityResult = await strategy.ExecuteAsync(
+            async () =>
+            {
+                await using var transaction =
+                    await _context.Database
+                        .BeginTransactionAsync();
+
+                user.FullName = fullName;
+
+                if (emailChanged)
+                {
+                    user.Email = email;
+                    user.UserName = email;
+                    user.EmailConfirmed = false;
+                }
+
+                var result =
+                    await _userManager.UpdateAsync(user);
+
+                if (!result.Succeeded)
+                    return result;
+
+                parent.FullName = fullName;
+                parent.Email = email;
+                parent.PhoneNumber =
+                    string.IsNullOrWhiteSpace(phoneNumber)
+                        ? null
+                        : phoneNumber;
+
+                await _context.SaveChangesAsync();
+
+                await _auditLogService.LogAsync(
+                    action: "UpdateOwnProfile",
+                    entityName: "ParentGuardian",
+                    entityId: parent.Id.ToString(),
+                    description:
+                        $"Parent/guardian {parent.ParentNumber} updated their profile.",
+                    oldValues: previousValues,
+                    newValues: new
+                    {
+                        parent.FullName,
+                        parent.PhoneNumber,
+                        parent.Email
+                    });
+
+                await transaction.CommitAsync();
+
+                return result;
+            });
+
+        if (!identityResult.Succeeded)
+        {
+            return BadRequest(new
+            {
+                message = "Unable to update parent profile.",
+                errors = identityResult.Errors
+                    .Select(x => x.Description)
+                    .ToList()
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Profile updated successfully.",
+            parent = new
+            {
+                parent.Id,
+                parent.ParentNumber,
+                parent.FullName,
+                parent.Email,
+                parent.PhoneNumber
+            }
+        });
+    }
 }
