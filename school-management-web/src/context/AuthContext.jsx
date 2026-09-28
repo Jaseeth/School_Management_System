@@ -38,6 +38,21 @@ export function AuthProvider({ children }) {
         setUser(null);
     };
 
+    const updateAccountDetails = (details) => {
+        setUser((current) => {
+            if (!current) return current;
+
+            const updated = {
+                ...current,
+                fullName: details.fullName,
+                email: details.email,
+            };
+
+            localStorage.setItem("authUser", JSON.stringify(updated));
+            return updated;
+        });
+    };
+
     const hasRole = (role) => {
         return user?.roles?.includes(role) ?? false;
     };

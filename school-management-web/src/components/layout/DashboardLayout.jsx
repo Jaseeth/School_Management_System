@@ -31,6 +31,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+import StaffAccountMenu from "./StaffAccountMenu";
 
 export default function DashboardLayout() {
     const navigate = useNavigate();
@@ -1409,97 +1410,7 @@ export default function DashboardLayout() {
 
                         {/* USER */}
 
-                        <button
-                            type="button"
-
-                            className="
-                                hidden
-                                items-center
-                                gap-3
-
-                                rounded-xl
-
-                                border
-                                border-slate-200
-
-                                bg-white
-
-                                px-3
-                                py-2
-
-                                transition
-
-                                hover:bg-slate-50
-
-                                sm:flex
-                            "
-                        >
-
-                            <div
-                                className="
-                                    flex
-                                    h-9
-                                    w-9
-                                    items-center
-                                    justify-center
-
-                                    rounded-lg
-
-                                    bg-blue-50
-
-                                    text-sm
-                                    font-bold
-                                    text-blue-700
-                                "
-                            >
-                                {
-                                    firstLetter
-                                }
-                            </div>
-
-                            <div
-                                className="
-                                    max-w-40
-                                    text-left
-                                "
-                            >
-
-                                <p
-                                    className="
-                                        truncate
-                                        text-sm
-                                        font-semibold
-                                        text-slate-900
-                                    "
-                                >
-                                    {
-                                        user?.fullName
-                                    }
-                                </p>
-
-                                <p
-                                    className="
-                                        truncate
-                                        text-xs
-                                        text-slate-500
-                                    "
-                                >
-                                    {
-                                        primaryRole
-                                    }
-                                </p>
-
-                            </div>
-
-                            <ChevronDown
-                                className="
-                                    h-4
-                                    w-4
-                                    text-slate-400
-                                "
-                            />
-
-                        </button>
+                        <StaffAccountMenu />
 
                     </div>
 

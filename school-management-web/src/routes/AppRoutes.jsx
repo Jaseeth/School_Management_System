@@ -44,6 +44,8 @@ import ParentNotificationsPage from "../pages/parents/ParentNotificationsPage";
 import ParentChangePasswordPage from "../pages/parents/ParentChangePasswordPage";
 import ParentProfilePage from "../pages/parents/ParentProfilePage";
 
+import StaffProfilePage from "../pages/staff/StaffProfilePage";
+
 export default function AppRoutes() {
     return (
         <Routes>
@@ -103,6 +105,8 @@ export default function AppRoutes() {
                     path="/students/:id/reset-password"
                     element={<AdminResetStudentPasswordPage />}
                 />
+
+                <Route path="/staff/my-profile" element={<StaffProfilePage />} />
 
                 {/*
                     FUTURE PAGES MUST ALSO GO HERE
