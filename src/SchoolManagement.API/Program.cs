@@ -520,6 +520,9 @@ builder.Services
     .AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(name: "database");
 
+builder.Services.AddScoped<
+    SchoolManagement.API.Services.AttendanceWindowService>();
+
 
 builder.Services.AddHsts(options =>
 {

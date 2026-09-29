@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SchoolManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SchoolManagement.Infrastructure.Persistence;
 namespace SchoolManagement.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260929081136_AttendanceWindowRule")]
+    partial class AttendanceWindowRule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -212,115 +215,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AcademicYears");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AttendanceChangeRequestId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PreviousRemarks")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int?>("PreviousStatus")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProposedRemarks")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("ProposedStatus")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StudentFullName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StudentIndexNumber")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.HasIndex("AttendanceChangeRequestId", "StudentId")
-                        .IsUnique();
-
-                    b.ToTable("AttendanceChangeItems");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AcademicYearId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("AttendanceDate")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("IsWholeClass")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("RequestedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("RequestedByStaffId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ReviewRemarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime?>("ReviewedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("ReviewedByStaffId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SchoolClassId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequestedByStaffId");
-
-                    b.HasIndex("ReviewedByStaffId");
-
-                    b.HasIndex("SchoolClassId");
-
-                    b.HasIndex("AcademicYearId", "SchoolClassId", "AttendanceDate", "RequestedByStaffId")
-                        .IsUnique()
-                        .HasFilter("[Status] = 1");
-
-                    b.HasIndex("AcademicYearId", "SchoolClassId", "AttendanceDate", "Status");
-
-                    b.ToTable("AttendanceChangeRequests");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceWindowExtension", b =>
@@ -2112,49 +2006,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("AcademicYear");
                 });
 
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeItem", b =>
-                {
-                    b.HasOne("SchoolManagement.Domain.Entities.AttendanceChangeRequest", "Request")
-                        .WithMany("Items")
-                        .HasForeignKey("AttendanceChangeRequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Student", null)
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("Request");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeRequest", b =>
-                {
-                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", null)
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
-                        .WithMany()
-                        .HasForeignKey("RequestedByStaffId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
-                        .WithMany()
-                        .HasForeignKey("ReviewedByStaffId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", null)
-                        .WithMany()
-                        .HasForeignKey("SchoolClassId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceWindowExtension", b =>
                 {
                     b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", null)
@@ -2957,11 +2808,6 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Staff");
 
                     b.Navigation("Subject");
-                });
-
-            modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeRequest", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Grade", b =>

@@ -37,6 +37,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ClassTeacherAssignment> ClassTeacherAssignments
     => Set<ClassTeacherAssignment>();
 
+    public DbSet<AttendanceChangeRequest> AttendanceChangeRequests
+    => Set<AttendanceChangeRequest>();
+
+    public DbSet<AttendanceChangeItem> AttendanceChangeItems
+        => Set<AttendanceChangeItem>();
+
     public DbSet<TemporaryClassTeacherAssignment>
         TemporaryClassTeacherAssignments
         => Set<TemporaryClassTeacherAssignment>();
@@ -82,6 +88,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     Set<ParentDeviceToken>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    public DbSet<AttendanceWindowExtension> AttendanceWindowExtensions
+    => Set<AttendanceWindowExtension>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1215,6 +1224,130 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(x => x.EntityName);
 
             entity.HasIndex(x => x.CreatedAt);
+        });
+
+        builder.Entity<AttendanceWindowExtension>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.AttendanceDate).HasColumnType("date");
+            entity.Property(x => x.Reason).IsRequired().HasMaxLength(1000);
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicYearId,
+                x.SchoolClassId,
+                x.AttendanceDate
+            }).IsUnique();
+
+            entity.HasOne<AcademicYear>()
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne<SchoolClass>()
+                .WithMany()
+                .HasForeignKey(x => x.SchoolClassId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne<Staff>()
+                .WithMany()
+                .HasForeignKey(x => x.GrantedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<AttendanceChangeRequest>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.AttendanceDate)
+                .HasColumnType("date");
+
+            entity.Property(x => x.Reason)
+                .IsRequired()
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.ReviewRemarks)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.Status)
+                .HasConversion<int>();
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicYearId,
+                x.SchoolClassId,
+                x.AttendanceDate,
+                x.Status
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.AcademicYearId,
+                x.SchoolClassId,
+                x.AttendanceDate,
+                x.RequestedByStaffId
+            })
+            .IsUnique()
+            .HasFilter("[Status] = 1");
+
+            entity.HasOne<AcademicYear>()
+                .WithMany()
+                .HasForeignKey(x => x.AcademicYearId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne<SchoolClass>()
+                .WithMany()
+                .HasForeignKey(x => x.SchoolClassId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne<Staff>()
+                .WithMany()
+                .HasForeignKey(x => x.RequestedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne<Staff>()
+                .WithMany()
+                .HasForeignKey(x => x.ReviewedByStaffId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<AttendanceChangeItem>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.StudentIndexNumber)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(x => x.StudentFullName)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(x => x.ProposedRemarks)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.ProposedStatus)
+                .HasConversion<int>();
+
+            entity.Property(x => x.PreviousRemarks)
+                .HasMaxLength(500);
+
+            entity.HasIndex(x => new
+            {
+                x.AttendanceChangeRequestId,
+                x.StudentId
+            })
+            .IsUnique();
+
+            entity.HasOne(x => x.Request)
+                .WithMany(x => x.Items)
+                .HasForeignKey(x => x.AttendanceChangeRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<Student>()
+                .WithMany()
+                .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }
