@@ -524,22 +524,16 @@ public class DashboardController : ControllerBase
     [Authorize(Roles = "Section Head")]
     public async Task<IActionResult> GetSectionHeadSummary()
     {
-        var userId =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(userId))
-        {
             return Unauthorized();
-        }
 
-
-        var staff =
-            await _context.Staff
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.ApplicationUserId == userId &&
-                    x.IsActive);
+        var staff = await _context.Staff
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.ApplicationUserId == userId &&
+                x.IsActive);
 
         if (staff == null)
         {
@@ -550,312 +544,167 @@ public class DashboardController : ControllerBase
             });
         }
 
+        var schoolNow = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTime.UtcNow,
+            "Asia/Colombo");
 
-        // ========================================================
-        // ACTIVE ACADEMIC YEAR
-        // ========================================================
+        var todayDate = schoolNow.Date;
+        var today = DateOnly.FromDateTime(todayDate);
+        var schoolDay = (SchoolDay)(int)today.DayOfWeek;
 
-        var academicYear =
-            await _context.AcademicYears
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive)
-                .OrderByDescending(x =>
-                    x.Id)
-                .FirstOrDefaultAsync();
+        // Select the current academic year by its dates.
+        var academicYear = await _context.AcademicYears
+            .AsNoTracking()
+            .Where(x =>
+                x.IsActive &&
+                x.StartDate.Date <= todayDate &&
+                x.EndDate.Date >= todayDate)
+            .OrderByDescending(x => x.StartDate)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync();
 
         if (academicYear == null)
         {
             return BadRequest(new
             {
                 message =
-                    "No active academic year found."
+                    $"No active academic year covers {todayDate:yyyy-MM-dd}. " +
+                    "Check the academic year dates and active status."
             });
         }
 
-
-        // ========================================================
-        // ACTIVE ACADEMIC TERM
-        // ========================================================
-
-        var academicTerm =
-            await _context.AcademicTerms
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        academicYear.Id)
-                .OrderBy(x =>
-                    x.Id)
-                .FirstOrDefaultAsync();
-
-
-        // ========================================================
-        // SECTION HEAD ASSIGNMENT
-        // ========================================================
-
-        var sectionHeadAssignment =
-            await _context.SectionHeadAssignments
-                .AsNoTracking()
-                .Where(x =>
-                    x.StaffId ==
-                        staff.Id &&
-                    x.AcademicYearId ==
-                        academicYear.Id &&
-                    x.IsActive)
-                .Select(x => new
-                {
-                    x.SectionId,
-                    SectionName =
-                        x.Section.Name
-                })
-                .FirstOrDefaultAsync();
+        var sectionHeadAssignment = await _context.SectionHeadAssignments
+            .AsNoTracking()
+            .Where(x =>
+                x.StaffId == staff.Id &&
+                x.AcademicYearId == academicYear.Id &&
+                x.IsActive)
+            .OrderBy(x => x.SectionId)
+            .Select(x => new
+            {
+                x.SectionId,
+                SectionName = x.Section.Name
+            })
+            .FirstOrDefaultAsync();
 
         if (sectionHeadAssignment == null)
         {
             return BadRequest(new
             {
                 message =
-                    "No active section-head assignment found for this academic year."
+                    $"No active Section Head assignment was found for " +
+                    $"{academicYear.Name}.",
+                academicYearId = academicYear.Id,
+                academicYearName = academicYear.Name
             });
         }
 
+        var sectionId = sectionHeadAssignment.SectionId;
 
-        var sectionId =
-            sectionHeadAssignment.SectionId;
+        // Select the term that contains today.
+        var academicTerm = await _context.AcademicTerms
+            .AsNoTracking()
+            .Where(x =>
+                x.IsActive &&
+                x.AcademicYearId == academicYear.Id &&
+                x.StartDate.Date <= todayDate &&
+                x.EndDate.Date >= todayDate)
+            .OrderByDescending(x => x.StartDate)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync();
 
+        var totalStudents = await _context.Students
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.IsActive &&
+                x.SchoolClass.Grade.SectionId == sectionId);
 
-        var today =
-            DateOnly.FromDateTime(
-                DateTime.Now);
+        var totalClasses = await _context.SchoolClasses
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.IsActive &&
+                x.Grade.SectionId == sectionId);
 
-        var schoolDay =
-            (SchoolDay)(int)today.DayOfWeek;
+        var sectionTeacherAssignments = _context.TeacherAssignments
+            .AsNoTracking()
+            .Where(x =>
+                x.IsActive &&
+                x.AcademicYearId == academicYear.Id &&
+                x.SchoolClass.Grade.SectionId == sectionId);
 
-
-        // ========================================================
-        // TOTAL STUDENTS IN SECTION
-        // ========================================================
-
-        var totalStudents =
-            await _context.Students
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.IsActive &&
-                    x.SchoolClass
-                        .Grade
-                        .SectionId ==
-                    sectionId);
-
-
-        // ========================================================
-        // TOTAL CLASSES IN SECTION
-        // ========================================================
-
-        var totalClasses =
-            await _context.SchoolClasses
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.IsActive &&
-                    x.Grade.SectionId ==
-                        sectionId);
-
-
-        // ========================================================
-        // TOTAL TEACHERS IN SECTION
-        // ========================================================
-
-        var totalTeachers =
-            await _context.TeacherAssignments
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        academicYear.Id &&
-                    x.SchoolClass
-                        .Grade
-                        .SectionId ==
-                        sectionId)
-                .Select(x =>
-                    x.StaffId)
-                .Distinct()
-                .CountAsync();
-
-
-        // ========================================================
-        // TODAY TIMETABLE
-        // ========================================================
+        var totalTeachers = await sectionTeacherAssignments
+            .Select(x => x.StaffId)
+            .Distinct()
+            .CountAsync();
 
         var todayTimetableCount = 0;
 
         if (academicTerm != null)
         {
-            todayTimetableCount =
-                await _context.TimetableEntries
-                    .AsNoTracking()
-                    .CountAsync(x =>
-                        x.IsActive &&
-                        x.AcademicYearId ==
-                            academicYear.Id &&
-                        x.AcademicTermId ==
-                            academicTerm.Id &&
-                        x.Day ==
-                            schoolDay &&
-                        x.SchoolClass
-                            .Grade
-                            .SectionId ==
-                            sectionId);
+            todayTimetableCount = await _context.TimetableEntries
+                .AsNoTracking()
+                .CountAsync(x =>
+                    x.IsActive &&
+                    x.AcademicYearId == academicYear.Id &&
+                    x.AcademicTermId == academicTerm.Id &&
+                    x.Day == schoolDay &&
+                    x.SchoolClass.Grade.SectionId == sectionId);
         }
 
+        var todaySpecialClassCount = await _context.SpecialClassSessions
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.IsActive &&
+                x.Status == SpecialClassStatus.Approved &&
+                x.AcademicYearId == academicYear.Id &&
+                x.ClassDate == today &&
+                x.SchoolClass.Grade.SectionId == sectionId);
 
-        // ========================================================
-        // TODAY SPECIAL CLASSES
-        // ========================================================
+        var upcomingSpecialClassCount = await _context.SpecialClassSessions
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.IsActive &&
+                x.Status == SpecialClassStatus.Approved &&
+                x.AcademicYearId == academicYear.Id &&
+                x.ClassDate > today &&
+                x.SchoolClass.Grade.SectionId == sectionId);
 
-        var todaySpecialClassCount =
-            await _context.SpecialClassSessions
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.IsActive &&
-                    x.Status ==
-                        SpecialClassStatus.Approved &&
-                    x.AcademicYearId ==
-                        academicYear.Id &&
-                    x.ClassDate ==
-                        today &&
-                    x.SchoolClass
-                        .Grade
-                        .SectionId ==
-                        sectionId);
+        var sectionStaffIds = sectionTeacherAssignments
+            .Select(x => x.StaffId)
+            .Distinct();
 
+        var pendingLeaveRequestCount = await _context.StaffLeaveRequests
+            .AsNoTracking()
+            .CountAsync(x =>
+                sectionStaffIds.Contains(x.StaffId) &&
+                x.Status == StaffLeaveStatus.Pending);
 
-        // ========================================================
-        // UPCOMING SPECIAL CLASSES
-        // ========================================================
+        var unreadNotificationCount = await _context.Notifications
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.RecipientStaffId == staff.Id &&
+                !x.IsRead);
 
-        var upcomingSpecialClassCount =
-            await _context.SpecialClassSessions
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.IsActive &&
-                    x.Status ==
-                        SpecialClassStatus.Approved &&
-                    x.AcademicYearId ==
-                        academicYear.Id &&
-                    x.ClassDate >
-                        today &&
-                    x.SchoolClass
-                        .Grade
-                        .SectionId ==
-                        sectionId);
-
-
-        // ========================================================
-        // PENDING LEAVE REQUESTS IN SECTION
-        //
-        // Count staff assigned to classes inside this section
-        // ========================================================
-
-        var sectionStaffIds =
-            _context.TeacherAssignments
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        academicYear.Id &&
-                    x.SchoolClass
-                        .Grade
-                        .SectionId ==
-                        sectionId)
-                .Select(x =>
-                    x.StaffId)
-                .Distinct();
-
-
-        var pendingLeaveRequestCount =
-            await _context.StaffLeaveRequests
-                .AsNoTracking()
-                .CountAsync(x =>
-                    sectionStaffIds.Contains(
-                        x.StaffId) &&
-                    x.Status ==
-                        StaffLeaveStatus.Pending);
-
-
-        // ========================================================
-        // UNREAD NOTIFICATIONS
-        // ========================================================
-
-        var unreadNotificationCount =
-            await _context.Notifications
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.RecipientStaffId ==
-                        staff.Id &&
-                    !x.IsRead);
-
-
-        // ========================================================
-        // RESPONSE
-        // ========================================================
-
-        var response =
-            new SectionHeadDashboardSummaryDto
-            {
-                StaffId =
-                    staff.Id,
-
-                StaffNumber =
-                    staff.StaffNumber,
-
-                SectionHeadName =
-                    staff.FullName,
-
-                SectionId =
-                    sectionId,
-
-                SectionName =
-                    sectionHeadAssignment.SectionName,
-
-                TotalStudents =
-                    totalStudents,
-
-                TotalClasses =
-                    totalClasses,
-
-                TotalTeachers =
-                    totalTeachers,
-
-                TodayTimetableCount =
-                    todayTimetableCount,
-
-                TodaySpecialClassCount =
-                    todaySpecialClassCount,
-
-                UpcomingSpecialClassCount =
-                    upcomingSpecialClassCount,
-
-                PendingLeaveRequestCount =
-                    pendingLeaveRequestCount,
-
-                UnreadNotificationCount =
-                    unreadNotificationCount,
-
-                ActiveAcademicYearId =
-                    academicYear.Id,
-
-                ActiveAcademicYearName =
-                    academicYear.Name,
-
-                ActiveAcademicTermId =
-                    academicTerm?.Id,
-
-                ActiveAcademicTermName =
-                    academicTerm?.Name
-            };
-
-
-        return Ok(response);
+        return Ok(new SectionHeadDashboardSummaryDto
+        {
+            StaffId = staff.Id,
+            StaffNumber = staff.StaffNumber,
+            SectionHeadName = staff.FullName,
+            SectionId = sectionId,
+            SectionName = sectionHeadAssignment.SectionName,
+            TotalStudents = totalStudents,
+            TotalClasses = totalClasses,
+            TotalTeachers = totalTeachers,
+            TodayTimetableCount = todayTimetableCount,
+            TodaySpecialClassCount = todaySpecialClassCount,
+            UpcomingSpecialClassCount = upcomingSpecialClassCount,
+            PendingLeaveRequestCount = pendingLeaveRequestCount,
+            UnreadNotificationCount = unreadNotificationCount,
+            ActiveAcademicYearId = academicYear.Id,
+            ActiveAcademicYearName = academicYear.Name,
+            ActiveAcademicTermId = academicTerm?.Id,
+            ActiveAcademicTermName = academicTerm?.Name
+        });
     }
 
     // ============================================================

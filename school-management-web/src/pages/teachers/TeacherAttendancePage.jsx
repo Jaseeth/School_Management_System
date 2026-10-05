@@ -348,10 +348,10 @@ export default function TeacherAttendancePage() {
                 return;
             }
 
-            if (!reason.trim()) {
-                setError("Enter a reason for section head approval.");
-                return;
-            }
+            // if (!reason.trim()) {
+            //     setError("Enter a reason for section head approval.");
+            //     return;
+            // }
 
             if (
                 changed.length < students.length &&
@@ -604,12 +604,11 @@ export default function TeacherAttendancePage() {
 
                             {!canSaveDirectly && attendanceWindow && (
                                 <label className="mt-5 block text-sm font-semibold text-slate-700">
-                                    Reason for section head approval
+                                    Reason for section head approval (optional)
                                     <textarea
                                         value={reason}
                                         onChange={(event) => setReason(event.target.value)}
                                         maxLength={1000}
-                                        required
                                         rows={3}
                                         placeholder="Explain the late entry or correction"
                                         className="mt-2 block w-full rounded-xl border border-slate-200 p-3 text-slate-900"

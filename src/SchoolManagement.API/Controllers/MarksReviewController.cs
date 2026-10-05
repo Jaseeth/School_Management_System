@@ -1,17 +1,18 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
+using SchoolManagement.Application.Auditing;
 using SchoolManagement.Application.Marks.DTOs;
+using SchoolManagement.Application.Notifications;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
-using SchoolManagement.Application.Notifications;
-using SchoolManagement.Application.Auditing;
 
 namespace SchoolManagement.API.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/marks-review")]
 public class MarksReviewController : ControllerBase
 {
@@ -20,264 +21,199 @@ public class MarksReviewController : ControllerBase
     private readonly IAuditLogService _auditLogService;
 
     public MarksReviewController(
-    ApplicationDbContext context,
-    IPushNotificationService pushNotificationService,
-    IAuditLogService auditLogService)
+        ApplicationDbContext context,
+        IPushNotificationService pushNotificationService,
+        IAuditLogService auditLogService)
     {
         _context = context;
         _pushNotificationService = pushNotificationService;
         _auditLogService = auditLogService;
     }
 
-    // =====================================
-    // Pending Submissions
-    // =====================================
-
-    [Authorize]
+    // Pending submissions
     [HttpGet("pending")]
     public async Task<IActionResult> GetPending()
     {
-        var staff =
-            await GetLoggedInStaffAsync();
+        var staff = await GetLoggedInStaffAsync();
 
         if (staff == null)
-        {
             return Forbid();
-        }
 
-        // ---------------------------------
-        // Check normal/global Marks.Review
-        // ---------------------------------
+        var isSectionHead = User.IsInRole("Section Head");
 
-        var hasGlobalReviewPermission =
-            await HasRolePermissionAsync(
-                "Marks.Review");
+        var query = _context.MarksSubmissions
+            .AsNoTracking()
+            .Where(x =>
+                x.Status == MarksSubmissionStatus.Submitted &&
+                x.TeacherAssignment.StaffId != staff.Id);
 
-        // ---------------------------------
-        // Check delegated sections
-        // ---------------------------------
-
-        var delegatedSectionIds =
-            await GetDelegatedSectionIdsAsync(
-                staff.Id,
-                "Marks.Review");
-
-        if (!hasGlobalReviewPermission &&
-            delegatedSectionIds.Count == 0)
+        if (isSectionHead)
         {
-            return StatusCode(
-                StatusCodes.Status403Forbidden,
-                new
+            var hasAssignment = await _context.SectionHeadAssignments
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.StaffId == staff.Id &&
+                    x.IsActive);
+
+            if (!hasAssignment)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new
+                    {
+                        message =
+                            "No active Section Head assignment was found."
+                    });
+            }
+
+            query = query.Where(submission =>
+                _context.SectionHeadAssignments.Any(assignment =>
+                    assignment.StaffId == staff.Id &&
+                    assignment.IsActive &&
+                    assignment.AcademicYearId ==
+                        submission.TeacherAssignment.AcademicYearId &&
+                    assignment.SectionId ==
+                        submission.TeacherAssignment
+                            .SchoolClass.Grade.SectionId));
+        }
+        else
+        {
+            var hasGlobalReviewPermission =
+                await HasRolePermissionAsync("Marks.Review");
+
+            if (!hasGlobalReviewPermission)
+            {
+                var delegatedSectionIds =
+                    await GetDelegatedSectionIdsAsync(
+                        staff.Id,
+                        "Marks.Review");
+
+                if (delegatedSectionIds.Count == 0)
                 {
-                    message =
-                        "You do not have permission to review marks."
-                });
-        }
+                    return StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        new
+                        {
+                            message =
+                                "You do not have permission to review marks."
+                        });
+                }
 
-        // ---------------------------------
-        // Only submitted marks
-        //
-        // IMPORTANT:
-        // Do not show the logged-in Teacher's
-        // own submissions in their review queue.
-        // ---------------------------------
-
-        var query =
-            _context.MarksSubmissions
-                .Where(x =>
-                    x.Status ==
-                        MarksSubmissionStatus.Submitted &&
-
-                    x.TeacherAssignment.StaffId !=
-                        staff.Id);
-
-        // ---------------------------------
-        // Global reviewer
-        //     -> sees all sections
-        //
-        // Delegated reviewer
-        //     -> sees delegated sections only
-        // ---------------------------------
-
-        if (!hasGlobalReviewPermission)
-        {
-            query =
-                query.Where(x =>
+                query = query.Where(x =>
                     delegatedSectionIds.Contains(
                         x.TeacherAssignment
-                            .SchoolClass
-                            .Grade
-                            .SectionId));
+                            .SchoolClass.Grade.SectionId));
+            }
         }
 
-        var submissions =
-            await query
-                .OrderByDescending(x =>
-                    x.SubmittedAt)
-                .Select(x => new
+        var submissions = await query
+            .OrderByDescending(x => x.SubmittedAt)
+            .Select(x => new
+            {
+                x.Id,
+                Status = x.Status.ToString(),
+                x.SubmittedAt,
+
+                Exam = new
                 {
-                    x.Id,
+                    x.Exam.Id,
+                    x.Exam.Name,
+                    x.Exam.MaximumMarks
+                },
 
-                    Status =
-                        x.Status.ToString(),
+                AcademicYear = new
+                {
+                    x.TeacherAssignment.AcademicYear.Id,
+                    x.TeacherAssignment.AcademicYear.Name
+                },
 
-                    x.SubmittedAt,
+                Teacher = new
+                {
+                    x.TeacherAssignment.Staff.Id,
+                    x.TeacherAssignment.Staff.StaffNumber,
+                    x.TeacherAssignment.Staff.FullName
+                },
 
-                    Exam = new
-                    {
-                        x.Exam.Id,
-                        x.Exam.Name,
-                        x.Exam.MaximumMarks
-                    },
+                Section = new
+                {
+                    x.TeacherAssignment.SchoolClass.Grade.Section.Id,
+                    x.TeacherAssignment.SchoolClass.Grade.Section.Name
+                },
 
-                    AcademicYear = new
-                    {
-                        x.TeacherAssignment
-                            .AcademicYear.Id,
+                Grade = new
+                {
+                    x.TeacherAssignment.SchoolClass.Grade.Id,
+                    x.TeacherAssignment.SchoolClass.Grade.Name
+                },
 
-                        x.TeacherAssignment
-                            .AcademicYear.Name
-                    },
+                SchoolClass = new
+                {
+                    x.TeacherAssignment.SchoolClass.Id,
+                    x.TeacherAssignment.SchoolClass.Name
+                },
 
-                    Teacher = new
-                    {
-                        x.TeacherAssignment
-                            .Staff.Id,
-
-                        x.TeacherAssignment
-                            .Staff.StaffNumber,
-
-                        x.TeacherAssignment
-                            .Staff.FullName
-                    },
-
-                    Section = new
-                    {
-                        x.TeacherAssignment
-                            .SchoolClass
-                            .Grade
-                            .Section.Id,
-
-                        x.TeacherAssignment
-                            .SchoolClass
-                            .Grade
-                            .Section.Name
-                    },
-
-                    Grade = new
-                    {
-                        x.TeacherAssignment
-                            .SchoolClass
-                            .Grade.Id,
-
-                        x.TeacherAssignment
-                            .SchoolClass
-                            .Grade.Name
-                    },
-
-                    SchoolClass = new
-                    {
-                        x.TeacherAssignment
-                            .SchoolClass.Id,
-
-                        x.TeacherAssignment
-                            .SchoolClass.Name
-                    },
-
-                    Subject = new
-                    {
-                        x.TeacherAssignment
-                            .Subject.Id,
-
-                        x.TeacherAssignment
-                            .Subject.Name
-                    }
-                })
-                .ToListAsync();
+                Subject = new
+                {
+                    x.TeacherAssignment.Subject.Id,
+                    x.TeacherAssignment.Subject.Name
+                }
+            })
+            .ToListAsync();
 
         return Ok(submissions);
     }
 
-    // =====================================
-    // Submission Details + Marks
-    // =====================================
-
-    [Authorize]
+    // Submission details and student marks
     [HttpGet("{submissionId:int}")]
-    public async Task<IActionResult> GetSubmission(
-        int submissionId)
+    public async Task<IActionResult> GetSubmission(int submissionId)
     {
-        var staff =
-            await GetLoggedInStaffAsync();
+        var staff = await GetLoggedInStaffAsync();
 
         if (staff == null)
-        {
             return Forbid();
-        }
 
-        var submission =
-            await _context.MarksSubmissions
-
-                .Include(x => x.Exam)
-
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.AcademicYear)
-
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.Staff)
-
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.Subject)
-
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.SchoolClass)
-                        .ThenInclude(x => x.Grade)
-                            .ThenInclude(x => x.Section)
-
-                .FirstOrDefaultAsync(x =>
-                    x.Id == submissionId);
+        var submission = await _context.MarksSubmissions
+            .AsNoTracking()
+            .Include(x => x.Exam)
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.AcademicYear)
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.Staff)
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.Subject)
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.SchoolClass)
+                    .ThenInclude(x => x.Grade)
+                        .ThenInclude(x => x.Section)
+            .FirstOrDefaultAsync(x => x.Id == submissionId);
 
         if (submission == null)
         {
             return NotFound(new
             {
-                message =
-                    "Marks submission not found."
+                message = "Marks submission not found."
             });
         }
 
         var sectionId =
-            submission.TeacherAssignment
-                .SchoolClass
-                .Grade
-                .SectionId;
+            submission.TeacherAssignment.SchoolClass.Grade.SectionId;
 
-        // ---------------------------------
-        // User may view the submission if:
-        //
-        // 1. They have Marks.Review
-        //    for the section
-        //
-        // OR
-        //
-        // 2. They have Marks.Publish
-        //    for the section
-        // ---------------------------------
+        var academicYearId =
+            submission.TeacherAssignment.AcademicYearId;
 
-        var canReview =
-            await HasMarksPermissionForSectionAsync(
-                staff,
-                "Marks.Review",
-                sectionId);
+        var canReview = await HasMarksPermissionForSectionAsync(
+            staff,
+            "Marks.Review",
+            sectionId,
+            academicYearId);
 
-        var canPublish =
-            await HasMarksPermissionForSectionAsync(
-                staff,
-                "Marks.Publish",
-                sectionId);
+        var canPublish = await HasMarksPermissionForSectionAsync(
+            staff,
+            "Marks.Publish",
+            sectionId,
+            academicYearId);
 
-        if (!canReview &&
-            !canPublish)
+        if (!canReview && !canPublish)
         {
             return StatusCode(
                 StatusCodes.Status403Forbidden,
@@ -288,34 +224,28 @@ public class MarksReviewController : ControllerBase
                 });
         }
 
-        var marks =
-            await _context.StudentMarks
-                .Where(x =>
-                    x.ExamId ==
-                        submission.ExamId &&
-
-                    x.TeacherAssignmentId ==
-                        submission.TeacherAssignmentId)
-                .OrderBy(x =>
-                    x.Student.FullName)
-                .Select(x => new
-                {
-                    x.Student.Id,
-                    x.Student.IndexNumber,
-                    x.Student.FullName,
-                    x.MarksObtained
-                })
-                .ToListAsync();
+        var marks = await _context.StudentMarks
+            .AsNoTracking()
+            .Where(x =>
+                x.ExamId == submission.ExamId &&
+                x.TeacherAssignmentId ==
+                    submission.TeacherAssignmentId)
+            .OrderBy(x => x.Student.FullName)
+            .Select(x => new
+            {
+                x.Student.Id,
+                x.Student.IndexNumber,
+                x.Student.FullName,
+                x.MarksObtained
+            })
+            .ToListAsync();
 
         return Ok(new
         {
             submission = new
             {
                 submission.Id,
-
-                Status =
-                    submission.Status.ToString(),
-
+                Status = submission.Status.ToString(),
                 submission.SubmittedAt,
                 submission.ReviewedAt,
                 submission.ReviewComment,
@@ -330,138 +260,90 @@ public class MarksReviewController : ControllerBase
 
                 AcademicYear = new
                 {
-                    submission.TeacherAssignment
-                        .AcademicYear.Id,
-
-                    submission.TeacherAssignment
-                        .AcademicYear.Name
+                    submission.TeacherAssignment.AcademicYear.Id,
+                    submission.TeacherAssignment.AcademicYear.Name
                 },
 
                 Teacher = new
                 {
-                    submission.TeacherAssignment
-                        .Staff.Id,
-
-                    submission.TeacherAssignment
-                        .Staff.StaffNumber,
-
-                    submission.TeacherAssignment
-                        .Staff.FullName
+                    submission.TeacherAssignment.Staff.Id,
+                    submission.TeacherAssignment.Staff.StaffNumber,
+                    submission.TeacherAssignment.Staff.FullName
                 },
 
                 Section = new
                 {
                     submission.TeacherAssignment
-                        .SchoolClass
-                        .Grade
-                        .Section.Id,
-
+                        .SchoolClass.Grade.Section.Id,
                     submission.TeacherAssignment
-                        .SchoolClass
-                        .Grade
-                        .Section.Name
+                        .SchoolClass.Grade.Section.Name
                 },
 
                 Grade = new
                 {
-                    submission.TeacherAssignment
-                        .SchoolClass
-                        .Grade.Id,
-
-                    submission.TeacherAssignment
-                        .SchoolClass
-                        .Grade.Name
+                    submission.TeacherAssignment.SchoolClass.Grade.Id,
+                    submission.TeacherAssignment.SchoolClass.Grade.Name
                 },
 
                 SchoolClass = new
                 {
-                    submission.TeacherAssignment
-                        .SchoolClass.Id,
-
-                    submission.TeacherAssignment
-                        .SchoolClass.Name
+                    submission.TeacherAssignment.SchoolClass.Id,
+                    submission.TeacherAssignment.SchoolClass.Name
                 },
 
                 Subject = new
                 {
-                    submission.TeacherAssignment
-                        .Subject.Id,
-
-                    submission.TeacherAssignment
-                        .Subject.Name
+                    submission.TeacherAssignment.Subject.Id,
+                    submission.TeacherAssignment.Subject.Name
                 }
             },
-
             marks
         });
     }
 
-    // =====================================
-    // Approve
-    // =====================================
-
-    [Authorize]
+    // Approve submitted marks
     [HttpPost("{submissionId:int}/approve")]
     public async Task<IActionResult> Approve(
         int submissionId,
         ReviewMarksRequest request)
     {
-        var staff =
-            await GetLoggedInStaffAsync();
+        var staff = await GetLoggedInStaffAsync();
 
         if (staff == null)
-        {
             return Forbid();
-        }
 
-        var submission =
-            await _context.MarksSubmissions
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.SchoolClass)
-                        .ThenInclude(x => x.Grade)
-                .FirstOrDefaultAsync(x =>
-                    x.Id == submissionId);
+        var submission = await _context.MarksSubmissions
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.SchoolClass)
+                    .ThenInclude(x => x.Grade)
+            .FirstOrDefaultAsync(x => x.Id == submissionId);
 
         if (submission == null)
         {
             return NotFound(new
             {
-                message =
-                    "Marks submission not found."
+                message = "Marks submission not found."
             });
         }
 
-        // ---------------------------------
-        // Prevent self-approval
-        // ---------------------------------
-
-        if (submission.TeacherAssignment.StaffId ==
-            staff.Id)
+        if (submission.TeacherAssignment.StaffId == staff.Id)
         {
             return StatusCode(
                 StatusCodes.Status403Forbidden,
                 new
                 {
-                    message =
-                        "You cannot approve your own marks submission."
+                    message = "You cannot approve your own marks submission."
                 });
         }
 
         var sectionId =
-            submission.TeacherAssignment
-                .SchoolClass
-                .Grade
-                .SectionId;
+            submission.TeacherAssignment.SchoolClass.Grade.SectionId;
 
-        // ---------------------------------
-        // Check permission
-        // ---------------------------------
-
-        var canReview =
-            await HasMarksPermissionForSectionAsync(
-                staff,
-                "Marks.Review",
-                sectionId);
+        var canReview = await HasMarksPermissionForSectionAsync(
+            staff,
+            "Marks.Review",
+            sectionId,
+            submission.TeacherAssignment.AcademicYearId);
 
         if (!canReview)
         {
@@ -470,108 +352,76 @@ public class MarksReviewController : ControllerBase
                 new
                 {
                     message =
-                        "You do not have permission to review marks for this section."
+                        "You do not have permission to review marks for this section and academic year."
                 });
         }
 
-        // ---------------------------------
-        // Must still be Submitted
-        // ---------------------------------
-
-        if (submission.Status !=
-            MarksSubmissionStatus.Submitted)
+        if (submission.Status != MarksSubmissionStatus.Submitted)
         {
             return BadRequest(new
             {
-                message =
-                    "Only submitted marks can be approved."
+                message = "Only submitted marks can be approved."
             });
         }
 
         var oldValues = new
         {
-            Status =
-        submission.Status.ToString(),
-
+            Status = submission.Status.ToString(),
             submission.ReviewedByStaffId,
             submission.ReviewedAt,
             submission.ReviewComment
         };
 
-        // ---------------------------------
-        // Approve
-        // ---------------------------------
-
-        submission.Status =
-            MarksSubmissionStatus.Approved;
-
-        submission.ReviewedByStaffId =
-            staff.Id;
-
-        submission.ReviewedAt =
-            DateTime.UtcNow;
-
+        submission.Status = MarksSubmissionStatus.Approved;
+        submission.ReviewedByStaffId = staff.Id;
+        submission.ReviewedAt = DateTime.UtcNow;
         submission.ReviewComment =
-            string.IsNullOrWhiteSpace(
-                request.Comment)
+            string.IsNullOrWhiteSpace(request.Comment)
                 ? null
                 : request.Comment.Trim();
 
         await _context.SaveChangesAsync();
 
         await _auditLogService.LogAsync(
-    action: "Approve",
-    entityName: "MarksSubmission",
-    entityId: submission.Id.ToString(),
-    description:
-        $"Marks submission {submission.Id} was approved.",
-    oldValues: oldValues,
-    newValues: new
-    {
-        Status =
-            submission.Status.ToString(),
-
-        submission.ReviewedByStaffId,
-        submission.ReviewedAt,
-        submission.ReviewComment
-    });
+            action: "Approve",
+            entityName: "MarksSubmission",
+            entityId: submission.Id.ToString(),
+            description:
+                $"Marks submission {submission.Id} was approved.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                Status = submission.Status.ToString(),
+                submission.ReviewedByStaffId,
+                submission.ReviewedAt,
+                submission.ReviewComment
+            });
 
         return Ok(new
         {
-            message =
-                "Marks approved successfully.",
-
+            message = "Marks approved successfully.",
             reviewedBy = new
             {
                 staff.Id,
                 staff.StaffNumber,
                 staff.FullName
             },
-
             submission.ReviewedAt
         });
     }
 
-    // =====================================
-    // Reject / Return For Correction
-    // =====================================
-
-    [Authorize]
+    // Return submitted marks for correction
     [HttpPost("{submissionId:int}/reject")]
     public async Task<IActionResult> Reject(
         int submissionId,
         ReviewMarksRequest request)
     {
-        var staff =
-            await GetLoggedInStaffAsync();
+        var staff = await GetLoggedInStaffAsync();
 
         if (staff == null)
-        {
             return Forbid();
-        }
 
-        if (string.IsNullOrWhiteSpace(
-            request.Comment))
+        if (string.IsNullOrWhiteSpace(request.Comment))
         {
             return BadRequest(new
             {
@@ -580,54 +430,38 @@ public class MarksReviewController : ControllerBase
             });
         }
 
-        var submission =
-            await _context.MarksSubmissions
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.SchoolClass)
-                        .ThenInclude(x => x.Grade)
-                .FirstOrDefaultAsync(x =>
-                    x.Id == submissionId);
+        var submission = await _context.MarksSubmissions
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.SchoolClass)
+                    .ThenInclude(x => x.Grade)
+            .FirstOrDefaultAsync(x => x.Id == submissionId);
 
         if (submission == null)
         {
             return NotFound(new
             {
-                message =
-                    "Marks submission not found."
+                message = "Marks submission not found."
             });
         }
 
-        // ---------------------------------
-        // Prevent self-review / self-reject
-        // ---------------------------------
-
-        if (submission.TeacherAssignment.StaffId ==
-            staff.Id)
+        if (submission.TeacherAssignment.StaffId == staff.Id)
         {
             return StatusCode(
                 StatusCodes.Status403Forbidden,
                 new
                 {
-                    message =
-                        "You cannot review your own marks submission."
+                    message = "You cannot review your own marks submission."
                 });
         }
 
         var sectionId =
-            submission.TeacherAssignment
-                .SchoolClass
-                .Grade
-                .SectionId;
+            submission.TeacherAssignment.SchoolClass.Grade.SectionId;
 
-        // ---------------------------------
-        // Check permission
-        // ---------------------------------
-
-        var canReview =
-            await HasMarksPermissionForSectionAsync(
-                staff,
-                "Marks.Review",
-                sectionId);
+        var canReview = await HasMarksPermissionForSectionAsync(
+            staff,
+            "Marks.Review",
+            sectionId,
+            submission.TeacherAssignment.AcademicYearId);
 
         if (!canReview)
         {
@@ -636,16 +470,11 @@ public class MarksReviewController : ControllerBase
                 new
                 {
                     message =
-                        "You do not have permission to review marks for this section."
+                        "You do not have permission to review marks for this section and academic year."
                 });
         }
 
-        // ---------------------------------
-        // Must still be Submitted
-        // ---------------------------------
-
-        if (submission.Status !=
-            MarksSubmissionStatus.Submitted)
+        if (submission.Status != MarksSubmissionStatus.Submitted)
         {
             return BadRequest(new
             {
@@ -656,151 +485,97 @@ public class MarksReviewController : ControllerBase
 
         var oldValues = new
         {
-            Status =
-        submission.Status.ToString(),
-
+            Status = submission.Status.ToString(),
             submission.ReviewedByStaffId,
             submission.ReviewedAt,
             submission.ReviewComment
         };
 
-        // ---------------------------------
-        // Return for correction
-        // ---------------------------------
+        var reviewedAt = DateTime.UtcNow;
 
-        submission.Status =
-            MarksSubmissionStatus.Rejected;
+        submission.Status = MarksSubmissionStatus.Rejected;
+        submission.ReviewedByStaffId = staff.Id;
+        submission.ReviewedAt = reviewedAt;
+        submission.ReviewComment = request.Comment.Trim();
 
-        submission.ReviewedByStaffId =
-            staff.Id;
-
-        submission.ReviewedAt =
-            DateTime.UtcNow;
-
-        submission.ReviewComment =
-            request.Comment.Trim();
-
-        // ---------------------------------
-        // Unlock StudentMark records
-        // so original Teacher can edit again
-        // ---------------------------------
-
-        var marks =
-            await _context.StudentMarks
-                .Where(x =>
-                    x.ExamId ==
-                        submission.ExamId &&
-
-                    x.TeacherAssignmentId ==
-                        submission.TeacherAssignmentId)
-                .ToListAsync();
+        var marks = await _context.StudentMarks
+            .Where(x =>
+                x.ExamId == submission.ExamId &&
+                x.TeacherAssignmentId ==
+                    submission.TeacherAssignmentId)
+            .ToListAsync();
 
         foreach (var mark in marks)
         {
             mark.IsSubmitted = false;
-
             mark.SubmittedAt = null;
-
-            mark.UpdatedAt =
-                DateTime.UtcNow;
+            mark.UpdatedAt = reviewedAt;
         }
 
         await _context.SaveChangesAsync();
 
         await _auditLogService.LogAsync(
-    action: "Reject",
-    entityName: "MarksSubmission",
-    entityId: submission.Id.ToString(),
-    description:
-        $"Marks submission {submission.Id} was returned for correction.",
-    oldValues: oldValues,
-    newValues: new
-    {
-        Status =
-            submission.Status.ToString(),
-
-        submission.ReviewedByStaffId,
-        submission.ReviewedAt,
-        submission.ReviewComment
-    });
+            action: "Reject",
+            entityName: "MarksSubmission",
+            entityId: submission.Id.ToString(),
+            description:
+                $"Marks submission {submission.Id} was returned for correction.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                Status = submission.Status.ToString(),
+                submission.ReviewedByStaffId,
+                submission.ReviewedAt,
+                submission.ReviewComment
+            });
 
         return Ok(new
         {
-            message =
-                "Marks returned to the teacher for correction.",
-
+            message = "Marks returned to the teacher for correction.",
             reviewedBy = new
             {
                 staff.Id,
                 staff.StaffNumber,
                 staff.FullName
             },
-
             submission.ReviewedAt
         });
     }
 
-    // =====================================
-    // Publish
-    // =====================================
-
-    [Authorize]
+    // Publish approved marks
     [HttpPost("{submissionId:int}/publish")]
-    public async Task<IActionResult> Publish(
-        int submissionId)
+    public async Task<IActionResult> Publish(int submissionId)
     {
-        var staff =
-            await GetLoggedInStaffAsync();
+        var staff = await GetLoggedInStaffAsync();
 
         if (staff == null)
-        {
             return Forbid();
-        }
 
-        var submission =
-            await _context.MarksSubmissions
-
-                .Include(x => x.Exam)
-
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.Subject)
-
-                .Include(x => x.TeacherAssignment)
-                    .ThenInclude(x => x.SchoolClass)
-                        .ThenInclude(x => x.Grade)
-
-                .FirstOrDefaultAsync(x =>
-                    x.Id == submissionId);
+        var submission = await _context.MarksSubmissions
+            .Include(x => x.Exam)
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.Subject)
+            .Include(x => x.TeacherAssignment)
+                .ThenInclude(x => x.SchoolClass)
+                    .ThenInclude(x => x.Grade)
+            .FirstOrDefaultAsync(x => x.Id == submissionId);
 
         if (submission == null)
         {
             return NotFound(new
             {
-                message =
-                    "Marks submission not found."
+                message = "Marks submission not found."
             });
         }
 
         var sectionId =
-            submission.TeacherAssignment
-                .SchoolClass
-                .Grade
-                .SectionId;
+            submission.TeacherAssignment.SchoolClass.Grade.SectionId;
 
-        // ---------------------------------
-        // Check Marks.Publish
-        //
-        // This may come from:
-        // - normal role permission
-        // OR
-        // - section delegated permission
-        // ---------------------------------
-
-        var canPublish =
-            await HasMarksPermissionForSectionAsync(
-                staff,
-                "Marks.Publish",
-                sectionId);
+        var canPublish = await HasMarksPermissionForSectionAsync(
+            staff,
+            "Marks.Publish",
+            sectionId,
+            submission.TeacherAssignment.AcademicYearId);
 
         if (!canPublish)
         {
@@ -813,114 +588,75 @@ public class MarksReviewController : ControllerBase
                 });
         }
 
-        // ---------------------------------
-        // Must be Approved first
-        // ---------------------------------
-
-        if (submission.Status !=
-            MarksSubmissionStatus.Approved)
+        if (submission.Status != MarksSubmissionStatus.Approved)
         {
             return BadRequest(new
             {
-                message =
-                    "Marks must be approved before publishing."
+                message = "Marks must be approved before publishing."
             });
         }
 
-        var publishedAt =
-            DateTime.UtcNow;
+        var publishedAt = DateTime.UtcNow;
 
         var oldValues = new
         {
-            Status =
-        submission.Status.ToString(),
-
+            Status = submission.Status.ToString(),
             submission.PublishedByStaffId,
             submission.PublishedAt
         };
 
-        submission.Status =
-            MarksSubmissionStatus.Published;
+        submission.Status = MarksSubmissionStatus.Published;
+        submission.PublishedByStaffId = staff.Id;
+        submission.PublishedAt = publishedAt;
 
-        submission.PublishedByStaffId =
-            staff.Id;
-
-        submission.PublishedAt =
-            publishedAt;
-
-        // ---------------------------------
-        // Publish student marks
-        // ---------------------------------
-
-        var marks =
-            await _context.StudentMarks
-                .Include(x => x.Student)
-                .Where(x =>
-                    x.ExamId ==
-                        submission.ExamId &&
-
-                    x.TeacherAssignmentId ==
-                        submission.TeacherAssignmentId)
-                .ToListAsync();
+        var marks = await _context.StudentMarks
+            .Include(x => x.Student)
+            .Where(x =>
+                x.ExamId == submission.ExamId &&
+                x.TeacherAssignmentId ==
+                    submission.TeacherAssignmentId)
+            .ToListAsync();
 
         foreach (var mark in marks)
         {
-            mark.IsPublished =
-                true;
-
-            mark.UpdatedAt =
-                publishedAt;
+            mark.IsPublished = true;
+            mark.UpdatedAt = publishedAt;
         }
 
         await _context.SaveChangesAsync();
 
         await _auditLogService.LogAsync(
-    action: "Publish",
-    entityName: "MarksSubmission",
-    entityId: submission.Id.ToString(),
-    description:
-        $"Marks submission {submission.Id} was published.",
-    oldValues: oldValues,
-    newValues: new
-    {
-        Status =
-            submission.Status.ToString(),
+            action: "Publish",
+            entityName: "MarksSubmission",
+            entityId: submission.Id.ToString(),
+            description:
+                $"Marks submission {submission.Id} was published.",
+            oldValues: oldValues,
+            newValues: new
+            {
+                Status = submission.Status.ToString(),
+                submission.PublishedByStaffId,
+                submission.PublishedAt,
+                PublishedMarks = marks.Count
+            });
 
-        submission.PublishedByStaffId,
-        submission.PublishedAt,
-
-        PublishedMarks =
-            marks.Count
-    });
-
-        // ---------------------------------
-        // Notify linked parents
-        // ---------------------------------
-
+        // Keep the existing linked-parent notification workflow.
         foreach (var mark in marks)
         {
-            var parentIds =
-                await _context.StudentParentGuardians
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.StudentId ==
-                            mark.StudentId &&
-
-                        x.IsActive &&
-
-                        x.ParentGuardian.IsActive)
-                    .Select(x =>
-                        x.ParentGuardianId)
-                    .Distinct()
-                    .ToListAsync();
+            var parentIds = await _context.StudentParentGuardians
+                .AsNoTracking()
+                .Where(x =>
+                    x.StudentId == mark.StudentId &&
+                    x.IsActive &&
+                    x.ParentGuardian.IsActive)
+                .Select(x => x.ParentGuardianId)
+                .Distinct()
+                .ToListAsync();
 
             if (parentIds.Count == 0)
-            {
                 continue;
-            }
 
-            var notificationTitle =
-                "Result Published";
+            var notificationTitle = "Result Published";
 
             var notificationMessage =
                 $"{mark.Student.FullName}'s " +
@@ -929,56 +665,36 @@ public class MarksReviewController : ControllerBase
 
             foreach (var parentId in parentIds)
             {
-                _context.Notifications.Add(
-                    new Notification
-                    {
-                        RecipientParentGuardianId =
-                            parentId,
-
-                        Type =
-                            NotificationType.General,
-
-                        Title =
-                            notificationTitle,
-
-                        Message =
-                            notificationMessage,
-
-                        IsRead =
-                            false,
-
-                        CreatedAt =
-                            DateTime.UtcNow,
-
-                        ReferenceType =
-                            "StudentMark",
-
-                        ReferenceId =
-                            mark.Id
-                    });
+                _context.Notifications.Add(new Notification
+                {
+                    RecipientParentGuardianId = parentId,
+                    Type = NotificationType.General,
+                    Title = notificationTitle,
+                    Message = notificationMessage,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    ReferenceType = "StudentMark",
+                    ReferenceId = mark.Id
+                });
             }
 
             await _context.SaveChangesAsync();
 
             foreach (var parentId in parentIds)
             {
-                await _pushNotificationService
-                    .SendToParentAsync(
-                        parentId,
-                        notificationTitle,
-                        notificationMessage,
-                        "StudentMark",
-                        mark.Id);
+                await _pushNotificationService.SendToParentAsync(
+                    parentId,
+                    notificationTitle,
+                    notificationMessage,
+                    "StudentMark",
+                    mark.Id);
             }
         }
 
         return Ok(new
         {
-            message =
-                "Marks published successfully.",
-
+            message = "Marks published successfully.",
             publishedAt,
-
             publishedBy = new
             {
                 staff.Id,
@@ -988,149 +704,294 @@ public class MarksReviewController : ControllerBase
         });
     }
 
-    // =====================================
-    // Check Permission For Section
-    // =====================================
-
-    private async Task<bool>
-        HasMarksPermissionForSectionAsync(
-            Staff staff,
-            string permissionName,
-            int sectionId)
+    // Approved submissions awaiting publication
+    [HttpGet("approved")]
+    public async Task<IActionResult> GetApproved()
     {
-        // ---------------------------------
-        // First check normal role permission
-        // ---------------------------------
+        var staff = await GetLoggedInStaffAsync();
 
-        var hasRolePermission =
-            await HasRolePermissionAsync(
-                permissionName);
+        if (staff == null)
+            return Forbid();
 
-        if (hasRolePermission)
+        var hasGlobalPublishPermission =
+            await HasRolePermissionAsync("Marks.Publish");
+
+        var delegatedSectionIds =
+            await GetDelegatedSectionIdsAsync(
+                staff.Id,
+                "Marks.Publish");
+
+        if (!hasGlobalPublishPermission &&
+            delegatedSectionIds.Count == 0)
         {
-            return true;
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message =
+                        "You do not have permission to publish marks."
+                });
         }
 
-        // ---------------------------------
-        // Otherwise check individual
-        // delegated permission
-        // ---------------------------------
+        var query = _context.MarksSubmissions
+            .AsNoTracking()
+            .Where(x =>
+                x.Status == MarksSubmissionStatus.Approved);
 
-        return await _context
-            .StaffPermissionDelegations
+        if (!hasGlobalPublishPermission)
+        {
+            query = query.Where(x =>
+                delegatedSectionIds.Contains(
+                    x.TeacherAssignment
+                        .SchoolClass.Grade.SectionId));
+        }
+
+        var submissions = await query
+            .OrderByDescending(x => x.ReviewedAt)
+            .Select(x => new
+            {
+                x.Id,
+                Status = x.Status.ToString(),
+                x.SubmittedAt,
+                x.ReviewedAt,
+                x.ReviewComment,
+
+                Exam = new
+                {
+                    x.Exam.Id,
+                    x.Exam.Name,
+                    x.Exam.MaximumMarks
+                },
+
+                AcademicYear = new
+                {
+                    x.TeacherAssignment.AcademicYear.Id,
+                    x.TeacherAssignment.AcademicYear.Name
+                },
+
+                Teacher = new
+                {
+                    x.TeacherAssignment.Staff.Id,
+                    x.TeacherAssignment.Staff.StaffNumber,
+                    x.TeacherAssignment.Staff.FullName
+                },
+
+                Section = new
+                {
+                    x.TeacherAssignment.SchoolClass.Grade.Section.Id,
+                    x.TeacherAssignment.SchoolClass.Grade.Section.Name
+                },
+
+                Grade = new
+                {
+                    x.TeacherAssignment.SchoolClass.Grade.Id,
+                    x.TeacherAssignment.SchoolClass.Grade.Name
+                },
+
+                SchoolClass = new
+                {
+                    x.TeacherAssignment.SchoolClass.Id,
+                    x.TeacherAssignment.SchoolClass.Name
+                },
+
+                Subject = new
+                {
+                    x.TeacherAssignment.Subject.Id,
+                    x.TeacherAssignment.Subject.Name
+                }
+            })
+            .ToListAsync();
+
+        return Ok(submissions);
+    }
+
+    [HttpGet("published")]
+    public async Task<IActionResult> GetPublished()
+    {
+        var staff = await GetLoggedInStaffAsync();
+
+        if (staff == null)
+            return Forbid();
+
+        var hasGlobalPublishPermission =
+            await HasRolePermissionAsync("Marks.Publish");
+
+        var delegatedSectionIds =
+            await GetDelegatedSectionIdsAsync(
+                staff.Id,
+                "Marks.Publish");
+
+        if (!hasGlobalPublishPermission &&
+            delegatedSectionIds.Count == 0)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message =
+                        "You do not have permission to view publishing history."
+                });
+        }
+
+        var query = _context.MarksSubmissions
+            .AsNoTracking()
+            .Where(x =>
+                x.Status == MarksSubmissionStatus.Published);
+
+        if (!hasGlobalPublishPermission)
+        {
+            query = query.Where(x =>
+                delegatedSectionIds.Contains(
+                    x.TeacherAssignment
+                        .SchoolClass.Grade.SectionId));
+        }
+
+        var submissions = await query
+            .OrderByDescending(x => x.PublishedAt)
+            .Select(x => new
+            {
+                x.Id,
+                Status = x.Status.ToString(),
+                x.SubmittedAt,
+                x.ReviewedAt,
+                x.PublishedAt,
+                x.PublishedByStaffId,
+                x.ReviewComment,
+
+                Exam = new
+                {
+                    x.Exam.Id,
+                    x.Exam.Name,
+                    x.Exam.MaximumMarks
+                },
+
+                AcademicYear = new
+                {
+                    x.TeacherAssignment.AcademicYear.Id,
+                    x.TeacherAssignment.AcademicYear.Name
+                },
+
+                Teacher = new
+                {
+                    x.TeacherAssignment.Staff.Id,
+                    x.TeacherAssignment.Staff.StaffNumber,
+                    x.TeacherAssignment.Staff.FullName
+                },
+
+                Section = new
+                {
+                    x.TeacherAssignment.SchoolClass.Grade.Section.Id,
+                    x.TeacherAssignment.SchoolClass.Grade.Section.Name
+                },
+
+                Grade = new
+                {
+                    x.TeacherAssignment.SchoolClass.Grade.Id,
+                    x.TeacherAssignment.SchoolClass.Grade.Name
+                },
+
+                SchoolClass = new
+                {
+                    x.TeacherAssignment.SchoolClass.Id,
+                    x.TeacherAssignment.SchoolClass.Name
+                },
+
+                Subject = new
+                {
+                    x.TeacherAssignment.Subject.Id,
+                    x.TeacherAssignment.Subject.Name
+                }
+            })
+            .ToListAsync();
+
+        return Ok(submissions);
+    }
+
+    // Section/year review access and existing publishing permissions
+    private async Task<bool> HasMarksPermissionForSectionAsync(
+        Staff staff,
+        string permissionName,
+        int sectionId,
+        int academicYearId)
+    {
+        if (User.IsInRole("Section Head") &&
+            permissionName == "Marks.Review")
+        {
+            return await _context.SectionHeadAssignments
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.StaffId == staff.Id &&
+                    x.SectionId == sectionId &&
+                    x.AcademicYearId == academicYearId &&
+                    x.IsActive);
+        }
+
+        if (await HasRolePermissionAsync(permissionName))
+            return true;
+
+        return await _context.StaffPermissionDelegations
+            .AsNoTracking()
             .AnyAsync(x =>
-                x.StaffId ==
-                    staff.Id &&
-
-                x.Permission.Name ==
-                    permissionName &&
-
+                x.StaffId == staff.Id &&
+                x.Permission.Name == permissionName &&
                 x.Permission.IsActive &&
-
-                x.SectionId ==
-                    sectionId &&
-
+                x.SectionId == sectionId &&
                 x.IsActive);
     }
 
-    // =====================================
-    // Check Normal Role Permission
-    // =====================================
-
-    private async Task<bool>
-        HasRolePermissionAsync(
-            string permissionName)
+    // Read role permissions from the database
+    private async Task<bool> HasRolePermissionAsync(
+        string permissionName)
     {
-        var userId =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (string.IsNullOrWhiteSpace(
-            userId))
-        {
+        if (string.IsNullOrWhiteSpace(userId))
             return false;
-        }
 
-        // Read roles directly from DB.
-        // This means permission changes take
-        // effect without relying only on old
-        // role claims stored in the JWT.
-
-        var roleIds =
-            await _context.UserRoles
-                .Where(x =>
-                    x.UserId == userId)
-                .Select(x =>
-                    x.RoleId)
-                .ToListAsync();
+        var roleIds = await _context.UserRoles
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.RoleId)
+            .ToListAsync();
 
         if (roleIds.Count == 0)
-        {
             return false;
-        }
 
         return await _context.RolePermissions
+            .AsNoTracking()
             .AnyAsync(x =>
-                roleIds.Contains(
-                    x.RoleId) &&
-
-                x.Permission.Name ==
-                    permissionName &&
-
+                roleIds.Contains(x.RoleId) &&
+                x.Permission.Name == permissionName &&
                 x.Permission.IsActive);
     }
 
-    // =====================================
-    // Get Delegated Sections
-    // =====================================
-
-    private async Task<List<int>>
-        GetDelegatedSectionIdsAsync(
-            int staffId,
-            string permissionName)
+    private async Task<List<int>> GetDelegatedSectionIdsAsync(
+        int staffId,
+        string permissionName)
     {
-        return await _context
-            .StaffPermissionDelegations
+        return await _context.StaffPermissionDelegations
+            .AsNoTracking()
             .Where(x =>
-                x.StaffId ==
-                    staffId &&
-
-                x.Permission.Name ==
-                    permissionName &&
-
+                x.StaffId == staffId &&
+                x.Permission.Name == permissionName &&
                 x.Permission.IsActive &&
-
                 x.SectionId != null &&
-
                 x.IsActive)
-            .Select(x =>
-                x.SectionId!.Value)
+            .Select(x => x.SectionId!.Value)
             .Distinct()
             .ToListAsync();
     }
 
-    // =====================================
-    // Current Logged-In Staff
-    // =====================================
-
-    private async Task<Staff?>
-        GetLoggedInStaffAsync()
+    private async Task<Staff?> GetLoggedInStaffAsync()
     {
-        var userId =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (string.IsNullOrWhiteSpace(
-            userId))
-        {
+        if (string.IsNullOrWhiteSpace(userId))
             return null;
-        }
 
         return await _context.Staff
             .FirstOrDefaultAsync(x =>
-                x.ApplicationUserId ==
-                    userId &&
-
+                x.ApplicationUserId == userId &&
                 x.IsActive);
     }
 }

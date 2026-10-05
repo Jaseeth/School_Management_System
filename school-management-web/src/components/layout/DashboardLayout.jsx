@@ -6,6 +6,7 @@
     ChevronRight,
     ClipboardCheck,
     FileText,
+    FilePenLine,
     GraduationCap,
     LayoutDashboard,
     LogOut,
@@ -66,25 +67,17 @@ const menuItems = [
     },
 
     {
+        title: "Attendance Approvals",
+        path: "/section-head/attendance-approvals",
+        icon: ClipboardCheck,
+        roles: ["Section Head"],
+    },
+
+    {
         title: "Class Attendance",
         path: "/teacher/attendance",
         icon: ClipboardCheck,
         roles: ["Teacher"],
-    },
-
-    {
-        title: "Results",
-        path: "/results",
-        icon: BookOpen,
-        roles: [
-            "Admin",
-            "Principal",
-            "Deputy Principal",
-            "Section Head",
-            "Teacher",
-            "Student",
-            "Parent",
-        ],
     },
     {
         title: "Timetable",
@@ -142,6 +135,24 @@ const menuItems = [
         title: "Audit Logs",
         path: "/audit-logs",
         icon: ShieldCheck,
+        roles: ["Admin", "Principal", "Deputy Principal"],
+    },
+    {
+        title: "Marks",
+        path: "/teacher/marks",
+        icon: FilePenLine,
+        roles: ["Teacher"],
+    },
+    {
+        title: "Marks Review",
+        path: "/section-head/marks-review",
+        icon: ClipboardCheck,
+        roles: ["Section Head"],
+    },
+    {
+        title: "Results Publishing",
+        path: "/results/publishing",
+        icon: FileText,
         roles: ["Admin", "Principal", "Deputy Principal"],
     },
 ];

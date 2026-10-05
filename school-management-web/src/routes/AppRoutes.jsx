@@ -53,6 +53,12 @@ import PortalLandingPage from "../pages/public/PortalLandingPage";
 import TeacherTimetablePage from "../pages/teachers/TeacherTimetablePage";
 import TeacherDailyClassesPage from "../pages/teachers/TeacherDailyClassesPage";
 import TeacherAttendancePage from "../pages/teachers/TeacherAttendancePage";
+import TeacherMarksPage from "../pages/teachers/TeacherMarksPage";
+
+import SectionHeadAttendanceApprovalsPage from "../pages/sectionHeads/SectionHeadAttendanceApprovalsPage";
+import SectionHeadMarksReviewPage from "../pages/sectionHeads/SectionHeadMarksReviewPage";
+
+import ResultsPublishingPage from "../pages/results/ResultsPublishingPage";
 
 export default function AppRoutes() {
     return (
@@ -133,6 +139,26 @@ export default function AppRoutes() {
                     element={<TeacherAttendancePage />}
                 />
 
+                <Route
+                    path="/section-head/attendance-approvals"
+                    element={<SectionHeadAttendanceApprovalsPage />}
+                />
+
+                <Route
+                    path="/teacher/marks"
+                    element={<TeacherMarksPage />}
+                />
+
+                <Route
+                    path="/section-head/marks-review"
+                    element={<SectionHeadMarksReviewPage />}
+                />
+
+                <Route
+                    path="/results/publishing"
+                    element={<ResultsPublishingPage />}
+                />
+
                 {/*
                     FUTURE PAGES MUST ALSO GO HERE
                 */}
@@ -143,15 +169,7 @@ export default function AppRoutes() {
                 DEFAULT ROUTES
             ================================================ */}
 
-            <Route
-                path="/"
-                element={
-                    <Navigate
-                        to="/dashboard"
-                        replace
-                    />
-                }
-            />
+
 
             <Route
                 path="*"

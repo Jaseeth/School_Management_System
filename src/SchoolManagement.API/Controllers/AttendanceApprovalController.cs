@@ -32,6 +32,18 @@ public sealed class AttendanceApprovalController : ControllerBase
     public async Task<IActionResult> SubmitRequest(
         SubmitAttendanceChangeRequest input)
     {
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            _context.ChangeTracker.Clear();
+            return await SubmitRequestCoreAsync(input);
+        });
+    }
+
+    private async Task<IActionResult> SubmitRequestCoreAsync(
+        SubmitAttendanceChangeRequest input)
+    {
         var teacher = await CurrentStaffAsync();
 
         if (teacher == null)
@@ -46,6 +58,7 @@ public sealed class AttendanceApprovalController : ControllerBase
         }
 
         var day = input.AttendanceDate.Date;
+
         var window = await _windows.GetAsync(
             input.AcademicYearId,
             input.SchoolClassId,
@@ -63,7 +76,8 @@ public sealed class AttendanceApprovalController : ControllerBase
         {
             return Conflict(new
             {
-                message = "The direct attendance window is open. Save attendance instead."
+                message =
+                    "The direct attendance window is open. Save attendance instead."
             });
         }
 
@@ -97,12 +111,11 @@ public sealed class AttendanceApprovalController : ControllerBase
             });
         }
 
-        if (string.IsNullOrWhiteSpace(input.Reason) ||
-            input.Reason.Trim().Length > 1000)
+        if ((input.Reason?.Trim().Length ?? 0) > 1000)
         {
             return BadRequest(new
             {
-                message = "Enter an overall reason of up to 1000 characters."
+                message = "Overall reason must not exceed 1000 characters."
             });
         }
 
@@ -116,7 +129,8 @@ public sealed class AttendanceApprovalController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Include at least one unique student with a valid status and remarks."
+                message =
+                    "Include at least one unique student with a valid status and remarks."
             });
         }
 
@@ -135,7 +149,8 @@ public sealed class AttendanceApprovalController : ControllerBase
         {
             return Conflict(new
             {
-                message = "No active Section Head is assigned to this section and academic year."
+                message =
+                    "No active Section Head is assigned to this section and academic year."
             });
         }
 
@@ -161,7 +176,8 @@ public sealed class AttendanceApprovalController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Every selected student must belong to the active class."
+                message =
+                    "Every selected student must belong to the active class."
             });
         }
 
@@ -178,7 +194,7 @@ public sealed class AttendanceApprovalController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Add a remark for each selected student and provide the overall reason."
+                message = "Add a remark for each selected student."
             });
         }
 
@@ -197,7 +213,7 @@ public sealed class AttendanceApprovalController : ControllerBase
             SchoolClassId = input.SchoolClassId,
             AttendanceDate = day,
             RequestedByStaffId = teacher.Id,
-            Reason = input.Reason.Trim(),
+            Reason = input.Reason?.Trim() ?? string.Empty,
             IsWholeClass = isWholeClass,
             Status = AttendanceChangeStatus.Pending,
             RequestedAtUtc = DateTime.UtcNow
@@ -208,9 +224,7 @@ public sealed class AttendanceApprovalController : ControllerBase
             var student = students.Single(x =>
                 x.Id == entry.StudentId);
 
-            oldRecords.TryGetValue(
-                entry.StudentId,
-                out var previous);
+            oldRecords.TryGetValue(entry.StudentId, out var previous);
 
             request.Items.Add(new AttendanceChangeItem
             {
@@ -218,18 +232,17 @@ public sealed class AttendanceApprovalController : ControllerBase
                 StudentIndexNumber = student.IndexNumber,
                 StudentFullName = student.FullName,
                 ProposedStatus = entry.Status,
-                ProposedRemarks =
-                    string.IsNullOrWhiteSpace(entry.Remarks)
-                        ? null
-                        : entry.Remarks.Trim(),
+                ProposedRemarks = string.IsNullOrWhiteSpace(entry.Remarks)
+                    ? null
+                    : entry.Remarks.Trim(),
                 PreviousStatus = previous?.Status,
                 PreviousRemarks = previous?.Remarks
             });
         }
 
         if (request.Items.All(x =>
-            x.PreviousStatus == x.ProposedStatus &&
-            x.PreviousRemarks == x.ProposedRemarks))
+                x.PreviousStatus == x.ProposedStatus &&
+                x.PreviousRemarks == x.ProposedRemarks))
         {
             return BadRequest(new
             {
@@ -241,20 +254,20 @@ public sealed class AttendanceApprovalController : ControllerBase
             await _context.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable);
 
-        var alreadyPending =
-            await _context.AttendanceChangeRequests
-                .AnyAsync(x =>
-                    x.AcademicYearId == input.AcademicYearId &&
-                    x.SchoolClassId == input.SchoolClassId &&
-                    x.AttendanceDate == day &&
-                    x.RequestedByStaffId == teacher.Id &&
-                    x.Status == AttendanceChangeStatus.Pending);
+        var alreadyPending = await _context.AttendanceChangeRequests
+            .AnyAsync(x =>
+                x.AcademicYearId == input.AcademicYearId &&
+                x.SchoolClassId == input.SchoolClassId &&
+                x.AttendanceDate == day &&
+                x.RequestedByStaffId == teacher.Id &&
+                x.Status == AttendanceChangeStatus.Pending);
 
         if (alreadyPending)
         {
             return Conflict(new
             {
-                message = "Your earlier request for this class and date is still pending."
+                message =
+                    "Your earlier request for this class and date is still pending."
             });
         }
 
@@ -381,9 +394,7 @@ public sealed class AttendanceApprovalController : ControllerBase
             })
             .ToListAsync();
 
-        var classIds = classes
-            .Select(x => x.Id)
-            .ToList();
+        var classIds = classes.Select(x => x.Id).ToList();
 
         var candidates = await _context.AttendanceChangeRequests
             .AsNoTracking()
@@ -456,6 +467,19 @@ public sealed class AttendanceApprovalController : ControllerBase
     [HttpPost("requests/{id:int}/review")]
     [Authorize(Roles = "Section Head")]
     public async Task<IActionResult> Review(
+        int id,
+        ReviewAttendanceChangeRequest input)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            _context.ChangeTracker.Clear();
+            return await ReviewCoreAsync(id, input);
+        });
+    }
+
+    private async Task<IActionResult> ReviewCoreAsync(
         int id,
         ReviewAttendanceChangeRequest input)
     {
@@ -541,11 +565,10 @@ public sealed class AttendanceApprovalController : ControllerBase
 
         if (input.Approve)
         {
+            // Check every student before applying any changes.
             foreach (var item in request.Items)
             {
-                saved.TryGetValue(
-                    item.StudentId,
-                    out var record);
+                saved.TryGetValue(item.StudentId, out var record);
 
                 if (record?.Status != item.PreviousStatus ||
                     record?.Remarks != item.PreviousRemarks)
@@ -557,6 +580,11 @@ public sealed class AttendanceApprovalController : ControllerBase
                             "changed after submission. Ask the teacher to submit a new request."
                     });
                 }
+            }
+
+            foreach (var item in request.Items)
+            {
+                saved.TryGetValue(item.StudentId, out var record);
 
                 if (record == null)
                 {
@@ -578,8 +606,7 @@ public sealed class AttendanceApprovalController : ControllerBase
 
                 record.Status = item.ProposedStatus;
                 record.Remarks = item.ProposedRemarks;
-                record.MarkedByStaffId =
-                    request.RequestedByStaffId;
+                record.MarkedByStaffId = request.RequestedByStaffId;
             }
         }
 
@@ -589,15 +616,22 @@ public sealed class AttendanceApprovalController : ControllerBase
 
         request.ReviewedByStaffId = head.Id;
         request.ReviewedAtUtc = DateTime.UtcNow;
-        request.ReviewRemarks =
-            string.IsNullOrWhiteSpace(input.Remarks)
-                ? null
-                : input.Remarks.Trim();
+        request.ReviewRemarks = string.IsNullOrWhiteSpace(input.Remarks)
+            ? null
+            : input.Remarks.Trim();
+
+        var reasonDescription = string.IsNullOrWhiteSpace(request.Reason)
+            ? "No overall reason provided"
+            : request.Reason;
+
+        var studentDescription = string.Join(
+            ", ",
+            request.Items.Select(x =>
+                $"{x.StudentIndexNumber} {x.StudentFullName}"));
 
         _context.AuditLogs.Add(new AuditLog
         {
-            UserId = User.FindFirstValue(
-                ClaimTypes.NameIdentifier),
+            UserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
             StaffId = head.Id,
             Action = input.Approve
                 ? "ApproveAttendanceChange"
@@ -611,9 +645,8 @@ public sealed class AttendanceApprovalController : ControllerBase
                 $"date {request.AttendanceDate:yyyy-MM-dd}; " +
                 $"teacher {teacher.StaffNumber} {teacher.FullName}; " +
                 $"scope {(request.IsWholeClass ? "whole class" : "selected students")}; " +
-                $"reason: {request.Reason}; " +
-                $"students: {string.Join(", ", request.Items.Select(x =>
-                    $"{x.StudentIndexNumber} {x.StudentFullName}"))}",
+                $"reason: {reasonDescription}; " +
+                $"students: {studentDescription}",
             OldValues = JsonSerializer.Serialize(
                 request.Items.Select(x => new
                 {
@@ -666,8 +699,7 @@ public sealed class AttendanceApprovalController : ControllerBase
 
     private async Task<Staff?> CurrentStaffAsync()
     {
-        var userId = User.FindFirstValue(
-            ClaimTypes.NameIdentifier);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(userId))
             return null;
@@ -683,19 +715,17 @@ public sealed class AttendanceApprovalController : ControllerBase
         int academicYearId,
         int schoolClassId)
     {
-        var permanent =
-            await _context.ClassTeacherAssignments
-                .AnyAsync(x =>
-                    x.StaffId == staffId &&
-                    x.AcademicYearId == academicYearId &&
-                    x.SchoolClassId == schoolClassId &&
-                    x.IsActive);
+        var permanent = await _context.ClassTeacherAssignments
+            .AnyAsync(x =>
+                x.StaffId == staffId &&
+                x.AcademicYearId == academicYearId &&
+                x.SchoolClassId == schoolClassId &&
+                x.IsActive);
 
         if (permanent)
             return true;
 
-        return await _context
-            .TemporaryClassTeacherAssignments
+        return await _context.TemporaryClassTeacherAssignments
             .AnyAsync(x =>
                 x.StaffId == staffId &&
                 x.AcademicYearId == academicYearId &&
@@ -710,7 +740,7 @@ public sealed class SubmitAttendanceChangeRequest
     public int AcademicYearId { get; set; }
     public int SchoolClassId { get; set; }
     public DateTime AttendanceDate { get; set; }
-    public string Reason { get; set; } = string.Empty;
+    public string? Reason { get; set; }
     public List<AttendanceChangeStudentRequest> Students { get; set; } = new();
 }
 
