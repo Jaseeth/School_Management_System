@@ -1229,7 +1229,7 @@ export default function StudentRegistrationPage() {
                     Already have an account?{" "}
 
                     <Link
-                        to="/login"
+                        to="/student/login"
                         className="font-semibold text-blue-600 hover:text-blue-700"
                     >
                         Sign in

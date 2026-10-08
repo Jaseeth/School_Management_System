@@ -2636,4 +2636,65 @@ public class ParentGuardiansController : ControllerBase
             }
         });
     }
+
+    [HttpGet]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    public async Task<IActionResult> GetParentGuardians(
+    [FromQuery] string? search,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
+    {
+        if (page < 1)
+            return BadRequest(new { message = "Page must be at least 1." });
+
+        if (pageSize < 1 || pageSize > 100)
+        {
+            return BadRequest(new
+            {
+                message = "Page size must be between 1 and 100."
+            });
+        }
+
+        var query = _context.ParentGuardians.AsNoTracking();
+
+        var searchText = search?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            query = query.Where(x =>
+                x.ParentNumber.Contains(searchText) ||
+                x.FullName.Contains(searchText) ||
+                (x.Email != null && x.Email.Contains(searchText)));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var parents = await query
+            .OrderBy(x => x.ParentNumber)
+            .ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new
+            {
+                x.Id,
+                x.ParentNumber,
+                x.FullName,
+                x.Email,
+                x.PhoneNumber,
+                x.IsActive,
+                hasLoginAccount = x.ApplicationUserId != null &&
+                    x.ApplicationUserId != "",
+                linkedStudents = _context.StudentParentGuardians.Count(r =>
+                    r.ParentGuardianId == x.Id && r.IsActive)
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            page,
+            pageSize,
+            totalCount,
+            parents
+        });
+    }
 }

@@ -43,8 +43,10 @@ import ParentAcademicProfilePage from "../pages/parents/ParentAcademicProfilePag
 import ParentNotificationsPage from "../pages/parents/ParentNotificationsPage";
 import ParentChangePasswordPage from "../pages/parents/ParentChangePasswordPage";
 import ParentProfilePage from "../pages/parents/ParentProfilePage";
+import ParentsManagementPage from "../pages/parents/ParentsManagementPage";
 
 import StaffProfilePage from "../pages/staff/StaffProfilePage";
+import StaffManagementPage from "../pages/staff/StaffManagementPage";
 import StaffForgotPasswordPage from "../pages/auth/StaffForgotPasswordPage";
 import StaffForcedChangePasswordPage from "../pages/auth/StaffForcedChangePasswordPage";
 
@@ -57,8 +59,11 @@ import TeacherMarksPage from "../pages/teachers/TeacherMarksPage";
 
 import SectionHeadAttendanceApprovalsPage from "../pages/sectionHeads/SectionHeadAttendanceApprovalsPage";
 import SectionHeadMarksReviewPage from "../pages/sectionHeads/SectionHeadMarksReviewPage";
+import SectionHeadAssignmentsPage from "../pages/sectionHeads/SectionHeadAssignmentsPage";
 
 import ResultsPublishingPage from "../pages/results/ResultsPublishingPage";
+
+import TermsExamsManagementPage from "../pages/exams/TermsExamsManagementPage";
 
 export default function AppRoutes() {
     return (
@@ -123,6 +128,7 @@ export default function AppRoutes() {
                 />
 
                 <Route path="/staff/my-profile" element={<StaffProfilePage />} />
+                <Route path="/staff" element={<StaffManagementPage />} />
 
                 <Route
                     path="/teacher/timetable"
@@ -155,8 +161,23 @@ export default function AppRoutes() {
                 />
 
                 <Route
+                    path="/section-head-assignments"
+                    element={<SectionHeadAssignmentsPage />}
+                />
+
+                <Route
                     path="/results/publishing"
                     element={<ResultsPublishingPage />}
+                />
+
+                <Route
+                    path="/parents"
+                    element={<ParentsManagementPage />}
+                />
+
+                <Route
+                    path="/exams"
+                    element={<TermsExamsManagementPage />}
                 />
 
                 {/*

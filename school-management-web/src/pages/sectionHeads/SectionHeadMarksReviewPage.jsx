@@ -300,7 +300,7 @@ export default function SectionHeadMarksReviewPage() {
                     <p className="mt-5 text-sm text-slate-500">
                         {error
                             ? "Submissions could not be loaded."
-                            : "No marks submissions are waiting for your review."}
+                            : "No marks submissions are waiting for your review. Only submissions for your active section and academic-year assignments appear. If you expected a submission, ask Admin to check Section Head Assignments for that year."}
                     </p>
                 ) : (
                     <div className="mt-5 grid gap-4 xl:grid-cols-2">

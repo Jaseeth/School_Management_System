@@ -218,6 +218,12 @@ public class StaffController : ControllerBase
     public async Task<IActionResult> CreateStaff(
         CreateStaffRequest request)
     {
+        request.StaffNumber = request.StaffNumber.Trim();
+        request.FullName = request.FullName.Trim();
+        request.Email = request.Email.Trim();
+        request.Designation = request.Designation?.Trim();
+        request.RoleId = request.RoleId.Trim();
+
         if (string.IsNullOrWhiteSpace(request.StaffNumber))
         {
             return BadRequest(new
@@ -275,6 +281,15 @@ public class StaffController : ControllerBase
             return BadRequest(new
             {
                 message = "Invalid role."
+            });
+        }
+
+        if (string.Equals(role.Name, "Student", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role.Name, "Parent", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new
+            {
+                message = "Select a staff role. Student and Parent accounts must use their own account workflows."
             });
         }
 
@@ -380,6 +395,12 @@ public class StaffController : ControllerBase
                 s.Designation,
                 s.ApplicationUserId,
                 s.IsActive,
+                AccountIsActive = u.IsActive,
+                Roles = (from userRole in _context.UserRoles
+                         join role in _context.Roles on userRole.RoleId equals role.Id
+                         where userRole.UserId == u.Id
+                         orderby role.Name
+                         select role.Name).ToList(),
                 u.MustChangePassword
             })
             .ToListAsync();

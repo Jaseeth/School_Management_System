@@ -22,7 +22,7 @@ export const studentPortalApi = {
 
     getResults() {
         return api.get(
-            "/student-results/my/academic"
+            "/student-results/my/summary"
         );
     },
 

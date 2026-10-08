@@ -54,6 +54,12 @@ const menuItems = [
         roles: ["Admin", "Principal", "Deputy Principal"],
     },
     {
+        title: "Section Head Assignments",
+        path: "/section-head-assignments",
+        icon: ShieldCheck,
+        roles: ["Admin"],
+    },
+    {
         title: "Attendance",
         path: "/attendance",
         icon: ClipboardCheck,
@@ -152,6 +158,13 @@ const menuItems = [
     {
         title: "Results Publishing",
         path: "/results/publishing",
+        icon: FileText,
+        roles: ["Admin", "Principal", "Deputy Principal"],
+    },
+
+    {
+        title: "Terms & Exams",
+        path: "/exams",
         icon: FileText,
         roles: ["Admin", "Principal", "Deputy Principal"],
     },
