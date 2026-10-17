@@ -1,4 +1,5 @@
-﻿using QuestPDF.Fluent;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using SchoolManagement.Application.Reports.DTOs;
 
@@ -27,6 +28,7 @@ public class ClassAttendanceReportPdfDocument : IDocument
     {
         container.Page(page =>
         {
+            page.Size(QuestPDF.Helpers.PageSizes.A4.Landscape());
             page.Margin(30);
 
             page.DefaultTextStyle(x =>
@@ -166,6 +168,7 @@ public class ClassAttendanceReportPdfDocument : IDocument
                         columns.ConstantColumn(65);
                         columns.ConstantColumn(65);
                         columns.ConstantColumn(80);
+                        columns.ConstantColumn(90);
                     });
 
                     AddHeaderCell(
@@ -190,7 +193,9 @@ public class ClassAttendanceReportPdfDocument : IDocument
 
                     AddHeaderCell(
                         table,
-                        "Absent");
+                        "Late");
+
+                    AddHeaderCell(table, "Absent");
 
                     AddHeaderCell(
                         table,
@@ -222,6 +227,8 @@ public class ClassAttendanceReportPdfDocument : IDocument
                             table,
                             student.PresentDays
                                 .ToString());
+
+                        AddCell(table, student.LateDays.ToString());
 
                         AddCell(
                             table,

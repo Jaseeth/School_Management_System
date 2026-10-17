@@ -1,3 +1,5 @@
+import TimetableIntervals from "../../components/TimetableIntervals";
+import MondayAssembly from "../../components/MondayAssembly";
 import {
     ArrowLeft,
     BookOpen,
@@ -155,6 +157,8 @@ export default function StudentTimetablePage() {
 
 
             <main className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-7 lg:px-8 lg:py-10">
+                <MondayAssembly />
+            <TimetableIntervals />
 
                 <button
                     type="button"
@@ -425,8 +429,8 @@ function DayCard({
 
                                 {
                                     entry
-                                        ?.room ||
-                                    "No room assigned"
+                                        ?.className ||
+                                    "—"
                                 }
 
                             </div>

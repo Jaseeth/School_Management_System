@@ -38,7 +38,7 @@ public class TeacherAssignmentsController : ControllerBase
         var academicYearExists =
             await _context.AcademicYears
                 .AnyAsync(x =>
-                    x.Id == request.AcademicYearId);
+                    x.Id == request.AcademicYearId && x.IsActive);
 
         if (!academicYearExists)
         {
@@ -74,7 +74,7 @@ public class TeacherAssignmentsController : ControllerBase
         var user = await _userManager.FindByIdAsync(
             staff.ApplicationUserId);
 
-        if (user == null)
+        if (user == null || !user.IsActive)
         {
             return BadRequest(new
             {
@@ -101,7 +101,7 @@ public class TeacherAssignmentsController : ControllerBase
             await _context.SchoolClasses
                 .AnyAsync(x =>
                     x.Id == request.SchoolClassId &&
-                    x.IsActive);
+                    x.IsActive && x.Grade.IsActive && x.Grade.Section.IsActive);
 
         if (!classExists)
         {
@@ -125,9 +125,9 @@ public class TeacherAssignmentsController : ControllerBase
             });
         }
 
-        var duplicateExists =
+        var existingAssignment =
             await _context.TeacherAssignments
-                .AnyAsync(x =>
+                .FirstOrDefaultAsync(x =>
                     x.AcademicYearId ==
                         request.AcademicYearId &&
                     x.StaffId ==
@@ -135,16 +135,22 @@ public class TeacherAssignmentsController : ControllerBase
                     x.SchoolClassId ==
                         request.SchoolClassId &&
                     x.SubjectId ==
-                        request.SubjectId &&
-                    x.IsActive);
+                        request.SubjectId);
 
-        if (duplicateExists)
+        if (existingAssignment?.IsActive == true)
         {
             return BadRequest(new
             {
                 message =
                     "This teacher assignment already exists."
             });
+        }
+
+        if (existingAssignment != null)
+        {
+            existingAssignment.IsActive = true;
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Teacher assignment reactivated successfully.", existingAssignment.Id });
         }
 
         var assignment =
@@ -185,16 +191,18 @@ public class TeacherAssignmentsController : ControllerBase
 
     [HasPermission("TeacherAssignments.View")]
     [HttpGet]
-    public async Task<IActionResult> GetAssignments()
+    public async Task<IActionResult> GetAssignments(bool includeInactive = false)
     {
         var assignments =
             await _context.TeacherAssignments
-                .Where(x => x.IsActive)
+                .AsNoTracking()
+                .Where(x => includeInactive || x.IsActive)
                 .OrderBy(x =>
                     x.Staff.FullName)
                 .Select(x => new
                 {
                     x.Id,
+                    x.IsActive,
 
                     AcademicYear = new
                     {
@@ -218,7 +226,12 @@ public class TeacherAssignmentsController : ControllerBase
                         Grade = new
                         {
                             x.SchoolClass.Grade.Id,
-                            x.SchoolClass.Grade.Name
+                            x.SchoolClass.Grade.Name,
+                            Section = new
+                            {
+                                x.SchoolClass.Grade.Section.Id,
+                                x.SchoolClass.Grade.Section.Name
+                            }
                         }
                     },
 

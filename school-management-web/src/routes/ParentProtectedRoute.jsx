@@ -1,7 +1,8 @@
-﻿import { Navigate } from "react-router-dom";
+import { getPortalToken } from "../services/portalSession";
+import { Navigate } from "react-router-dom";
 
 export default function ParentProtectedRoute({ children }) {
-    const token = localStorage.getItem("accessToken");
+    const token = getPortalToken("parent");
 
     try {
         const parent = JSON.parse(

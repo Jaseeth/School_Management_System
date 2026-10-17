@@ -1426,11 +1426,13 @@ public class ParentGuardiansController : ControllerBase
             attendance.Count(x =>
                 x.Status == "Absent");
 
+        var lateDays = attendance.Count(x => x.Status == "Late");
+
         var attendancePercentage =
             totalDays == 0
                 ? 0
                 : Math.Round(
-                    (decimal)presentDays /
+                    (decimal)(presentDays + lateDays) /
                     totalDays * 100,
                     2);
 
@@ -1463,6 +1465,7 @@ public class ParentGuardiansController : ControllerBase
 
                 PresentDays =
                     presentDays,
+                LateDays = lateDays,
 
                 AbsentDays =
                     absentDays,
@@ -1940,11 +1943,13 @@ public class ParentGuardiansController : ControllerBase
             attendance.Count(x =>
                 x.Status == "Absent");
 
+        var lateDays = attendance.Count(x => x.Status == "Late");
+
         var attendancePercentage =
             totalAttendanceDays == 0
                 ? 0
                 : Math.Round(
-                    (decimal)presentDays /
+                    (decimal)(presentDays + lateDays) /
                     totalAttendanceDays * 100,
                     2);
 
@@ -2076,6 +2081,7 @@ public class ParentGuardiansController : ControllerBase
                     totalAttendanceDays,
 
                 presentDays,
+                lateDays,
 
                 absentDays,
 

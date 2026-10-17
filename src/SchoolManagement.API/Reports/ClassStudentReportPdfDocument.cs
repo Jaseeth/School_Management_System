@@ -1,4 +1,5 @@
-﻿using QuestPDF.Fluent;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using SchoolManagement.Application.Reports.DTOs;
 
@@ -27,6 +28,7 @@ public class ClassStudentReportPdfDocument : IDocument
     {
         container.Page(page =>
         {
+            page.Size(QuestPDF.Helpers.PageSizes.A4.Landscape());
             page.Margin(30);
 
             page.DefaultTextStyle(x =>
@@ -144,6 +146,7 @@ public class ClassStudentReportPdfDocument : IDocument
                         columns.ConstantColumn(60);
                         columns.ConstantColumn(60);
                         columns.ConstantColumn(70);
+                        columns.ConstantColumn(90);
                     });
 
                     AddHeaderCell(
@@ -174,9 +177,8 @@ public class ClassStudentReportPdfDocument : IDocument
                         table,
                         "Present");
 
-                    AddHeaderCell(
-                        table,
-                        "Attendance %");
+                    AddHeaderCell(table, "Late");
+                    AddHeaderCell(table, "Attendance %");
 
                     var number = 1;
 
@@ -217,9 +219,8 @@ public class ClassStudentReportPdfDocument : IDocument
                             student.PresentDays
                                 .ToString());
 
-                        AddCell(
-                            table,
-                            $"{student.AttendancePercentage:0.##}%");
+                        AddCell(table, student.LateDays.ToString());
+                        AddCell(table, $"{student.AttendancePercentage:0.##}%");
 
                         number++;
                     }

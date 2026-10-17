@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Filters;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,8 +14,8 @@ namespace SchoolManagement.API.Controllers;
 
 [ApiController]
 [Route("api/reports")]
-[Authorize(Roles = "Admin,Principal,Deputy Principal")]
-public class ReportsController : ControllerBase
+[Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head")]
+public class ReportsController : ControllerBase, IAsyncActionFilter
 {
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
@@ -24,6 +26,105 @@ public class ReportsController : ControllerBase
     {
         _context = context;
         _environment = environment;
+    }
+
+    private bool IsGlobalReporter => User.IsInRole("Admin") || User.IsInRole("Principal") || User.IsInRole("Deputy Principal");
+    [NonAction]
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (!IsGlobalReporter)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var heads = _context.SectionHeadAssignments.Where(h => h.IsActive && h.Staff.IsActive && h.Staff.ApplicationUserId == userId);
+            var year = context.ActionArguments.TryGetValue("academicYearId", out var yearValue) ? (int?)yearValue : null;
+            if (context.ActionArguments.TryGetValue("schoolClassId", out var classValue))
+            {
+                var classId = (int)classValue!;
+                if (!await heads.AnyAsync(h => h.AcademicYearId == year && _context.SchoolClasses.Any(c => c.Id == classId && c.Grade.SectionId == h.SectionId)))
+                { context.Result = Forbid(); return; }
+            }
+            if (context.ActionArguments.TryGetValue("studentId", out var studentValue))
+            {
+                var studentId = (int)studentValue!;
+                var enrollments = _context.StudentAcademicEnrollments.Where(e => e.StudentId == studentId && e.IsActive);
+                if (year.HasValue) enrollments = enrollments.Where(e => e.AcademicYearId == year);
+                if (!await enrollments.AnyAsync() || await enrollments.AnyAsync(e => !heads.Any(h => h.AcademicYearId == e.AcademicYearId && h.SectionId == e.SchoolClass.Grade.SectionId)))
+                { context.Result = Forbid(); return; }
+            }
+        }
+        await next();
+    }
+
+    [HttpGet("options")]
+    public async Task<IActionResult> GetOptions()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var global = IsGlobalReporter;
+        var heads = _context.SectionHeadAssignments.Where(h => h.IsActive && h.Staff.IsActive && h.Staff.ApplicationUserId == userId);
+        var enrollments = _context.StudentAcademicEnrollments.Where(e => e.IsActive && e.Student.IsActive &&
+            (global || heads.Any(h => h.AcademicYearId == e.AcademicYearId && h.SectionId == e.SchoolClass.Grade.SectionId)));
+        var students = await enrollments.Select(e => new { id = e.StudentId, name = e.Student.FullName, code = e.Student.IndexNumber, academicYearId = e.AcademicYearId, schoolClassId = e.SchoolClassId }).Distinct().ToListAsync();
+        var years = await _context.AcademicYears.Where(y => global || heads.Any(h => h.AcademicYearId == y.Id)).Select(y => new { y.Id, y.Name }).ToListAsync();
+        var classes = await _context.SchoolClasses.Where(c => global || heads.Any(h => h.SectionId == c.Grade.SectionId)).Select(c => new { c.Id, name = c.Grade.Section.Name + " · " + c.Grade.Name + " " + c.Name }).ToListAsync();
+        var terms = await _context.AcademicTerms.Where(t => global || heads.Any(h => h.AcademicYearId == t.AcademicYearId)).Select(t => new { t.Id, t.Name, t.AcademicYearId }).ToListAsync();
+        var exams = await _context.Exams.Where(e => global || heads.Any(h => h.AcademicYearId == e.AcademicTerm.AcademicYearId))
+            .Select(e => new { e.Id, e.Name, e.AcademicTermId }).ToListAsync();
+        return Ok(new { students, years, classes, terms, exams, globalReports = global });
+    }
+
+    [HttpGet("people/{kind}")]
+    [HttpGet("people/{kind}/pdf")]
+    public async Task<IActionResult> GetPeopleReport(string kind, int academicYearId)
+    {
+        if (!IsGlobalReporter) return Forbid();
+        var year = await _context.AcademicYears.Where(y => y.Id == academicYearId).Select(y => y.Name).FirstOrDefaultAsync();
+        if (year == null) return BadRequest(new { message = "Select a valid academic year." });
+        string title;
+        string[] columns;
+        List<string[]> rows;
+        if (kind == "sectionHeads")
+        {
+            title = "Section Head assignments";
+            columns = ["Staff number", "Section Head", "Section", "Status"];
+            var items = await _context.SectionHeadAssignments.AsNoTracking().Where(a => a.AcademicYearId == academicYearId)
+                .Select(a => new { a.Staff.StaffNumber, a.Staff.FullName, Section = a.Section.Name, Active = a.IsActive && a.Staff.IsActive }).ToListAsync();
+            rows = items.Select(a => new[] { a.StaffNumber, a.FullName, a.Section, a.Active ? "Active" : "Inactive" }).ToList();
+        }
+        else if (kind == "teachers")
+        {
+            title = "Teacher subject assignments";
+            columns = ["Staff number", "Teacher", "Class", "Subject", "Status"];
+            var items = await _context.TeacherAssignments.AsNoTracking().Where(a => a.AcademicYearId == academicYearId)
+                .Select(a => new { a.Staff.StaffNumber, a.Staff.FullName, Class = a.SchoolClass.Grade.Name + " " + a.SchoolClass.Name, Subject = a.Subject.Name, Active = a.IsActive && a.Staff.IsActive }).ToListAsync();
+            rows = items.Select(a => new[] { a.StaffNumber, a.FullName, a.Class, a.Subject, a.Active ? "Active" : "Inactive" }).ToList();
+        }
+        else if (kind == "parents")
+        {
+            title = "Parent links and accounts";
+            columns = ["Parent number", "Parent", "Account", "Status", "Linked students"];
+            var items = await _context.ParentGuardians.AsNoTracking().Select(p => new {
+                p.ParentNumber, p.FullName, p.ApplicationUserId, p.IsActive,
+                Children = p.StudentRelationships.Where(r => r.IsActive && _context.StudentAcademicEnrollments.Any(e => e.StudentId == r.StudentId && e.IsActive && e.AcademicYearId == academicYearId))
+                    .Select(r => r.Student.IndexNumber + " - " + r.Student.FullName).ToList()
+            }).ToListAsync();
+            rows = items.Select(p => new[] { p.ParentNumber, p.FullName, p.ApplicationUserId == null ? "Not linked" : "Linked", p.IsActive ? "Active" : "Inactive", string.Join(", ", p.Children) }).ToList();
+        }
+        else return BadRequest(new { message = "Unknown report type." });
+        if (!Request.Path.Value!.EndsWith("/pdf", StringComparison.OrdinalIgnoreCase))
+            return Ok(new { title, academicYear = year, totalRows = rows.Count, records = rows.Select(row => columns.Select((column, index) => new { column, value = row[index] }).ToDictionary(cell => cell.column, cell => cell.value)) });
+        var pdf = QuestPDF.Fluent.Document.Create(document => document.Page(page => {
+            page.Size(842, 595);
+            page.Margin(30);
+            page.DefaultTextStyle(style => style.FontSize(10));
+            page.Header().Column(column => { column.Item().Text(title).FontSize(20).Bold(); column.Item().Text("Academic year: " + year); });
+            page.Content().PaddingTop(15).Table(table => {
+                table.ColumnsDefinition(definition => { foreach (var unused in columns) definition.RelativeColumn(); });
+                table.Header(header => { foreach (var column in columns) header.Cell().Padding(5).Text(column).Bold(); });
+                foreach (var row in rows) foreach (var cell in row) table.Cell().BorderBottom(0.5f).Padding(5).Text(cell);
+            });
+            page.Footer().AlignCenter().Text(text => { text.Span("Page "); text.CurrentPageNumber(); });
+        })).GeneratePdf();
+        return File(pdf, "application/pdf", kind + "-report.pdf");
     }
 
     // ============================================================
@@ -327,6 +428,8 @@ public class ReportsController : ControllerBase
                 x.Status ==
                     AttendanceStatus.Present);
 
+        var lateDays = attendanceRecords.Count(x => x.Status == AttendanceStatus.Late);
+
         var absentDays =
             attendanceRecords.Count(x =>
                 x.Status ==
@@ -336,7 +439,7 @@ public class ReportsController : ControllerBase
             totalDays == 0
                 ? 0
                 : Math.Round(
-                    (decimal)presentDays /
+                    (decimal)(presentDays + lateDays) /
                     totalDays * 100,
                     2);
 
@@ -438,6 +541,7 @@ public class ReportsController : ControllerBase
 
                         PresentDays =
                             presentDays,
+                        LateDays = lateDays,
 
                         AbsentDays =
                             absentDays,
@@ -542,6 +646,7 @@ public class ReportsController : ControllerBase
                         group.Count(x =>
                             x.Status ==
                                 AttendanceStatus.Present),
+                        LateDays = group.Count(x => x.Status == AttendanceStatus.Late),
 
                     AbsentDays =
                         group.Count(x =>
@@ -590,6 +695,7 @@ public class ReportsController : ControllerBase
 
                     var presentDays =
                         attendance?.PresentDays ?? 0;
+                    var lateDays = attendance?.LateDays ?? 0;
 
                     var absentDays =
                         attendance?.AbsentDays ?? 0;
@@ -598,7 +704,7 @@ public class ReportsController : ControllerBase
                         totalDays == 0
                             ? 0
                             : Math.Round(
-                                (decimal)presentDays /
+                                (decimal)(presentDays + lateDays) /
                                 totalDays * 100,
                                 2);
 
@@ -627,6 +733,7 @@ public class ReportsController : ControllerBase
 
                         PresentDays =
                             presentDays,
+                        LateDays = lateDays,
 
                         AbsentDays =
                             absentDays,
@@ -757,6 +864,7 @@ public class ReportsController : ControllerBase
                         group.Count(x =>
                             x.Status ==
                                 AttendanceStatus.Present),
+                        LateDays = group.Count(x => x.Status == AttendanceStatus.Late),
 
                     AbsentDays =
                         group.Count(x =>
@@ -805,6 +913,7 @@ public class ReportsController : ControllerBase
 
                     var presentDays =
                         attendance?.PresentDays ?? 0;
+                    var lateDays = attendance?.LateDays ?? 0;
 
                     var absentDays =
                         attendance?.AbsentDays ?? 0;
@@ -813,7 +922,7 @@ public class ReportsController : ControllerBase
                         totalDays == 0
                             ? 0
                             : Math.Round(
-                                (decimal)presentDays /
+                                (decimal)(presentDays + lateDays) /
                                 totalDays * 100,
                                 2);
 
@@ -842,6 +951,7 @@ public class ReportsController : ControllerBase
 
                         PresentDays =
                             presentDays,
+                        LateDays = lateDays,
 
                         AbsentDays =
                             absentDays,
@@ -1055,6 +1165,7 @@ public class ReportsController : ControllerBase
                             group.Count(x =>
                                 x.Status ==
                                     AttendanceStatus.Present),
+                        LateDays = group.Count(x => x.Status == AttendanceStatus.Late),
 
                         AbsentDays =
                             group.Count(x =>
@@ -1082,6 +1193,7 @@ public class ReportsController : ControllerBase
 
                     var presentDays =
                         attendance?.PresentDays ?? 0;
+                    var lateDays = attendance?.LateDays ?? 0;
 
                     var absentDays =
                         attendance?.AbsentDays ?? 0;
@@ -1090,7 +1202,7 @@ public class ReportsController : ControllerBase
                         totalDays == 0
                             ? 0
                             : Math.Round(
-                                (decimal)presentDays /
+                                (decimal)(presentDays + lateDays) /
                                 totalDays * 100,
                                 2);
 
@@ -1110,6 +1222,7 @@ public class ReportsController : ControllerBase
 
                         PresentDays =
                             presentDays,
+                        LateDays = lateDays,
 
                         AbsentDays =
                             absentDays,
@@ -1290,6 +1403,7 @@ public class ReportsController : ControllerBase
                             group.Count(x =>
                                 x.Status ==
                                     AttendanceStatus.Present),
+                        LateDays = group.Count(x => x.Status == AttendanceStatus.Late),
 
                         AbsentDays =
                             group.Count(x =>
@@ -1313,6 +1427,7 @@ public class ReportsController : ControllerBase
 
                     var presentDays =
                         attendance?.PresentDays ?? 0;
+                    var lateDays = attendance?.LateDays ?? 0;
 
                     var absentDays =
                         attendance?.AbsentDays ?? 0;
@@ -1321,7 +1436,7 @@ public class ReportsController : ControllerBase
                         totalDays == 0
                             ? 0
                             : Math.Round(
-                                (decimal)presentDays /
+                                (decimal)(presentDays + lateDays) /
                                 totalDays * 100,
                                 2);
 
@@ -1341,6 +1456,7 @@ public class ReportsController : ControllerBase
 
                         PresentDays =
                             presentDays,
+                        LateDays = lateDays,
 
                         AbsentDays =
                             absentDays,

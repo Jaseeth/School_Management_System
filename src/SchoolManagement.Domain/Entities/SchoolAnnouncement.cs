@@ -8,6 +8,10 @@ public class SchoolAnnouncement
 
     public string Message { get; set; } = string.Empty;
 
+    public List<int> StudentIds { get; set; } = [];
+    public List<int> StaffIds { get; set; } = [];
+    public List<int> ParentIds { get; set; } = [];
+
     public string AudienceType { get; set; } = string.Empty;
 
     public int? SectionId { get; set; }

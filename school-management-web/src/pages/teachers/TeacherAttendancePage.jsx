@@ -1,5 +1,5 @@
 import { ClipboardCheck, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
 
@@ -71,11 +71,19 @@ export default function TeacherAttendancePage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
+    const [classesReloadKey, setClassesReloadKey] = useState(0);
     const [reloadKey, setReloadKey] = useState(0);
+
+    const busy = useRef(false);
+    const requestsRef = useRef([]);
+    const selectedKeyRef = useRef("");
+    useEffect(() => { requestsRef.current = requests; }, [requests]);
+    useEffect(() => { selectedKeyRef.current = selectedKey; }, [selectedKey]);
 
     const selected = classes.find((item) => classKey(item) === selectedKey);
     const canSaveDirectly = attendanceWindow?.canSaveDirectly === true;
     const pendingRequest = requests.some(isPending);
+    const needsPermission = attendanceWindow && !attendanceWindow.isWindowOpen;
 
     useEffect(() => {
         if (!isTeacher) {
@@ -100,8 +108,9 @@ export default function TeacherAttendancePage() {
                 setClasses(list);
 
                 if (list.length > 0) {
-                    setSelectedKey(classKey(list[0]));
-                    setDate(dateForClass(list[0]));
+                    if (!list.some((item) => classKey(item) === selectedKeyRef.current)) {
+                        setSelectedKey(classKey(list[0])); setDate(dateForClass(list[0]));
+                    }
                 }
             } catch (err) {
                 if (active) {
@@ -117,7 +126,7 @@ export default function TeacherAttendancePage() {
 
         loadClasses();
         return () => { active = false; };
-    }, [isTeacher]);
+    }, [isTeacher, classesReloadKey]);
 
     useEffect(() => {
         if (!selected || !date) return;
@@ -187,6 +196,13 @@ export default function TeacherAttendancePage() {
                     };
                 }
 
+                const loadedRequests = Array.isArray(requestsResponse.data?.requests) ? requestsResponse.data.requests : [];
+                const pending = loadedRequests.find(isPending);
+                for (const item of pending?.students || []) {
+                    if (initialDraft[item.studentId]) initialDraft[item.studentId] = {
+                        status: String(item.proposedStatus), remarks: item.proposedRemarks || "",
+                    };
+                }
                 setStudents(list);
                 setDraft(initialDraft);
                 setAttendanceWindow(windowResponse.data);
@@ -218,15 +234,18 @@ export default function TeacherAttendancePage() {
 
         const interval = window.setInterval(async () => {
             try {
-                const response = await api.get("/attendance/windows", {
-                    params: {
-                        academicYearId: selected.academicYearId,
-                        schoolClassId: selected.schoolClassId,
-                        attendanceDate: date,
-                    },
-                });
-
-                if (active) setAttendanceWindow(response.data);
+                const params = { academicYearId: selected.academicYearId,
+                    schoolClassId: selected.schoolClassId, attendanceDate: date };
+                const [response, requestResponse] = await Promise.all([
+                    api.get("/attendance/windows", { params }), api.get("/attendance/approval/requests/my", { params }),
+                ]);
+                if (active) {
+                    const latest = requestResponse.data?.requests || [];
+                    const reviewed = requestsRef.current.some((previous) => isPending(previous) &&
+                        latest.some((next) => next.id === previous.id && !isPending(next)));
+                    setAttendanceWindow(response.data); setRequests(latest);
+                    if (reviewed) setReloadKey((current) => current + 1);
+                }
             } catch {
                 // The Refresh button can retry a failed window request.
             }
@@ -283,8 +302,16 @@ export default function TeacherAttendancePage() {
 
     async function save(event) {
         event.preventDefault();
+        if (busy.current || loadingRoster) return;
+        busy.current = true;
+        setSaving(true);
+        try { await submitAttendance(); }
+        finally { busy.current = false; setSaving(false); }
+    }
 
-        if (!selected || saving || students.length === 0 || !attendanceWindow) {
+    async function submitAttendance() {
+
+        if (!selected || students.length === 0 || !attendanceWindow) {
             return;
         }
 
@@ -310,6 +337,19 @@ export default function TeacherAttendancePage() {
                 err?.response?.data?.message ||
                 "Unable to check the attendance window. Please try again."
             );
+            return;
+        }
+
+        if (!latestWindow?.isWindowOpen) {
+            if (pendingRequest) { setError("An attendance request is already awaiting section head review."); return; }
+            if (!reason.trim()) { setError("Enter a reason for attendance entry permission."); return; }
+            try {
+                const response = await api.post("/attendance/approval/requests", {
+                    academicYearId: selected.academicYearId, schoolClassId: selected.schoolClassId,
+                    attendanceDate: `${date}T00:00:00`, isPermissionRequest: true, reason: reason.trim(), students: [],
+                });
+                setMessage(response.data.message); setReason(""); setReloadKey((current) => current + 1);
+            } catch (err) { setError(err?.response?.data?.message || "Unable to request entry permission."); }
             return;
         }
 
@@ -348,11 +388,6 @@ export default function TeacherAttendancePage() {
                 return;
             }
 
-            // if (!reason.trim()) {
-            //     setError("Enter a reason for section head approval.");
-            //     return;
-            // }
-
             if (
                 changed.length < students.length &&
                 changed.some(
@@ -377,8 +412,6 @@ export default function TeacherAttendancePage() {
             })),
         };
 
-        setSaving(true);
-
         try {
             const response = directSave
                 ? await api.post("/attendance/mark", payload)
@@ -401,11 +434,20 @@ export default function TeacherAttendancePage() {
                 "Unable to submit attendance. Please try again."
             );
 
+            // Keep the selections and server error visible. A conflict (for example,
+            // a missing section head) does not mean attendance was saved.
             if (err?.response?.status === 409) {
-                setReloadKey((current) => current + 1);
+                try {
+                    const params = { academicYearId: selected.academicYearId,
+                        schoolClassId: selected.schoolClassId, attendanceDate: date };
+                    const [windowResponse, requestsResponse] = await Promise.all([
+                        api.get("/attendance/windows", { params }),
+                        api.get("/attendance/approval/requests/my", { params }),
+                    ]);
+                    setAttendanceWindow(windowResponse.data);
+                    setRequests(requestsResponse.data?.requests || []);
+                } catch { /* The original submission error remains visible. */ }
             }
-        } finally {
-            setSaving(false);
         }
     }
 
@@ -427,6 +469,18 @@ export default function TeacherAttendancePage() {
                 Mark attendance for classes where you are the class teacher
                 or have temporary class-teacher access.
             </p>
+
+            {error && (
+                <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {error}
+                </p>
+            )}
+
+            {message && (
+                <p role="status" className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                    {message}
+                </p>
+            )}
 
             {loadingClasses ? (
                 <p role="status" className="mt-8 rounded-2xl bg-white p-6 text-slate-600">
@@ -464,6 +518,7 @@ export default function TeacherAttendancePage() {
                         <label className="block text-sm font-semibold text-slate-700">
                             Date
                             <input
+                                disabled={saving}
                                 type="date"
                                 value={date}
                                 min={selected?.academicYearStartDate?.slice(0, 10)}
@@ -478,7 +533,7 @@ export default function TeacherAttendancePage() {
 
                         <button
                             type="button"
-                            onClick={() => setReloadKey((current) => current + 1)}
+                            onClick={() => { setClassesReloadKey((current) => current + 1); setReloadKey((current) => current + 1); }}
                             disabled={loadingRoster || saving}
                             className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
@@ -506,19 +561,22 @@ export default function TeacherAttendancePage() {
                                             attendanceWindow.extendedUntil ||
                                             attendanceWindow.regularClosesAt
                                         )} Sri Lanka time.`
-                                        : "No first period is configured for this date."}
+                                        : attendanceWindow.unavailableReason || "No first period is configured for this date."}
                                     {" "}
-                                    {canSaveDirectly
-                                        ? "Changes save immediately."
-                                        : "Changes require section head approval."}
+                                    {attendanceWindow.hasEntryPermission
+                                        ? `Entry permission is active until ${formatSchoolTime(attendanceWindow.extendedUntil)}. Save attendance directly.`
+                                        : canSaveDirectly ? "First submission saves immediately; all attendance statuses are allowed."
+                                        : needsPermission ? "Request section head permission to enter attendance."
+                                        : "Attendance is already saved. Corrections require section head approval."}
                                 </p>
                             )}
 
                             {requests.length > 0 && (
                                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                                    {pendingRequest && <p className="mb-2 font-semibold text-amber-800">A request is awaiting section head review. Correction requests apply after approval; entry permission requests unlock saving.</p>}
                                     {requests.map((request) => (
                                         <p key={request.id} className="py-1">
-                                            Request #{request.id}: {requestStatus(request)}
+                                            Request #{request.id}: {request.isPermissionRequest ? "Entry permission" : "Attendance correction"} · {requestStatus(request)}
                                             {request.studentCount != null &&
                                                 ` · ${request.studentCount} student(s)`}
                                             {request.reviewRemarks &&
@@ -535,6 +593,7 @@ export default function TeacherAttendancePage() {
                                 <button
                                     type="button"
                                     onClick={markAllPresent}
+                                    disabled={saving || pendingRequest || needsPermission}
                                     className="cursor-pointer rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                                 >
                                     Mark all present
@@ -566,6 +625,7 @@ export default function TeacherAttendancePage() {
                                                     event.target.value
                                                 )}
                                                 required={canSaveDirectly}
+                                                disabled={saving || pendingRequest || needsPermission}
                                                 className="mt-1 block w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
                                             >
                                                 <option value="">Select status</option>
@@ -589,6 +649,7 @@ export default function TeacherAttendancePage() {
                                                     "remarks",
                                                     event.target.value
                                                 )}
+                                                disabled={saving || pendingRequest || needsPermission}
                                                 maxLength={500}
                                                 placeholder={
                                                     canSaveDirectly
@@ -604,10 +665,11 @@ export default function TeacherAttendancePage() {
 
                             {!canSaveDirectly && attendanceWindow && (
                                 <label className="mt-5 block text-sm font-semibold text-slate-700">
-                                    Reason for section head approval (optional)
+                                    {needsPermission ? "Reason for attendance entry permission (required)" : "Reason for correction approval (optional)"}
                                     <textarea
                                         value={reason}
                                         onChange={(event) => setReason(event.target.value)}
+                                        disabled={saving || pendingRequest}
                                         maxLength={1000}
                                         rows={3}
                                         placeholder="Explain the late entry or correction"
@@ -622,7 +684,7 @@ export default function TeacherAttendancePage() {
                                     saving ||
                                     loadingRoster ||
                                     !attendanceWindow ||
-                                    (!canSaveDirectly && pendingRequest)
+                                    pendingRequest
                                 }
                                 className="mt-5 w-full cursor-pointer rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                             >
@@ -632,7 +694,7 @@ export default function TeacherAttendancePage() {
                                         ? "Save attendance"
                                         : pendingRequest
                                             ? "Waiting for section head review"
-                                            : "Submit for approval"}
+                                            : needsPermission ? "Request entry permission" : "Submit corrections for approval"}
                             </button>
                         </form>
                     ) : !error ? (
@@ -643,17 +705,7 @@ export default function TeacherAttendancePage() {
                 </>
             ) : null}
 
-            {error && (
-                <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {error}
-                </p>
-            )}
 
-            {message && (
-                <p role="status" className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-                    {message}
-                </p>
-            )}
         </div>
     );
 }

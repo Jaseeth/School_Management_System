@@ -12,6 +12,9 @@ public class AttendanceChangeRequest
 
     public int RequestedByStaffId { get; set; }
     public string Reason { get; set; } = string.Empty;
+    public bool IsPermissionRequest { get; set; }
+    public DateTime? GrantedUntilUtc { get; set; }
+
     public bool IsWholeClass { get; set; }
 
     public AttendanceChangeStatus Status { get; set; }

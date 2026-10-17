@@ -57,10 +57,8 @@ export default function StudentLoginPage() {
                 return;
             }
 
-            localStorage.removeItem("authUser");
-            localStorage.removeItem("parentUser");
 
-            localStorage.setItem("accessToken", data.token);
+            localStorage.setItem("studentAccessToken", data.token);
             localStorage.setItem(
                 "studentUser",
                 JSON.stringify({
@@ -74,6 +72,7 @@ export default function StudentLoginPage() {
                 })
             );
 
+            window.dispatchEvent(new Event("auth-session-changed"));
             navigate(
                 data.mustChangePassword === true
                     ? "/student/change-password"

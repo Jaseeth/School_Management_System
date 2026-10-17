@@ -1,3 +1,4 @@
+import TemporaryAttendanceTeacher from "../../components/TemporaryAttendanceTeacher";
 import { Check, ClipboardCheck, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import api from "../../api/axios";
@@ -25,6 +26,7 @@ export default function SectionHeadAttendanceApprovalsPage() {
     const allowed = user?.roles?.includes("Section Head");
 
     const [requests, setRequests] = useState([]);
+    const [permissionMinutes, setPermissionMinutes] = useState({});
     const [remarks, setRemarks] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -99,6 +101,7 @@ export default function SectionHeadAttendanceApprovalsPage() {
                 `/attendance/approval/requests/${requestId}/review`,
                 {
                     approve,
+                    permissionMinutes: Number(permissionMinutes[requestId] || 60),
                     remarks: reviewRemarks || null,
                 }
             );
@@ -179,6 +182,8 @@ export default function SectionHeadAttendanceApprovalsPage() {
                 </p>
             )}
 
+            <TemporaryAttendanceTeacher />
+
             {loading ? (
                 <p role="status" className="mt-6 rounded-2xl bg-white p-6 text-slate-600">
                     Loading attendance requests...
@@ -226,7 +231,7 @@ export default function SectionHeadAttendanceApprovalsPage() {
                                     <Detail label="Attendance date" value={formatDate(request.attendanceDate)} />
                                     <Detail
                                         label="Scope"
-                                        value={`${request.isWholeClass ? "Whole class" : "Selected students"} · ${students.length} student(s)`}
+                                        value={request.isPermissionRequest ? "Entry permission for this teacher, class and date" : `${request.isWholeClass ? "Whole class" : "Selected students"} · ${students.length} student(s)`}
                                     />
                                 </dl>
 
@@ -240,7 +245,7 @@ export default function SectionHeadAttendanceApprovalsPage() {
                                 </div>
 
                                 <h3 className="mt-6 font-semibold text-slate-950">
-                                    Proposed attendance
+                                    {request.isPermissionRequest ? "Entry permission (attendance stays unchanged until the teacher saves)" : "Proposed attendance"}
                                 </h3>
 
                                 <div className="mt-3 space-y-3">
@@ -299,9 +304,10 @@ export default function SectionHeadAttendanceApprovalsPage() {
 
                                 {selectedDecision ? (
                                     <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        {request.isPermissionRequest && selectedDecision.approve && <label className="block text-sm font-semibold text-slate-700">Permission duration (minutes)<input type="number" min="1" max="120" value={permissionMinutes[request.id] || 60} onChange={(event) => setPermissionMinutes((current) => ({ ...current, [request.id]: event.target.value }))} className="mt-2 rounded-xl border border-slate-200 bg-white p-3" /></label>}
                                         <p className="text-sm text-slate-700">
                                             {selectedDecision.approve
-                                                ? "Approve and apply the proposed attendance?"
+                                                ? request.isPermissionRequest ? "Grant temporary permission to enter attendance?" : "Approve and apply the proposed attendance?"
                                                 : "Reject and keep saved attendance unchanged?"}
                                         </p>
                                         <div className="mt-3 flex flex-wrap gap-3">

@@ -452,6 +452,7 @@ public class StudentAcademicProfilePdfDocument : IDocument
                         columns.RelativeColumn();
                         columns.RelativeColumn();
                         columns.RelativeColumn();
+                        columns.RelativeColumn();
                     });
 
                     AddHeaderCell(
@@ -464,7 +465,9 @@ public class StudentAcademicProfilePdfDocument : IDocument
 
                     AddHeaderCell(
                         table,
-                        "Absent");
+                        "Late");
+
+                    AddHeaderCell(table, "Absent");
 
                     AddHeaderCell(
                         table,
@@ -481,6 +484,8 @@ public class StudentAcademicProfilePdfDocument : IDocument
                         _report.Attendance
                             .PresentDays
                             .ToString());
+
+                    AddCell(table, _report.Attendance.LateDays.ToString());
 
                     AddCell(
                         table,

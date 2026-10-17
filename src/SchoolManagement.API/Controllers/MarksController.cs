@@ -142,8 +142,16 @@ public class MarksController : ControllerBase
             })
             .ToListAsync();
 
+        var submissionStatus = await _context.MarksSubmissions
+            .AsNoTracking()
+            .Where(x => x.ExamId == examId && x.TeacherAssignmentId == teacherAssignmentId)
+            .Select(x => (MarksSubmissionStatus?)x.Status)
+            .FirstOrDefaultAsync();
+
         return Ok(new
         {
+            submissionStatus = submissionStatus?.ToString(),
+            submissionId = await _context.MarksSubmissions.Where(x => x.ExamId == examId && x.TeacherAssignmentId == teacherAssignmentId).Select(x => (int?)x.Id).FirstOrDefaultAsync(),
             exam = new
             {
                 exam.Id,

@@ -197,10 +197,11 @@ export default function ParentAttendancePage() {
 
                 {!loadingAttendance && !error && attendance && (
                     <>
-                        <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                             {[
                                 ["Total Days", attendance.totalDays],
-                                ["Present", attendance.presentDays],
+                                ["Present (on time)", attendance.presentDays],
+                                ["Late", attendance.lateDays ?? 0],
                                 ["Absent", attendance.absentDays],
                                 ["Attendance", `${attendance.attendancePercentage}%`],
                             ].map(([label, value]) => (
@@ -217,6 +218,8 @@ export default function ParentAttendancePage() {
                                 </div>
                             ))}
                         </div>
+
+                        <p className="mt-3 text-sm text-slate-500">Attendance includes Present and Late days.</p>
 
                         <h2 className="mt-9 text-xl font-bold text-slate-950">
                             Attendance Records · {attendance.academicYearName}

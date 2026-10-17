@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Academic.DTOs;
 using SchoolManagement.Domain.Entities;
@@ -55,6 +57,9 @@ public class SectionHeadAssignmentsController : ControllerBase
             });
         }
 
+        if (!await IsSectionHeadAccountAsync(staff.ApplicationUserId))
+            return BadRequest(new { message = "Select an active account with the Section Head role." });
+
         // ------------------------------
         // Validate Section
         // ------------------------------
@@ -80,7 +85,7 @@ public class SectionHeadAssignmentsController : ControllerBase
             await _context.AcademicYears
                 .FirstOrDefaultAsync(x =>
                     x.Id ==
-                        request.AcademicYearId);
+                        request.AcademicYearId && x.IsActive);
 
         if (academicYear == null)
         {
@@ -206,6 +211,44 @@ public class SectionHeadAssignmentsController : ControllerBase
         });
     }
 
+    private Task<bool> IsSectionHeadAccountAsync(string userId) => _context.Users.AnyAsync(user =>
+        user.Id == userId && user.IsActive && _context.UserRoles.Any(userRole => userRole.UserId == userId &&
+            _context.Roles.Any(role => role.Id == userRole.RoleId && role.Name == "Section Head")));
+
+    [HasPermission("SectionHeads.Manage")]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, CreateSectionHeadAssignmentRequest request)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
+        {
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var assignment = await _context.SectionHeadAssignments.FindAsync(id);
+            if (assignment == null || !assignment.IsActive)
+                return NotFound(new { message = "Active section head assignment not found." });
+            var staff = await _context.Staff.FirstOrDefaultAsync(x => x.Id == request.StaffId && x.IsActive);
+            if (staff?.ApplicationUserId == null || !await IsSectionHeadAccountAsync(staff.ApplicationUserId))
+                return BadRequest(new { message = "Select an active staff account with the Section Head role." });
+            if (!await _context.Sections.AnyAsync(x => x.Id == request.SectionId && x.IsActive) ||
+                !await _context.AcademicYears.AnyAsync(x => x.Id == request.AcademicYearId && x.IsActive))
+                return BadRequest(new { message = "Select an active section and academic year." });
+            if (await _context.SectionHeadAssignments.AnyAsync(x => x.Id != id && x.StaffId == request.StaffId &&
+                x.SectionId == request.SectionId && x.AcademicYearId == request.AcademicYearId))
+                return Conflict(new { message = "This assignment already exists. Use the existing assignment or reactivate it." });
+            var before = new { assignment.StaffId, assignment.SectionId, assignment.AcademicYearId };
+            assignment.StaffId = request.StaffId;
+            assignment.SectionId = request.SectionId;
+            assignment.AcademicYearId = request.AcademicYearId;
+            _context.AuditLogs.Add(new AuditLog { UserId = User.FindFirstValue(ClaimTypes.NameIdentifier), Action = "UpdateSectionHeadAssignment",
+                EntityName = "SectionHeadAssignment", EntityId = id.ToString(), OldValues = JsonSerializer.Serialize(before),
+                NewValues = JsonSerializer.Serialize(request), Description = "Updated section head access scope.", CreatedAt = DateTime.UtcNow });
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return Ok(new { message = "Section head assignment updated successfully.", assignment.Id });
+        });
+    }
+
     // =====================================
     // View Assignments
     // =====================================
@@ -318,6 +361,8 @@ public class SectionHeadAssignmentsController : ControllerBase
         }
 
         assignment.IsActive = false;
+        _context.AuditLogs.Add(new AuditLog { UserId = User.FindFirstValue(ClaimTypes.NameIdentifier), Action = "RemoveSectionHeadAssignment",
+            EntityName = "SectionHeadAssignment", EntityId = id.ToString(), Description = $"Deactivated staff {assignment.StaffId}, section {assignment.SectionId}, year {assignment.AcademicYearId}.", CreatedAt = DateTime.UtcNow });
 
         await _context.SaveChangesAsync();
 

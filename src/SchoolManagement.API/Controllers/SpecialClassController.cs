@@ -321,138 +321,8 @@ public class SpecialClassController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        var title =
-    "Special Class Scheduled";
-
-        var message =
-            $"{subject.Name} special class has been scheduled for " +
-            $"{request.ClassDate:dd MMM yyyy} from " +
-            $"{request.StartTime:HH\\:mm} to " +
-            $"{request.EndTime:HH\\:mm} for Grade " +
-            $"{schoolClass.Grade.Name} - Class {schoolClass.Name}.";
-
-        var now =
-            DateTime.UtcNow;
-
-
-        // ============================================================
-        // NOTIFY TEACHER
-        // ============================================================
-
-        _context.Notifications.Add(
-            new Notification
-            {
-                RecipientStaffId =
-                    teacher.Id,
-
-                Type =
-                    NotificationType.SpecialClassApproved,
-
-                Title =
-                    title,
-
-                Message =
-                    message,
-
-                IsRead =
-                    false,
-
-                CreatedAt =
-                    now,
-
-                ReferenceType =
-                    "SpecialClassSession",
-
-                ReferenceId =
-                    session.Id
-            });
-
-
-        // ============================================================
-        // FIND ACTIVE STUDENTS IN THIS CLASS
-        // ============================================================
-
-        var studentIds =
-            await _context.Students
-                .Where(x =>
-                    x.SchoolClassId ==
-                        session.SchoolClassId &&
-                    x.IsActive)
-                .Select(x =>
-                    x.Id)
-                .ToListAsync();
-
-
-        // ============================================================
-        // INTERNAL NOTIFICATION → STUDENTS
-        // ============================================================
-
-        foreach (var studentId in studentIds)
-        {
-            _context.Notifications.Add(
-                new Notification
-                {
-                    RecipientStudentId =
-                        studentId,
-
-                    Type =
-                        NotificationType.SpecialClassApproved,
-
-                    Title =
-                        title,
-
-                    Message =
-                        message,
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        now,
-
-                    ReferenceType =
-                        "SpecialClassSession",
-
-                    ReferenceId =
-                        session.Id
-                });
-        }
-
-
-        // ============================================================
-        // SAVE INTERNAL NOTIFICATIONS
-        // ============================================================
-
-        await _context.SaveChangesAsync();
-
-
-        // ============================================================
-        // FIREBASE → TEACHER
-        // ============================================================
-
-        await _pushNotificationService
-            .SendToStaffAsync(
-                teacher.Id,
-                title,
-                message,
-                "SpecialClassSession",
-                session.Id);
-
-
-        // ============================================================
-        // FIREBASE → STUDENTS
-        // ============================================================
-
-        foreach (var studentId in studentIds)
-        {
-            await _pushNotificationService
-                .SendToStudentAsync(
-                    studentId,
-                    title,
-                    message,
-                    "SpecialClassSession",
-                    session.Id);
-        }
+        var delivery = await NotifySpecialClassAsync(session, currentStaff.Id, NotificationType.SpecialClassApproved, "Special Class Scheduled", "A special class has been scheduled.", true);
+        var studentIds = delivery.StudentIds;
 
         return Ok(new
         {
@@ -752,76 +622,7 @@ public class SpecialClassController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Find Section Heads
-        var sectionHeadStaffIds =
-            await _context.SectionHeadAssignments
-                .Where(x =>
-                    x.SectionId ==
-                        schoolClass.Grade.SectionId &&
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.IsActive)
-                .Select(x =>
-                    x.StaffId)
-                .Distinct()
-                .ToListAsync();
-
-        var title =
-            "Special Class Request";
-
-        var message =
-            $"{teacher.FullName} requested a special class for " +
-            $"{subject.Name}, Grade {schoolClass.Grade.Name} - " +
-            $"Class {schoolClass.Name}, on " +
-            $"{request.ClassDate:dd MMM yyyy} from " +
-            $"{request.StartTime:HH\\:mm} to " +
-            $"{request.EndTime:HH\\:mm}.";
-
-        foreach (var sectionHeadStaffId
-            in sectionHeadStaffIds)
-        {
-            _context.Notifications.Add(
-                new Notification
-                {
-                    RecipientStaffId =
-                        sectionHeadStaffId,
-
-                    Type =
-                        NotificationType.SpecialClassRequested,
-
-                    Title =
-                        title,
-
-                    Message =
-                        message,
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        DateTime.UtcNow,
-
-                    ReferenceType =
-                        "SpecialClassSession",
-
-                    ReferenceId =
-                        session.Id
-                });
-        }
-
-        await _context.SaveChangesAsync();
-
-        foreach (var sectionHeadStaffId
-            in sectionHeadStaffIds)
-        {
-            await _pushNotificationService
-                .SendToStaffAsync(
-                    sectionHeadStaffId,
-                    title,
-                    message,
-                    "SpecialClassSession",
-                    session.Id);
-        }
+        var delivery = await NotifySpecialClassAsync(session, teacher.Id, NotificationType.SpecialClassRequested, "Special Class Request", "A teacher requested a special class. Awaiting approval; this class is not confirmed yet.", true);
 
         return Ok(new
         {
@@ -835,7 +636,7 @@ public class SpecialClassController : ControllerBase
                 session.Status.ToString(),
 
             sectionHeadsNotified =
-                sectionHeadStaffIds.Count
+                delivery.SectionHeadsNotified
         });
     }
 
@@ -1195,129 +996,8 @@ public class SpecialClassController : ControllerBase
                 NotificationType.SpecialClassRejected;
         }
 
-        // ============================================================
-        // NOTIFY TEACHER
-        // ============================================================
-
-        _context.Notifications.Add(
-            new Notification
-            {
-                RecipientStaffId =
-                    session.StaffId,
-
-                Type =
-                    notificationType,
-
-                Title =
-                    title,
-
-                Message =
-                    message,
-
-                IsRead =
-                    false,
-
-                CreatedAt =
-                    now,
-
-                ReferenceType =
-                    "SpecialClassSession",
-
-                ReferenceId =
-                    session.Id
-            });
-
-        // ============================================================
-        // IF APPROVED, ALSO NOTIFY STUDENTS IN THAT CLASS
-        // ============================================================
-
-        List<int> studentIds =
-            new();
-
-        string? studentTitle =
-            null;
-
-        string? studentMessage =
-            null;
-
-        if (request.Approve)
-        {
-            studentIds =
-                await _context.Students
-                    .Where(x =>
-                        x.SchoolClassId ==
-                            session.SchoolClassId &&
-                        x.IsActive)
-                    .Select(x =>
-                        x.Id)
-                    .ToListAsync();
-
-            studentTitle =
-                "Special Class Scheduled";
-
-            studentMessage =
-                $"{session.Subject.Name} special class has been scheduled for " +
-                $"{session.ClassDate:dd MMM yyyy} from " +
-                $"{session.StartTime:HH\\:mm} to " +
-                $"{session.EndTime:HH\\:mm}.";
-
-            foreach (var studentId in studentIds)
-            {
-                _context.Notifications.Add(
-                    new Notification
-                    {
-                        RecipientStudentId =
-                            studentId,
-
-                        Type =
-                            NotificationType.SpecialClassApproved,
-
-                        Title =
-                            studentTitle,
-
-                        Message =
-                            studentMessage,
-
-                        IsRead =
-                            false,
-
-                        CreatedAt =
-                            now,
-
-                        ReferenceType =
-                            "SpecialClassSession",
-
-                        ReferenceId =
-                            session.Id
-                    });
-            }
-        }
-
-        await _context.SaveChangesAsync();
-
-        await _pushNotificationService
-            .SendToStaffAsync(
-                session.StaffId,
-                title,
-                message,
-                "SpecialClassSession",
-                session.Id);
-
-        if (request.Approve &&
-            studentTitle != null &&
-            studentMessage != null)
-        {
-            foreach (var studentId in studentIds)
-            {
-                await _pushNotificationService
-                    .SendToStudentAsync(
-                        studentId,
-                        studentTitle,
-                        studentMessage,
-                        "SpecialClassSession",
-                        session.Id);
-            }
-        }
+        var delivery = await NotifySpecialClassAsync(session, reviewingStaff.Id, notificationType, title, message, true);
+        var studentIds = delivery.StudentIds;
 
         return Ok(new
         {
@@ -1364,6 +1044,22 @@ public class SpecialClassController : ControllerBase
                     x.Status ==
                         SpecialClassStatus.Approved &&
                     x.ClassDate >= today);
+
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(currentUserId)) return Unauthorized();
+        var account = await _userManager.FindByIdAsync(currentUserId);
+        if (account == null) return Unauthorized();
+        var roles = await _userManager.GetRolesAsync(account);
+        if (!roles.Any(role => new[] { "Admin", "Principal", "Deputy Principal" }.Contains(role)))
+        {
+            var staff = await _context.Staff.AsNoTracking().FirstOrDefaultAsync(x => x.IsActive && x.ApplicationUserId == currentUserId);
+            if (staff == null) return Forbid();
+            if (roles.Contains("Section Head"))
+                query = query.Where(x => _context.SectionHeadAssignments.Any(a => a.StaffId == staff.Id && a.IsActive &&
+                    a.SectionId == x.SchoolClass.Grade.SectionId && a.AcademicYearId == x.AcademicYearId));
+            else if (roles.Contains("Teacher")) query = query.Where(x => x.StaffId == staff.Id);
+            else return Forbid();
+        }
 
         if (academicYearId.HasValue)
         {
@@ -1791,141 +1487,9 @@ public class SpecialClassController : ControllerBase
         // Do not notify teacher about their own pending cancellation.
         // ========================================================
 
-        var teacherNotified =
-            false;
-
-        if (session.StaffId !=
-            currentStaff.Id)
-        {
-            _context.Notifications.Add(
-                new Notification
-                {
-                    RecipientStaffId =
-                        session.StaffId,
-
-                    Type =
-                        NotificationType
-                            .SpecialClassCancelled,
-
-                    Title =
-                        title,
-
-                    Message =
-                        message,
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        now,
-
-                    ReferenceType =
-                        "SpecialClassSession",
-
-                    ReferenceId =
-                        session.Id
-                });
-
-            teacherNotified =
-                true;
-        }
-
-
-        // ========================================================
-        // NOTIFY STUDENTS ONLY IF CLASS WAS APPROVED
-        //
-        // Students never knew about a Pending request,
-        // therefore pending cancellations must not notify them.
-        // ========================================================
-
-        List<int> studentIds =
-            new();
-
-        if (previousStatus ==
-            SpecialClassStatus.Approved)
-        {
-            studentIds =
-                await _context.Students
-                    .Where(x =>
-                        x.SchoolClassId ==
-                            session.SchoolClassId &&
-                        x.IsActive)
-                    .Select(x =>
-                        x.Id)
-                    .ToListAsync();
-
-            foreach (var studentId in studentIds)
-            {
-                _context.Notifications.Add(
-                    new Notification
-                    {
-                        RecipientStudentId =
-                            studentId,
-
-                        Type =
-                            NotificationType
-                                .SpecialClassCancelled,
-
-                        Title =
-                            title,
-
-                        Message =
-                            message,
-
-                        IsRead =
-                            false,
-
-                        CreatedAt =
-                            now,
-
-                        ReferenceType =
-                            "SpecialClassSession",
-
-                        ReferenceId =
-                            session.Id
-                    });
-            }
-        }
-
-
-        // ========================================================
-        // SAVE
-        // ========================================================
-
-        await _context.SaveChangesAsync();
-
-
-        // ========================================================
-        // FIREBASE → TEACHER
-        // ========================================================
-
-        if (teacherNotified)
-        {
-            await _pushNotificationService
-                .SendToStaffAsync(
-                    session.StaffId,
-                    title,
-                    message,
-                    "SpecialClassSession",
-                    session.Id);
-        }
-
-
-        // ========================================================
-        // FIREBASE → STUDENTS
-        // ========================================================
-
-        foreach (var studentId in studentIds)
-        {
-            await _pushNotificationService
-                .SendToStudentAsync(
-                    studentId,
-                    title,
-                    message,
-                    "SpecialClassSession",
-                    session.Id);
-        }
-
+        var delivery = await NotifySpecialClassAsync(session, currentStaff.Id, NotificationType.SpecialClassCancelled, title, message, true);
+        var teacherNotified = delivery.TeacherNotified;
+        var studentIds = delivery.StudentIds;
 
         return Ok(new
         {
@@ -2203,113 +1767,8 @@ public class SpecialClassController : ControllerBase
                 $" Room: {session.Room}.";
         }
 
-        _context.Notifications.Add(
-            new Notification
-            {
-                RecipientStaffId =
-                    session.StaffId,
-
-                Type =
-                    NotificationType
-                        .SpecialClassRescheduled,
-
-                Title =
-                    title,
-
-                Message =
-                    message,
-
-                IsRead =
-                    false,
-
-                CreatedAt =
-                    now,
-
-                ReferenceType =
-                    "SpecialClassSession",
-
-                ReferenceId =
-                    session.Id
-            });
-
-        // ========================================================
-        // STUDENTS IN THIS CLASS
-        // ========================================================
-
-        var studentIds =
-            await _context.Students
-                .Where(x =>
-                    x.SchoolClassId ==
-                        session.SchoolClassId &&
-                    x.IsActive)
-                .Select(x =>
-                    x.Id)
-                .ToListAsync();
-
-        foreach (var studentId in studentIds)
-        {
-            _context.Notifications.Add(
-                new Notification
-                {
-                    RecipientStudentId =
-                        studentId,
-
-                    Type =
-                        NotificationType
-                            .SpecialClassRescheduled,
-
-                    Title =
-                        title,
-
-                    Message =
-                        message,
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        now,
-
-                    ReferenceType =
-                        "SpecialClassSession",
-
-                    ReferenceId =
-                        session.Id
-                });
-        }
-
-        // ========================================================
-        // SAVE CLASS CHANGES + INTERNAL NOTIFICATIONS
-        // ========================================================
-
-        await _context.SaveChangesAsync();
-
-        // ========================================================
-        // FIREBASE → TEACHER
-        // ========================================================
-
-        await _pushNotificationService
-            .SendToStaffAsync(
-                session.StaffId,
-                title,
-                message,
-                "SpecialClassSession",
-                session.Id);
-
-        // ========================================================
-        // FIREBASE → STUDENTS
-        // ========================================================
-
-        foreach (var studentId in studentIds)
-        {
-            await _pushNotificationService
-                .SendToStudentAsync(
-                    studentId,
-                    title,
-                    message,
-                    "SpecialClassSession",
-                    session.Id);
-        }
+        var delivery = await NotifySpecialClassAsync(session, currentStaff.Id, NotificationType.SpecialClassRescheduled, title, message, session.Status == SpecialClassStatus.Approved);
+        var studentIds = delivery.StudentIds;
 
         return Ok(new
         {
@@ -2360,6 +1819,45 @@ public class SpecialClassController : ControllerBase
     // ============================================================
     // HELPERS
     // ============================================================
+
+    private async Task<(List<int> StudentIds, bool TeacherNotified, int SectionHeadsNotified)> NotifySpecialClassAsync(
+        SpecialClassSession session, int actorStaffId, NotificationType type, string title, string message, bool notifyFamilies)
+    {
+        var sectionId = await _context.SchoolClasses.Where(x => x.Id == session.SchoolClassId).Select(x => x.Grade.SectionId).SingleAsync();
+        var headIds = await _context.SectionHeadAssignments.Where(x => x.IsActive && x.AcademicYearId == session.AcademicYearId && x.SectionId == sectionId)
+            .Select(x => x.StaffId).Distinct().ToListAsync();
+        var staffIds = await _context.Staff.Where(x => x.IsActive && (x.Id == session.StaffId || headIds.Contains(x.Id) ||
+            _context.UserRoles.Any(ur => ur.UserId == x.ApplicationUserId && _context.Roles.Any(r => r.Id == ur.RoleId &&
+                (r.Name == "Admin" || r.Name == "Principal" || r.Name == "Deputy Principal")))))
+            .Select(x => x.Id).Distinct().ToListAsync();
+        staffIds.Remove(actorStaffId);
+        var studentIds = notifyFamilies ? await _context.Students.Where(x => x.IsActive && x.SchoolClassId == session.SchoolClassId)
+            .Select(x => x.Id).Distinct().ToListAsync() : new List<int>();
+        var parentIds = await _context.StudentParentGuardians.Where(x => x.IsActive && studentIds.Contains(x.StudentId) && x.ParentGuardian.IsActive)
+            .Select(x => x.ParentGuardianId).Distinct().ToListAsync();
+        var subject = await _context.Subjects.Where(x => x.Id == session.SubjectId).Select(x => x.Name).SingleAsync();
+        var details = $"{message} {subject}: {session.ClassDate:yyyy-MM-dd}, {session.StartTime:HH:mm}–{session.EndTime:HH:mm}.";
+        foreach (var id in staffIds) _context.Notifications.Add(new Notification { RecipientStaffId = id, Type = type, Title = title, Message = details,
+            ReferenceType = "SpecialClassSession", ReferenceId = session.Id, CreatedAt = DateTime.UtcNow });
+        foreach (var id in studentIds) _context.Notifications.Add(new Notification { RecipientStudentId = id, Type = type, Title = title, Message = details,
+            ReferenceType = "SpecialClassSession", ReferenceId = session.Id, CreatedAt = DateTime.UtcNow });
+        foreach (var id in parentIds) _context.Notifications.Add(new Notification { RecipientParentGuardianId = id, Type = type, Title = title, Message = details,
+            ReferenceType = "SpecialClassSession", ReferenceId = session.Id, CreatedAt = DateTime.UtcNow });
+        await _context.SaveChangesAsync();
+        async Task Push(Func<Task> send)
+        {
+            try { await send(); }
+            catch (Exception exception)
+            {
+                HttpContext.RequestServices?.GetService<Microsoft.Extensions.Logging.ILogger<SpecialClassController>>()?
+                    .LogWarning(exception, "Special class {SessionId} was saved but a push notification failed.", session.Id);
+            }
+        }
+        foreach (var id in staffIds) await Push(() => _pushNotificationService.SendToStaffAsync(id, title, details, "SpecialClassSession", session.Id));
+        foreach (var id in studentIds) await Push(() => _pushNotificationService.SendToStudentAsync(id, title, details, "SpecialClassSession", session.Id));
+        foreach (var id in parentIds) await Push(() => _pushNotificationService.SendToParentAsync(id, title, details, "SpecialClassSession", session.Id));
+        return (studentIds, staffIds.Contains(session.StaffId), headIds.Count(staffIds.Contains));
+    }
 
     private static bool IsWeekend(
         DateOnly date)

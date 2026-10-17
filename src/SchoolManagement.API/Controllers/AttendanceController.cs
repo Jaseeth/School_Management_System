@@ -238,6 +238,19 @@ public class AttendanceController : ControllerBase
     public async Task<IActionResult> MarkAttendance(
         MarkAttendanceRequest request)
     {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
+        {
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var result = await MarkAttendanceCore(request);
+            if (result is OkObjectResult) await transaction.CommitAsync();
+            return result;
+        });
+    }
+
+    private async Task<IActionResult> MarkAttendanceCore(MarkAttendanceRequest request)
+    {
         if (request.Students == null ||
             request.Students.Count == 0)
         {
@@ -298,15 +311,16 @@ public class AttendanceController : ControllerBase
         var window = await _attendanceWindow.GetAsync(
             request.AcademicYearId,
             request.SchoolClassId,
-            day);
+            day, staff.Id);
 
         if (!window.CanSaveDirectly)
         {
             return Conflict(new
             {
                 message =
-                    "The direct attendance window is closed. " +
-                    "Submit attendance for section head approval.",
+                    window.IsWindowOpen
+                        ? "Attendance has already been saved. Submit corrections for section head approval."
+                        : "The attendance window is closed. Request entry permission from the section head.",
                 window
             });
         }
@@ -377,6 +391,12 @@ public class AttendanceController : ControllerBase
                 ids.Contains(x.StudentId))
             .ToDictionaryAsync(x => x.StudentId);
 
+        if (!window.HasSavedAttendance && valid.Count != await _context.Students.CountAsync(x => x.SchoolClassId == request.SchoolClassId && x.IsActive))
+            return BadRequest(new { message = "The first submission must include a status for every active student in this class." });
+        if (await _context.AttendanceChangeRequests.AnyAsync(x => x.AcademicYearId == request.AcademicYearId &&
+            x.SchoolClassId == request.SchoolClassId && x.AttendanceDate == day && !x.IsPermissionRequest &&
+            x.Status == AttendanceChangeStatus.Pending))
+            return Conflict(new { message = "Attendance corrections are awaiting section head review." });
         var now = DateTime.UtcNow;
         var createdCount = 0;
         var updatedCount = 0;

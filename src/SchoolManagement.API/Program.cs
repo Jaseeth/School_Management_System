@@ -344,10 +344,19 @@ builder.Services.Configure<
             .GetSection(
                 "Resend"));
 
-builder.Services
-    .AddHttpClient<
-        IEmailService,
-        ResendEmailService>();
+var emailProvider = builder.Configuration["Email:Provider"] ?? "Resend";
+if (string.Equals(emailProvider, "Mailpit", StringComparison.OrdinalIgnoreCase))
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException("Mailpit is only supported in Development. Use Resend for other environments.");
+    builder.Services.Configure<MailpitSettings>(builder.Configuration.GetSection("Mailpit"));
+    builder.Services.AddScoped<IEmailService, MailpitEmailService>();
+}
+else if (string.Equals(emailProvider, "Resend", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<IEmailService, ResendEmailService>();
+}
+else throw new InvalidOperationException("Email:Provider must be Mailpit or Resend.");
 
 builder.Services
     .AddSingleton<

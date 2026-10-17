@@ -13,6 +13,8 @@ public class FirebasePushNotificationService
     : IPushNotificationService
 {
     private readonly ApplicationDbContext _context;
+    private readonly FirebaseSettings _settings;
+    private static readonly object InitializationLock = new();
 
     private readonly ILogger<FirebasePushNotificationService>
         _logger;
@@ -25,20 +27,23 @@ public class FirebasePushNotificationService
         _context = context;
         _logger = logger;
 
-        var firebaseSettings =
-            settings.Value;
+        _settings = settings.Value;
+    }
 
-        if (FirebaseApp.DefaultInstance == null)
+    private void EnsureFirebaseInitialized()
+    {
+        lock (InitializationLock)
         {
+            if (FirebaseApp.DefaultInstance != null) return;
             FirebaseApp.Create(
                 new AppOptions
                 {
                     Credential =
                         GoogleCredential.FromFile(
-                            firebaseSettings.CredentialsPath),
+                            _settings.CredentialsPath),
 
                     ProjectId =
-                        firebaseSettings.ProjectId
+                        _settings.ProjectId
                 });
         }
     }
@@ -210,6 +215,7 @@ public class FirebasePushNotificationService
     {
         try
         {
+            EnsureFirebaseInitialized();
             var firebaseMessage =
                 new Message
                 {

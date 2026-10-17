@@ -1,6 +1,7 @@
 import api from "../api/axios";
+import { getPortalToken } from "./portalSession";
 
-const ACCESS_TOKEN_KEY = "accessToken";
+const ACCESS_TOKEN_KEY = "staffAccessToken";
 const USER_KEY = "authUser";
 
 export const authService = {
@@ -12,8 +13,6 @@ export const authService = {
 
         const data = response.data;
 
-        localStorage.removeItem("parentUser");
-        localStorage.removeItem("studentUser");
 
         localStorage.setItem(
             ACCESS_TOKEN_KEY,
@@ -31,22 +30,24 @@ export const authService = {
             })
         );
 
+        window.dispatchEvent(new Event("auth-session-changed"));
         return data;
     },
 
     logout() {
         localStorage.removeItem(ACCESS_TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
+        window.dispatchEvent(new Event("auth-session-changed"));
     },
 
     getToken() {
-        return localStorage.getItem(ACCESS_TOKEN_KEY);
+        return getPortalToken("staff");
     },
 
     getUser() {
         const user = localStorage.getItem(USER_KEY);
 
-        if (!user) {
+        if (!user || !getPortalToken("staff")) {
             return null;
         }
 
@@ -58,7 +59,7 @@ export const authService = {
     },
 
     isAuthenticated() {
-        return !!localStorage.getItem(ACCESS_TOKEN_KEY);
+        return !!getPortalToken("staff");
     },
 
     hasRole(role) {

@@ -676,12 +676,12 @@ export default function StudentRegistrationPage() {
                         type="button"
                         onClick={() =>
                             navigate(
-                                "/login"
+                                "/student/login"
                             )
                         }
                         className="mt-8 inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                     >
-                        Go to Login
+                        Go to Student Login
                     </button>
 
                 </div>

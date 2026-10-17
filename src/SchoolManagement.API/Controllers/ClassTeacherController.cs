@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +9,7 @@ using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using System.Security.Claims;
+using System.Data;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -19,16 +20,18 @@ public class ClassTeacherController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IPushNotificationService _pushNotificationService;
+    private readonly IServiceProvider _serviceProvider;
+    private IPushNotificationService _pushNotificationService =>
+        _serviceProvider.GetRequiredService<IPushNotificationService>();
 
     public ClassTeacherController(
         ApplicationDbContext context,
         UserManager<ApplicationUser> userManager,
-        IPushNotificationService pushNotificationService)
+        IServiceProvider serviceProvider)
     {
         _context = context;
         _userManager = userManager;
-        _pushNotificationService = pushNotificationService;
+        _serviceProvider = serviceProvider;
     }
 
     // ============================================================
@@ -97,7 +100,7 @@ public class ClassTeacherController : ControllerBase
         var academicYear =
             await _context.AcademicYears
                 .FirstOrDefaultAsync(x =>
-                    x.Id == request.AcademicYearId);
+                    x.Id == request.AcademicYearId && x.IsActive);
 
         if (academicYear == null)
         {
@@ -117,7 +120,7 @@ public class ClassTeacherController : ControllerBase
                 .Include(x => x.Grade)
                     .ThenInclude(x => x.Section)
                 .FirstOrDefaultAsync(x =>
-                    x.Id == request.SchoolClassId);
+                    x.Id == request.SchoolClassId && x.IsActive && x.Grade.IsActive && x.Grade.Section.IsActive);
 
         if (schoolClass == null)
         {
@@ -185,7 +188,7 @@ public class ClassTeacherController : ControllerBase
             await _userManager.FindByIdAsync(
                 teacher.ApplicationUserId);
 
-        if (teacherUser == null)
+        if (teacherUser == null || !teacherUser.IsActive)
         {
             return BadRequest(new
             {
@@ -211,124 +214,138 @@ public class ClassTeacherController : ControllerBase
         // CHECK CURRENT ACTIVE CLASS TEACHER
         // ========================================================
 
-        var existingActive =
-            await _context.ClassTeacherAssignments
-                .FirstOrDefaultAsync(x =>
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.IsActive);
-
-        if (existingActive != null)
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
         {
-            if (existingActive.StaffId ==
-                request.StaffId)
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var existingActive =
+                await _context.ClassTeacherAssignments
+                    .FirstOrDefaultAsync(x =>
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.SchoolClassId ==
+                            request.SchoolClassId &&
+                        x.IsActive);
+
+            if (existingActive != null)
             {
-                return BadRequest(new
+                if (existingActive.StaffId ==
+                    request.StaffId)
                 {
-                    message =
-                        "This teacher is already the active class teacher."
-                });
+                    return BadRequest(new
+                    {
+                        message =
+                            "This teacher is already the active class teacher."
+                    });
+                }
+
+                if (request.ReplacesAssignmentId != existingActive.Id)
+                    return Conflict(new { message = "This class already has an active class teacher. Refresh and confirm the replacement." });
+
+                // Deactivate previous teacher
+                existingActive.IsActive = false;
+            }
+            else if (request.ReplacesAssignmentId.HasValue)
+            {
+                return Conflict(new { message = "The class-teacher assignment has changed. Refresh before assigning." });
             }
 
-            // Deactivate previous teacher
-            existingActive.IsActive = false;
-        }
+            // ========================================================
+            // CHECK IF SAME RECORD ALREADY EXISTS
+            // ========================================================
 
-        // ========================================================
-        // CHECK IF SAME RECORD ALREADY EXISTS
-        // ========================================================
+            var oldAssignment =
+                await _context.ClassTeacherAssignments
+                    .FirstOrDefaultAsync(x =>
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.SchoolClassId ==
+                            request.SchoolClassId &&
+                        x.StaffId ==
+                            request.StaffId);
 
-        var oldAssignment =
-            await _context.ClassTeacherAssignments
-                .FirstOrDefaultAsync(x =>
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.StaffId ==
-                        request.StaffId);
-
-        if (oldAssignment != null)
-        {
-            oldAssignment.IsActive = true;
-            oldAssignment.AssignedAt =
-                DateTime.UtcNow;
-            oldAssignment.AssignedByStaffId =
-                currentStaff.Id;
-        }
-        else
-        {
-            var assignment =
-                new ClassTeacherAssignment
-                {
-                    AcademicYearId =
-                        request.AcademicYearId,
-
-                    SchoolClassId =
-                        request.SchoolClassId,
-
-                    StaffId =
-                        request.StaffId,
-
-                    AssignedByStaffId =
-                        currentStaff.Id,
-
-                    AssignedAt =
-                        DateTime.UtcNow,
-
-                    IsActive =
-                        true
-                };
-
-            _context.ClassTeacherAssignments
-                .Add(assignment);
-        }
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message =
-                "Class teacher assigned successfully.",
-
-            academicYear = new
+            if (oldAssignment != null)
             {
-                id =
-                    academicYear.Id,
-
-                name =
-                    academicYear.Name
-            },
-
-            schoolClass = new
-            {
-                id =
-                    schoolClass.Id,
-
-                name =
-                    schoolClass.Name,
-
-                grade =
-                    schoolClass.Grade.Name,
-
-                section =
-                    schoolClass.Grade
-                        .Section.Name
-            },
-
-            teacher = new
-            {
-                id =
-                    teacher.Id,
-
-                staffNumber =
-                    teacher.StaffNumber,
-
-                fullName =
-                    teacher.FullName
+                oldAssignment.IsActive = true;
+                oldAssignment.AssignedAt =
+                    DateTime.UtcNow;
+                oldAssignment.AssignedByStaffId =
+                    currentStaff.Id;
             }
+            else
+            {
+                var assignment =
+                    new ClassTeacherAssignment
+                    {
+                        AcademicYearId =
+                            request.AcademicYearId,
+
+                        SchoolClassId =
+                            request.SchoolClassId,
+
+                        StaffId =
+                            request.StaffId,
+
+                        AssignedByStaffId =
+                            currentStaff.Id,
+
+                        AssignedAt =
+                            DateTime.UtcNow,
+
+                        IsActive =
+                            true
+                    };
+
+                _context.ClassTeacherAssignments
+                    .Add(assignment);
+            }
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Ok(new
+            {
+                message =
+                    "Class teacher assigned successfully.",
+
+                academicYear = new
+                {
+                    id =
+                        academicYear.Id,
+
+                    name =
+                        academicYear.Name
+                },
+
+                schoolClass = new
+                {
+                    id =
+                        schoolClass.Id,
+
+                    name =
+                        schoolClass.Name,
+
+                    grade =
+                        schoolClass.Grade.Name,
+
+                    section =
+                        schoolClass.Grade
+                            .Section.Name
+                },
+
+                teacher = new
+                {
+                    id =
+                        teacher.Id,
+
+                    staffNumber =
+                        teacher.StaffNumber,
+
+                    fullName =
+                        teacher.FullName
+                }
+            });
         });
     }
 
@@ -342,7 +359,8 @@ public class ClassTeacherController : ControllerBase
         int? academicYearId,
         int? sectionId,
         int? gradeId,
-        int? classId)
+        int? classId,
+        bool includeInactive = false)
     {
         var userId =
             User.FindFirstValue(
@@ -393,7 +411,7 @@ public class ClassTeacherController : ControllerBase
             _context.ClassTeacherAssignments
                 .AsNoTracking()
                 .Where(x =>
-                    x.IsActive);
+                    includeInactive || x.IsActive);
 
         if (academicYearId.HasValue)
         {
@@ -434,24 +452,10 @@ public class ClassTeacherController : ControllerBase
         if (isSectionHead &&
             !isWholeSchool)
         {
-            var sectionIds =
-                await _context
-                    .SectionHeadAssignments
-                    .Where(x =>
-                        x.StaffId ==
-                            staff.Id &&
-                        x.IsActive)
-                    .Select(x =>
-                        x.SectionId)
-                    .Distinct()
-                    .ToListAsync();
-
-            query =
-                query.Where(x =>
-                    sectionIds.Contains(
-                        x.SchoolClass
-                            .Grade
-                            .SectionId));
+            query = query.Where(x => _context.SectionHeadAssignments.Any(assignment =>
+                assignment.StaffId == staff.Id && assignment.IsActive &&
+                assignment.SectionId == x.SchoolClass.Grade.SectionId &&
+                assignment.AcademicYearId == x.AcademicYearId));
         }
 
         var result =
@@ -849,12 +853,24 @@ public class ClassTeacherController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        try
+        {
+            if (await _context.StaffDeviceTokens.AnyAsync(x => x.StaffId == teacher.Id && x.IsActive))
+            {
         await _pushNotificationService.SendToStaffAsync(
             teacher.Id,
             directAssignTitle,
             directAssignMessage,
             "TemporaryClassTeacherAssignment",
             temporaryAssignment.Id);
+            }
+        }
+        catch (Exception exception)
+        {
+            _serviceProvider.GetService<ILogger<ClassTeacherController>>()?.LogWarning(exception,
+                "Temporary teacher assignment saved, but push notification failed.");
+        }
+
 
         return Ok(new
         {

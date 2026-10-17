@@ -8,12 +8,14 @@ public sealed class AttendanceWindowService
 {
     private readonly ApplicationDbContext _context;
     private readonly TimeZoneInfo _schoolZone;
+    private readonly TimeProvider _clock;
 
     public AttendanceWindowService(
         ApplicationDbContext context,
-        IConfiguration configuration)
+        IConfiguration configuration, TimeProvider? clock = null)
     {
         _context = context;
+        _clock = clock ?? TimeProvider.System;
 
         _schoolZone = TimeZoneInfo.FindSystemTimeZoneById(
             configuration["Attendance:SchoolTimeZoneId"]
@@ -21,7 +23,7 @@ public sealed class AttendanceWindowService
     }
 
     public DateTimeOffset SchoolNow =>
-        TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, _schoolZone);
+        TimeZoneInfo.ConvertTime(_clock.GetUtcNow(), _schoolZone);
 
     public DateTimeOffset ToSchool(DateTimeOffset value) =>
         TimeZoneInfo.ConvertTime(value, _schoolZone);
@@ -29,7 +31,8 @@ public sealed class AttendanceWindowService
     public async Task<AttendanceWindowState> GetAsync(
         int academicYearId,
         int schoolClassId,
-        DateTime attendanceDate)
+        DateTime attendanceDate,
+        int? staffId = null)
     {
         var day = attendanceDate.Date;
         var now = SchoolNow;
@@ -108,13 +111,29 @@ public sealed class AttendanceWindowService
             now >= firstPeriodStartsAt.Value &&
             now < extendedUntil.Value;
 
+        var hasSavedAttendance = await _context.StudentAttendances.AsNoTracking().AnyAsync(x =>
+            x.AcademicYearId == academicYearId && x.SchoolClassId == schoolClassId && x.AttendanceDate == day);
+        var permissionUntil = staffId.HasValue ? await _context.AttendanceChangeRequests.AsNoTracking()
+            .Where(x => x.IsPermissionRequest && x.Status == AttendanceChangeStatus.Approved &&
+                x.RequestedByStaffId == staffId.Value && x.AcademicYearId == academicYearId &&
+                x.SchoolClassId == schoolClassId && x.AttendanceDate == day && x.GrantedUntilUtc > now.UtcDateTime)
+            .Select(x => x.GrantedUntilUtc).MaxAsync() : null;
+        var hasEntryPermission = permissionUntil.HasValue || extendedOpen;
+
         return new AttendanceWindowState(
             day,
             now,
             firstPeriodStartsAt,
             regularClosesAt,
-            extendedUntil,
-            regularOpen || extendedOpen);
+            permissionUntil.HasValue ? ToSchool(new DateTimeOffset(DateTime.SpecifyKind(permissionUntil.Value, DateTimeKind.Utc))) : extendedUntil,
+            hasEntryPermission || (!hasSavedAttendance && regularOpen),
+            activeTermIds.Count == 0
+                ? "No active academic term covers this date. Check the term start and end dates in Academic Setup."
+                : startTimes.Count == 0 ? "No teaching period is configured for this class and weekday in the term covering this date."
+                : null,
+            hasSavedAttendance,
+            regularOpen || hasEntryPermission,
+            hasEntryPermission);
     }
 }
 
@@ -124,4 +143,8 @@ public sealed record AttendanceWindowState(
     DateTimeOffset? FirstPeriodStartsAt,
     DateTimeOffset? RegularClosesAt,
     DateTimeOffset? ExtendedUntil,
-    bool CanSaveDirectly);
+    bool CanSaveDirectly,
+    string? UnavailableReason = null,
+    bool HasSavedAttendance = false,
+    bool IsWindowOpen = false,
+    bool HasEntryPermission = false);

@@ -527,7 +527,8 @@ public class DevelopmentDataSeeder
                 await _context.Permissions
                     .Where(x =>
                         x.Name == "Students.View" ||
-                        x.Name == "Marks.Enter")
+                        x.Name == "Marks.Enter" ||
+                        x.Name == "Exams.View")
                     .Select(x => x.Id)
                     .ToListAsync();
 

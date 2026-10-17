@@ -213,6 +213,8 @@ public class MarksReviewController : ControllerBase
             sectionId,
             academicYearId);
 
+        canPublish = canPublish || await HasTeacherPublishingAccessAsync(staff.Id, submission.TeacherAssignment);
+
         if (!canReview && !canPublish)
         {
             return StatusCode(
@@ -577,6 +579,8 @@ public class MarksReviewController : ControllerBase
             sectionId,
             submission.TeacherAssignment.AcademicYearId);
 
+        canPublish = canPublish || await HasTeacherPublishingAccessAsync(staff.Id, submission.TeacherAssignment);
+
         if (!canPublish)
         {
             return StatusCode(
@@ -722,6 +726,7 @@ public class MarksReviewController : ControllerBase
                 "Marks.Publish");
 
         if (!hasGlobalPublishPermission &&
+            !User.IsInRole("Section Head") && !User.IsInRole("Teacher") &&
             delegatedSectionIds.Count == 0)
         {
             return StatusCode(
@@ -741,9 +746,15 @@ public class MarksReviewController : ControllerBase
         if (!hasGlobalPublishPermission)
         {
             query = query.Where(x =>
-                delegatedSectionIds.Contains(
-                    x.TeacherAssignment
-                        .SchoolClass.Grade.SectionId));
+                (User.IsInRole("Teacher") &&
+                    ((x.TeacherAssignment.StaffId == staff.Id && x.TeacherAssignment.IsActive) ||
+                     _context.ClassTeacherAssignments.Any(a => a.StaffId == staff.Id && a.IsActive &&
+                        a.AcademicYearId == x.TeacherAssignment.AcademicYearId && a.SchoolClassId == x.TeacherAssignment.SchoolClassId))) ||
+                (User.IsInRole("Section Head")
+                    ? _context.SectionHeadAssignments.Any(a => a.StaffId == staff.Id && a.IsActive &&
+                        a.AcademicYearId == x.TeacherAssignment.AcademicYearId &&
+                        a.SectionId == x.TeacherAssignment.SchoolClass.Grade.SectionId)
+                    : delegatedSectionIds.Contains(x.TeacherAssignment.SchoolClass.Grade.SectionId)));
         }
 
         var submissions = await query
@@ -822,6 +833,7 @@ public class MarksReviewController : ControllerBase
                 "Marks.Publish");
 
         if (!hasGlobalPublishPermission &&
+            !User.IsInRole("Section Head") && !User.IsInRole("Teacher") &&
             delegatedSectionIds.Count == 0)
         {
             return StatusCode(
@@ -841,9 +853,15 @@ public class MarksReviewController : ControllerBase
         if (!hasGlobalPublishPermission)
         {
             query = query.Where(x =>
-                delegatedSectionIds.Contains(
-                    x.TeacherAssignment
-                        .SchoolClass.Grade.SectionId));
+                (User.IsInRole("Teacher") &&
+                    ((x.TeacherAssignment.StaffId == staff.Id && x.TeacherAssignment.IsActive) ||
+                     _context.ClassTeacherAssignments.Any(a => a.StaffId == staff.Id && a.IsActive &&
+                        a.AcademicYearId == x.TeacherAssignment.AcademicYearId && a.SchoolClassId == x.TeacherAssignment.SchoolClassId))) ||
+                (User.IsInRole("Section Head")
+                    ? _context.SectionHeadAssignments.Any(a => a.StaffId == staff.Id && a.IsActive &&
+                        a.AcademicYearId == x.TeacherAssignment.AcademicYearId &&
+                        a.SectionId == x.TeacherAssignment.SchoolClass.Grade.SectionId)
+                    : delegatedSectionIds.Contains(x.TeacherAssignment.SchoolClass.Grade.SectionId)));
         }
 
         var submissions = await query
@@ -908,6 +926,15 @@ public class MarksReviewController : ControllerBase
     }
 
     // Section/year review access and existing publishing permissions
+    private async Task<bool> HasTeacherPublishingAccessAsync(int staffId, TeacherAssignment assignment)
+    {
+        if (!User.IsInRole("Teacher")) return false;
+        if (assignment.StaffId == staffId && assignment.IsActive) return true;
+        return await _context.ClassTeacherAssignments.AsNoTracking().AnyAsync(a =>
+            a.StaffId == staffId && a.IsActive && a.AcademicYearId == assignment.AcademicYearId &&
+            a.SchoolClassId == assignment.SchoolClassId);
+    }
+
     private async Task<bool> HasMarksPermissionForSectionAsync(
         Staff staff,
         string permissionName,
@@ -915,7 +942,7 @@ public class MarksReviewController : ControllerBase
         int academicYearId)
     {
         if (User.IsInRole("Section Head") &&
-            permissionName == "Marks.Review")
+            (permissionName == "Marks.Review" || permissionName == "Marks.Publish"))
         {
             return await _context.SectionHeadAssignments
                 .AsNoTracking()

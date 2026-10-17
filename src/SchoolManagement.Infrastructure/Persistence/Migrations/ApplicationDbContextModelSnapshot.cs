@@ -276,6 +276,12 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("AttendanceDate")
                         .HasColumnType("date");
 
+                    b.Property<DateTime?>("GrantedUntilUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsPermissionRequest")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsWholeClass")
                         .HasColumnType("bit");
 
@@ -882,6 +888,10 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.PrimitiveCollection<string>("ParentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("PublishAt")
                         .HasColumnType("datetime2");
 
@@ -894,6 +904,14 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
 
                     b.Property<int?>("SectionId")
                         .HasColumnType("int");
+
+                    b.PrimitiveCollection<string>("StaffIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.PrimitiveCollection<string>("StudentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1975,6 +1993,41 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("TimetableEntries");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.TimetableInterval", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicTermId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicTermId");
+
+                    b.HasIndex("AcademicYearId", "AcademicTermId", "Day", "StartTime");
+
+                    b.ToTable("TimetableIntervals");
+                });
+
             modelBuilder.Entity("SchoolManagement.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -2957,6 +3010,25 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Staff");
 
                     b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.TimetableInterval", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.AcademicTerm", "AcademicTerm")
+                        .WithMany()
+                        .HasForeignKey("AcademicTermId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AcademicTerm");
+
+                    b.Navigation("AcademicYear");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeRequest", b =>

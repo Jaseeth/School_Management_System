@@ -44,7 +44,7 @@ export default function ParentDashboardPage() {
     }, []);
 
     function logout() {
-        localStorage.removeItem("accessToken");
+        localStorage.removeItem("parentAccessToken");
         localStorage.removeItem("parentUser");
         navigate("/parent/login", { replace: true });
     }
@@ -102,6 +102,7 @@ export default function ParentDashboardPage() {
                         <Bell className="h-4 w-4" />
                         Notifications
                     </Link>
+                    <Link to="/parent/announcements" className="inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Announcements</Link>
 
                     <Link
                         to="/parent/change-password"

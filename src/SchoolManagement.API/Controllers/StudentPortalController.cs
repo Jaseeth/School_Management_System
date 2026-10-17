@@ -451,11 +451,14 @@ public class StudentPortalController : ControllerBase
         var absentDays = attendance.Count(x =>
             x.status == "Absent");
 
+        var lateDays = attendance.Count(x => x.status == "Late");
+        var attendedDays = presentDays + lateDays;
+
         var attendancePercentage =
             totalDays == 0
                 ? 0
                 : Math.Round(
-                    (decimal)presentDays / totalDays * 100,
+                    (decimal)attendedDays / totalDays * 100,
                     2);
 
         return Ok(new
@@ -470,6 +473,8 @@ public class StudentPortalController : ControllerBase
             totalDays,
             presentDays,
             absentDays,
+            lateDays,
+            attendedDays,
             attendancePercentage,
             attendance
         });
@@ -585,6 +590,7 @@ public class StudentPortalController : ControllerBase
                 startTime = x.StartTime,
                 endTime = x.EndTime,
                 room = x.Room,
+                className = x.SchoolClass.Name,
                 subject = new
                 {
                     id = x.SubjectId,

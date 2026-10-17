@@ -7,6 +7,8 @@ export const sectionHeadAssignmentsApi = {
     getStaff() {
         return api.get("/Staff");
     },
+    update(id, data) { return api.put(`/section-head-assignments/${id}`, data); },
+    remove(id) { return api.delete(`/section-head-assignments/${id}`); },
     assign(data) {
         return api.post("/section-head-assignments", data);
     },

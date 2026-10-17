@@ -8,9 +8,19 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const savedUser = authService.getUser();
-        setUser(savedUser);
-        setLoading(false);
+        const syncSession = () => {
+            setUser(authService.getUser());
+            setLoading(false);
+        };
+        syncSession();
+        window.addEventListener("storage", syncSession);
+        window.addEventListener("auth-session-changed", syncSession);
+        window.addEventListener("focus", syncSession);
+        return () => {
+            window.removeEventListener("storage", syncSession);
+            window.removeEventListener("auth-session-changed", syncSession);
+            window.removeEventListener("focus", syncSession);
+        };
     }, []);
 
     const login = async (email, password) => {

@@ -1,3 +1,5 @@
+import TimetableIntervals from "../../components/TimetableIntervals";
+import MondayAssembly from "../../components/MondayAssembly";
 import { CalendarDays, Clock3, MapPin, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
@@ -94,6 +96,8 @@ export default function TeacherTimetablePage() {
                 </button>
             </div>
 
+            <MondayAssembly />
+            <TimetableIntervals refreshKey={refreshKey} />
             {loading ? (
                 <p
                     role="status"

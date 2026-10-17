@@ -57,7 +57,27 @@ public class AttendanceWindowsController : ControllerBase
         return Ok(await _windows.GetAsync(
             academicYearId,
             schoolClassId,
-            attendanceDate));
+            attendanceDate, staff.Id));
+    }
+
+    [HttpGet("management-options")]
+    [Authorize(Roles = "Section Head")]
+    public async Task<IActionResult> ManagementOptions()
+    {
+        var staff = await GetCurrentStaffAsync();
+        if (staff == null) return Forbid();
+        var classes = await (from assignment in _context.SectionHeadAssignments
+            from schoolClass in _context.SchoolClasses
+            where assignment.StaffId == staff.Id && assignment.IsActive && assignment.AcademicYear.IsActive &&
+                schoolClass.IsActive && schoolClass.Grade.IsActive && schoolClass.Grade.SectionId == assignment.SectionId
+            select new { academicYearId = assignment.AcademicYearId, schoolClassId = schoolClass.Id,
+                label = assignment.AcademicYear.Name + " / " + schoolClass.Grade.Section.Name + " / " + schoolClass.Grade.Name + " " + schoolClass.Name }).Distinct().ToListAsync();
+        var teachers = await (from teacher in _context.Staff
+            join account in _context.Users on teacher.ApplicationUserId equals account.Id
+            where teacher.IsActive && account.IsActive && _context.UserRoles.Any(r => r.UserId == account.Id &&
+                _context.Roles.Any(role => role.Id == r.RoleId && role.Name == "Teacher"))
+            select new { teacher.Id, teacher.StaffNumber, teacher.FullName }).ToListAsync();
+        return Ok(new { classes, teachers });
     }
 
     [HttpPost("extend")]

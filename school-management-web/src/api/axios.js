@@ -1,3 +1,4 @@
+import { getPortalToken } from "../services/portalSession";
 import axios from "axios";
 
 const api = axios.create({
@@ -9,7 +10,8 @@ const api = axios.create({
 
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem("accessToken");
+        const portal = window.location.pathname.startsWith("/student/") ? "student" : window.location.pathname.startsWith("/parent/") ? "parent" : "staff";
+        const token = getPortalToken(portal);
 
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;

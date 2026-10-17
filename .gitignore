@@ -432,3 +432,5 @@ FodyWeavers.xsd
 # Firebase service account credentials
 firebase-service-account.json
 **/firebase-service-account.json
+# Local development tools and captured emails
+.local-tools/

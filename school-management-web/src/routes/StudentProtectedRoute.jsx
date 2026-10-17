@@ -1,8 +1,9 @@
+import { getPortalToken } from "../services/portalSession";
 import { Navigate, useLocation } from "react-router-dom";
 
 export default function StudentProtectedRoute({ children }) {
     const location = useLocation();
-    const token = localStorage.getItem("accessToken");
+    const token = getPortalToken("student");
     const storedStudent = localStorage.getItem("studentUser");
 
     if (!token || !storedStudent) {
@@ -23,7 +24,7 @@ export default function StudentProtectedRoute({ children }) {
             return <Navigate to="/student/change-password" replace />;
         }
     } catch {
-        localStorage.removeItem("accessToken");
+        localStorage.removeItem("studentAccessToken");
         localStorage.removeItem("studentUser");
         return <Navigate to="/student/login" replace />;
     }

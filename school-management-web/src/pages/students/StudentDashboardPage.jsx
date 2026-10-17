@@ -52,7 +52,7 @@ export default function StudentDashboardPage() {
         () => {
 
             localStorage.removeItem(
-                "accessToken"
+                "studentAccessToken"
             );
 
             localStorage.removeItem(

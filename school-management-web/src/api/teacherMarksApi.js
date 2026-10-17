@@ -1,6 +1,9 @@
 import api from "./axios";
 
 export const teacherMarksApi = {
+    publish(submissionId) {
+        return api.post(`/marks-review/${submissionId}/publish`);
+    },
     getMyAssignments() {
         return api.get("/teacher-assignments/my");
     },

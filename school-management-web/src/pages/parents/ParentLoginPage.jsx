@@ -26,9 +26,7 @@ export default function ParentLoginPage() {
                 return;
             }
 
-            localStorage.removeItem("authUser");
-            localStorage.removeItem("studentUser");
-            localStorage.setItem("accessToken", data.token);
+            localStorage.setItem("parentAccessToken", data.token);
             localStorage.setItem(
                 "parentUser",
                 JSON.stringify({
@@ -39,6 +37,7 @@ export default function ParentLoginPage() {
                 })
             );
 
+            window.dispatchEvent(new Event("auth-session-changed"));
             navigate("/parent/dashboard", { replace: true });
         } catch (err) {
             setError(

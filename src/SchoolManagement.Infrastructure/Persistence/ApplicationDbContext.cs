@@ -59,6 +59,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     => Set<Notification>();
     public DbSet<StaffDeviceToken> StaffDeviceTokens =>
     Set<StaffDeviceToken>();
+    public DbSet<TimetableInterval> TimetableIntervals => Set<TimetableInterval>();
+
     public DbSet<TimetableEntry> TimetableEntries => Set<TimetableEntry>();
 
     public DbSet<SpecialClassSession> SpecialClassSessions => Set<SpecialClassSession>();
@@ -665,6 +667,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(x => x.StaffId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TimetableInterval>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.AcademicTerm).WithMany().HasForeignKey(x => x.AcademicTermId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.AcademicYearId, x.AcademicTermId, x.Day, x.StartTime });
         });
 
         builder.Entity<TimetableEntry>(entity =>

@@ -1,6 +1,9 @@
 ﻿import api from "./axios";
 
 export const studentsApi = {
+    registerStudent(data) {
+        return api.post("/students/registration", data);
+    },
     getManagementStudents(params = {}) {
         return api.get(
             "/Students/management",

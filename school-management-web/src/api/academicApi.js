@@ -2,6 +2,30 @@
 
 export const academicApi = {
 
+    createSection(data) {
+        return api.post("/academic/sections", data);
+    },
+
+    createGrade(data) {
+        return api.post("/academic/grades", data);
+    },
+
+    createClass(data) {
+        return api.post("/academic/classes", data);
+    },
+
+    createAcademicYear(data) {
+        return api.post("/academic/academic-years", data);
+    },
+
+    updateAcademicYear(id, data) {
+        return api.put(`/academic/academic-years/${id}`, data);
+    },
+
+    createSubject(data) {
+        return api.post("/academic/subjects", data);
+    },
+
     getAcademicYears() {
         return api.get(
             "/academic/academic-years"

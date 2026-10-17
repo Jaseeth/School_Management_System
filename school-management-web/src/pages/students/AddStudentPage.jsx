@@ -1,4 +1,4 @@
-﻿import {
+import {
     ArrowLeft,
     ArrowRight,
     CalendarDays,
@@ -17,6 +17,7 @@
 import {
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from "react";
 
@@ -32,13 +33,6 @@ import {
     studentsApi,
 } from "../../api/studentsApi";
 
-import {
-    parentGuardiansApi,
-} from "../../api/parentGuardiansApi";
-
-import {
-    studentEnrollmentsApi,
-} from "../../api/studentEnrollmentsApi";
 
 
 const steps = [
@@ -79,6 +73,10 @@ export default function AddStudentPage() {
 
     const navigate =
         useNavigate();
+
+    const submissionBusy = useRef(false);
+    const completedRegistration = useRef(false);
+    const [existingRegistration, setExistingRegistration] = useState(null);
 
     // ============================================================
     // CURRENT STEP
@@ -923,239 +921,66 @@ export default function AddStudentPage() {
     // FINAL CREATE
     // ============================================================
 
-    const handleCreateStudent =
-        async () => {
+    const registrationPayload = {
+        student: {
+            indexNumber: studentForm.indexNumber.trim(),
+            fullName: studentForm.fullName.trim(),
+            dateOfBirth: studentForm.dateOfBirth || null,
+            email: studentForm.email.trim().toLowerCase(),
+            mobile: studentForm.mobile.trim() || null,
+            schoolClassId: Number(studentForm.schoolClassId),
+            academicYearId: Number(academicYearId),
+        },
+        parent: {
+            parentNumber: parentForm.parentNumber.trim(),
+            fullName: parentForm.fullName.trim(),
+            email: parentForm.email.trim().toLowerCase() || null,
+            phoneNumber: parentForm.phoneNumber.trim() || null,
+        },
+        subjectIds: selectedSubjectIds,
+        relationship: parentForm.relationship.trim(),
+        isPrimaryGuardian: parentForm.isPrimaryGuardian,
+        isEmergencyContact: parentForm.isEmergencyContact,
+    };
+    const registrationFingerprint = JSON.stringify(registrationPayload);
+    const matchingExistingRegistration = existingRegistration?.fingerprint === registrationFingerprint
+        ? existingRegistration : null;
+    const canCompleteExisting = matchingExistingRegistration?.canComplete === true;
 
-            setError("");
-            setSuccess("");
-
-            try {
-
-                setSubmitting(true);
-
-                // ------------------------------------------------
-                // 1. CREATE STUDENT
-                // ------------------------------------------------
-
-                const studentPayload = {
-
-                    indexNumber:
-                        studentForm
-                            .indexNumber
-                            .trim(),
-
-                    fullName:
-                        studentForm
-                            .fullName
-                            .trim(),
-
-                    dateOfBirth:
-                        studentForm
-                            .dateOfBirth
-                            ? studentForm
-                                .dateOfBirth
-                            : null,
-
-                    email:
-                        studentForm
-                            .email
-                            .trim()
-                            .toLowerCase(),
-
-                    mobile:
-                        studentForm
-                            .mobile
-                            .trim() ||
-                        null,
-
-                    schoolClassId:
-                        Number(
-                            studentForm
-                                .schoolClassId
-                        ),
-
-                    academicYearId:
-                        Number(
-                            academicYearId
-                        ),
-                };
-
-                const studentResponse =
-                    await studentsApi
-                        .createStudent(
-                            studentPayload
-                        );
-
-                const newStudentId =
-                    studentResponse
-                        .data
-                        ?.id;
-
-                if (
-                    !newStudentId
-                ) {
-
-                    throw new Error(
-                        "Student was created but the new student ID was not returned."
-                    );
-
-                }
-
-
-                // ------------------------------------------------
-                // 2. ASSIGN SUBJECTS
-                // ------------------------------------------------
-
-                for (
-                    const subjectId
-                    of selectedSubjectIds
-                ) {
-
-                    await studentEnrollmentsApi
-                        .assignSubject({
-                            studentId:
-                                Number(
-                                    newStudentId
-                                ),
-
-                            academicYearId:
-                                Number(
-                                    academicYearId
-                                ),
-
-                            subjectId:
-                                Number(
-                                    subjectId
-                                ),
-                        });
-
-                }
-
-
-                // ------------------------------------------------
-                // 3. CREATE PARENT
-                // ------------------------------------------------
-
-                const parentResponse =
-                    await parentGuardiansApi
-                        .createParent({
-                            parentNumber:
-                                parentForm
-                                    .parentNumber
-                                    .trim(),
-
-                            fullName:
-                                parentForm
-                                    .fullName
-                                    .trim(),
-
-                            email:
-                                parentForm
-                                    .email
-                                    .trim()
-                                    ? parentForm
-                                        .email
-                                        .trim()
-                                        .toLowerCase()
-                                    : null,
-
-                            phoneNumber:
-                                parentForm
-                                    .phoneNumber
-                                    .trim() ||
-                                null,
-                        });
-
-                const parentId =
-                    parentResponse
-                        .data
-                        ?.parent
-                        ?.id;
-
-                if (
-                    !parentId
-                ) {
-
-                    throw new Error(
-                        "Parent was created but the new parent ID was not returned."
-                    );
-
-                }
-
-
-                // ------------------------------------------------
-                // 4. LINK PARENT TO STUDENT
-                // ------------------------------------------------
-
-                await parentGuardiansApi
-                    .linkStudent({
-                        studentId:
-                            Number(
-                                newStudentId
-                            ),
-
-                        parentGuardianId:
-                            Number(
-                                parentId
-                            ),
-
-                        relationship:
-                            parentForm
-                                .relationship
-                                .trim(),
-
-                        isPrimaryGuardian:
-                            parentForm
-                                .isPrimaryGuardian,
-
-                        isEmergencyContact:
-                            parentForm
-                                .isEmergencyContact,
-                    });
-
-
-                // ------------------------------------------------
-                // COMPLETE
-                // ------------------------------------------------
-
-                setSuccess(
-                    "Student registration completed successfully."
-                );
-
-                setTimeout(
-                    () => {
-                        navigate(
-                            `/students/${newStudentId}`
-                        );
-                    },
-                    900
-                );
-
+    const handleCreateStudent = async () => {
+        if (submissionBusy.current || completedRegistration.current) return;
+        submissionBusy.current = true;
+        setSubmitting(true);
+        setError("");
+        setSuccess("");
+        try {
+            const response = await studentsApi.registerStudent({
+                ...registrationPayload,
+                existingStudentId: canCompleteExisting ? matchingExistingRegistration.id : null,
+            });
+            const studentId = response.data?.id;
+            if (!studentId) throw new Error("Registration completed but no student ID was returned. Check the Students list before retrying.");
+            completedRegistration.current = true;
+            setExistingRegistration(null);
+            setSuccess("Student registration completed successfully.");
+            setTimeout(() => navigate(`/students/${studentId}`), 900);
+        } catch (err) {
+            const data = err?.response?.data;
+            if (err?.response?.status === 409 && data?.existingStudentId) {
+                setExistingRegistration({
+                    id: data.existingStudentId,
+                    canComplete: data.canCompleteRegistration === true,
+                    fingerprint: registrationFingerprint,
+                });
             }
-            catch (err) {
-
-                console.error(
-                    "Failed to complete student registration:",
-                    err
-                );
-
-                setError(
-                    err?.response
-                        ?.data
-                        ?.message ||
-                    err?.message ||
-                    "Unable to complete student registration."
-                );
-
-            }
-            finally {
-
-                setSubmitting(false);
-
-            }
-
-        };
-
+            setError(data?.message ||
+                (data?.errors ? Object.values(data.errors).flat().join(" ") : null) ||
+                err?.message || "Unable to complete student registration.");
+        } finally {
+            submissionBusy.current = false;
+            if (!completedRegistration.current) setSubmitting(false);
+        }
+    };
 
     // ============================================================
     // RENDER
@@ -1307,6 +1132,17 @@ export default function AddStudentPage() {
                     {error}
                 </div>
 
+            )}
+
+            {matchingExistingRegistration && (
+                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-800">
+                    {canCompleteExisting && <p>Review the details, then choose Complete existing student setup. Existing student details, academic placement and assigned subjects will be kept; missing subjects and the new guardian will be saved together.</p>}
+                    <button type="button" disabled={submitting}
+                        onClick={() => navigate(`/students/${matchingExistingRegistration.id}`)}
+                        className="mt-2 cursor-pointer font-semibold underline disabled:cursor-not-allowed disabled:opacity-50">
+                        View existing student
+                    </button>
+                </div>
             )}
 
 
@@ -2200,7 +2036,7 @@ export default function AddStudentPage() {
                                 <>
                                     <Save className="h-4 w-4" />
 
-                                    Create Student
+                                    {canCompleteExisting ? "Complete existing student setup" : "Create Student"}
                                 </>
                             )}
 

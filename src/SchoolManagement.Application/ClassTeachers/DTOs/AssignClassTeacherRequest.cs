@@ -7,4 +7,6 @@ public class AssignClassTeacherRequest
     public int SchoolClassId { get; set; }
 
     public int StaffId { get; set; }
+
+    public int? ReplacesAssignmentId { get; set; }
 }

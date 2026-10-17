@@ -62,8 +62,16 @@ import SectionHeadMarksReviewPage from "../pages/sectionHeads/SectionHeadMarksRe
 import SectionHeadAssignmentsPage from "../pages/sectionHeads/SectionHeadAssignmentsPage";
 
 import ResultsPublishingPage from "../pages/results/ResultsPublishingPage";
+import AnnouncementsPage from "../pages/announcements/AnnouncementsPage";
+import ParentAnnouncementsPage from "../pages/parents/ParentAnnouncementsPage";
+import SpecialClassesPage from "../pages/specialClasses/SpecialClassesPage";
+import StaffNotificationsPage from "../pages/notifications/StaffNotificationsPage";
+import ReportsPage from "../pages/reports/ReportsPage";
 
 import TermsExamsManagementPage from "../pages/exams/TermsExamsManagementPage";
+import AcademicSetupPage from "../pages/academic/AcademicSetupPage";
+import TeacherAssignmentsManagementPage from "../pages/teachers/TeacherAssignmentsManagementPage";
+import TimetableManagementPage from "../pages/timetable/TimetableManagementPage";
 
 export default function AppRoutes() {
     return (
@@ -129,6 +137,9 @@ export default function AppRoutes() {
 
                 <Route path="/staff/my-profile" element={<StaffProfilePage />} />
                 <Route path="/staff" element={<StaffManagementPage />} />
+                <Route path="/academic-setup" element={<AcademicSetupPage />} />
+                <Route path="/teacher-assignments" element={<TeacherAssignmentsManagementPage />} />
+                <Route path="/timetable" element={<TimetableManagementPage />} />
 
                 <Route
                     path="/teacher/timetable"
@@ -169,6 +180,10 @@ export default function AppRoutes() {
                     path="/results/publishing"
                     element={<ResultsPublishingPage />}
                 />
+                <Route path="/announcements" element={<AnnouncementsPage />} />
+                <Route path="/special-classes" element={<SpecialClassesPage />} />
+                <Route path="/notifications" element={<StaffNotificationsPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
 
                 <Route
                     path="/parents"
@@ -325,6 +340,7 @@ export default function AppRoutes() {
             />
 
             <Route path="/parent/login" element={<ParentLoginPage />} />
+            <Route path="/parent/announcements" element={<ParentProtectedRoute><ParentAnnouncementsPage /></ParentProtectedRoute>} />
 
             <Route
                 path="/change-password"

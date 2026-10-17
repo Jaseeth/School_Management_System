@@ -29,12 +29,87 @@ public class SchoolAnnouncementsController : ControllerBase
         _auditLogService = auditLogService;
     }
 
+    private bool IsGlobalCreator() => User.IsInRole("Admin") || User.IsInRole("Principal") || User.IsInRole("Deputy Principal");
+    private async Task<Staff?> CurrentStaffAsync() => await _context.Staff.AsNoTracking().FirstOrDefaultAsync(x =>
+        x.IsActive && x.ApplicationUserId == User.FindFirstValue(ClaimTypes.NameIdentifier));
+    private IQueryable<Student> AllowedStudents(int staffId)
+    {
+        var query = _context.Students.Where(s => s.IsActive);
+        if (IsGlobalCreator()) return query;
+        return query.Where(s =>
+            (User.IsInRole("Section Head") && _context.StudentAcademicEnrollments.Any(e => e.StudentId == s.Id && e.IsActive &&
+                _context.SectionHeadAssignments.Any(h => h.StaffId == staffId && h.IsActive && h.AcademicYear.IsActive &&
+                    h.AcademicYearId == e.AcademicYearId && h.SectionId == e.SchoolClass.Grade.SectionId))) ||
+            (User.IsInRole("Teacher") && _context.StudentAcademicEnrollments.Any(e => e.StudentId == s.Id && e.IsActive && (
+                _context.ClassTeacherAssignments.Any(a => a.StaffId == staffId && a.IsActive && a.AcademicYear.IsActive && a.AcademicYearId == e.AcademicYearId && a.SchoolClassId == e.SchoolClassId) ||
+                _context.TeacherAssignments.Any(a => a.StaffId == staffId && a.IsActive && a.AcademicYear.IsActive && a.AcademicYearId == e.AcademicYearId && a.SchoolClassId == e.SchoolClassId &&
+                    _context.StudentSubjectEnrollments.Any(se => se.StudentId == s.Id && se.IsActive && se.AcademicYearId == a.AcademicYearId && se.SubjectId == a.SubjectId))))));
+    }
+    private IQueryable<Staff> AllowedStaff(int staffId)
+    {
+        var query = _context.Staff.Where(s => s.IsActive);
+        if (IsGlobalCreator()) return query;
+        return query.Where(s => User.IsInRole("Section Head") &&
+            _context.UserRoles.Any(ur => ur.UserId == s.ApplicationUserId && _context.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Teacher")) && (
+            _context.TeacherAssignments.Any(a => a.StaffId == s.Id && a.IsActive &&
+                _context.SectionHeadAssignments.Any(h => h.StaffId == staffId && h.IsActive && h.AcademicYear.IsActive && h.AcademicYearId == a.AcademicYearId && h.SectionId == a.SchoolClass.Grade.SectionId)) ||
+            _context.ClassTeacherAssignments.Any(a => a.StaffId == s.Id && a.IsActive &&
+                _context.SectionHeadAssignments.Any(h => h.StaffId == staffId && h.IsActive && h.AcademicYear.IsActive && h.AcademicYearId == a.AcademicYearId && h.SectionId == a.SchoolClass.Grade.SectionId))));
+    }
+    private async Task<bool> CanManageAsync(int creatorStaffId)
+    {
+        if (IsGlobalCreator()) return true;
+        var staff = await CurrentStaffAsync();
+        return staff != null && creatorStaffId == staff.Id;
+    }
+
+    [HttpGet("my/parent")]
+    [Authorize(Roles = "Parent")]
+    public async Task<IActionResult> GetMyParentAnnouncements()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+        var parent = await _context.ParentGuardians.AsNoTracking().FirstOrDefaultAsync(x => x.IsActive && x.ApplicationUserId == userId);
+        if (parent == null) return Forbid();
+        var now = DateTime.UtcNow;
+        var announcements = await _context.SchoolAnnouncements.AsNoTracking().Where(x => x.IsActive && x.PublishAt <= now &&
+            (x.ExpiresAt == null || x.ExpiresAt > now) && (
+                (x.AudienceType == "SpecificParents" && x.ParentIds.Contains(parent.Id)) ||
+                (x.AudienceType == "Role" && x.RoleName == "Parent")))
+            .OrderByDescending(x => x.PublishAt).Select(x => new { x.Id, x.Title, x.Message, x.PublishAt }).ToListAsync();
+        return Ok(new { announcements });
+    }
+
+    [HttpGet("recipient-options")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
+    public async Task<IActionResult> GetRecipientOptions()
+    {
+        var currentStaff = await CurrentStaffAsync();
+        if (currentStaff == null) return Forbid();
+        var students = await AllowedStudents(currentStaff.Id).AsNoTracking()
+            .OrderBy(x => x.FullName).Select(x => new { x.Id, name = x.FullName, code = x.IndexNumber, email = x.Email, section = x.SchoolClass.Grade.Section.Name, grade = x.SchoolClass.Grade.Name, schoolClass = x.SchoolClass.Name }).ToListAsync();
+        var staff = await AllowedStaff(currentStaff.Id).AsNoTracking()
+            .OrderBy(x => x.FullName).Select(x => new { x.Id, name = x.FullName, code = x.StaffNumber, section = string.Join(", ", _context.SectionHeadAssignments.Where(a => a.StaffId == x.Id && a.IsActive).Select(a => a.Section.Name)),
+                isSectionHead = _context.UserRoles.Any(ur => ur.UserId == x.ApplicationUserId &&
+                    _context.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Section Head")) }).ToListAsync();
+        var global = IsGlobalCreator();
+        var parents = await _context.ParentGuardians.AsNoTracking().Where(x => x.IsActive && global)
+            .OrderBy(x => x.FullName).Select(x => new { x.Id, name = x.FullName, code = x.ParentNumber, email = x.Email, phone = x.PhoneNumber }).ToListAsync();
+        var sections = await _context.SectionHeadAssignments.Where(h => h.StaffId == currentStaff.Id && h.IsActive && h.AcademicYear.IsActive)
+            .Select(h => new { id = h.SectionId, name = h.Section.Name }).Distinct().ToListAsync();
+        var classes = await _context.ClassTeacherAssignments.Where(a => a.StaffId == currentStaff.Id && a.IsActive && a.AcademicYear.IsActive)
+            .Select(a => new { id = a.SchoolClassId, name = a.AcademicYear.Name + " · " + a.SchoolClass.Grade.Name + " " + a.SchoolClass.Name }).ToListAsync();
+        var subjects = await _context.TeacherAssignments.Where(a => a.StaffId == currentStaff.Id && a.IsActive && a.AcademicYear.IsActive)
+            .Select(a => new { id = a.Id, name = a.AcademicYear.Name + " · " + a.SchoolClass.Grade.Name + " " + a.SchoolClass.Name + " · " + a.Subject.Name }).ToListAsync();
+        return Ok(new { students, staff, parents, sections, classes, subjects });
+    }
+
     // ============================================================
     // CREATE ANNOUNCEMENT
     // ============================================================
 
     [HttpPost]
-    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
     public async Task<IActionResult> CreateAnnouncement(
         CreateSchoolAnnouncementRequest request)
     {
@@ -82,6 +157,49 @@ public class SchoolAnnouncementsController : ControllerBase
             });
         }
 
+        if (!IsGlobalCreator())
+        {
+            if (request.AudienceType == "SectionStudents" || request.AudienceType == "SectionTeachers")
+            {
+                if (!User.IsInRole("Section Head") || !await _context.SectionHeadAssignments.AnyAsync(h => h.StaffId == currentStaff.Id && h.IsActive && h.AcademicYear.IsActive && h.SectionId == request.SectionId)) return Forbid();
+                if (request.AudienceType == "SectionStudents")
+                {
+                    request.StudentIds = await AllowedStudents(currentStaff.Id).Where(s => s.SchoolClass.Grade.SectionId == request.SectionId).Select(s => s.Id).ToListAsync();
+                    request.AudienceType = "SpecificStudents";
+                }
+                else
+                {
+                    request.StaffIds = await AllowedStaff(currentStaff.Id).Where(s => _context.TeacherAssignments.Any(a => a.StaffId == s.Id && a.IsActive && a.SchoolClass.Grade.SectionId == request.SectionId) ||
+                        _context.ClassTeacherAssignments.Any(a => a.StaffId == s.Id && a.IsActive && a.SchoolClass.Grade.SectionId == request.SectionId)).Select(s => s.Id).ToListAsync();
+                    request.AudienceType = "SpecificStaff";
+                }
+            }
+            else if (request.AudienceType == "ClassStudents")
+            {
+                if (!User.IsInRole("Teacher") || !await _context.ClassTeacherAssignments.AnyAsync(a => a.StaffId == currentStaff.Id && a.IsActive && a.AcademicYear.IsActive && a.SchoolClassId == request.SchoolClassId)) return Forbid();
+                request.StudentIds = await AllowedStudents(currentStaff.Id).Where(s => s.SchoolClassId == request.SchoolClassId).Select(s => s.Id).ToListAsync();
+                request.AudienceType = "SpecificStudents";
+            }
+            else if (request.AudienceType == "SubjectStudents")
+            {
+                var assignment = await _context.TeacherAssignments.FirstOrDefaultAsync(a => a.Id == request.TeacherAssignmentId && a.StaffId == currentStaff.Id && a.IsActive && a.AcademicYear.IsActive);
+                if (!User.IsInRole("Teacher") || assignment == null) return Forbid();
+                request.StudentIds = await AllowedStudents(currentStaff.Id).Where(s => s.SchoolClassId == assignment.SchoolClassId && _context.StudentSubjectEnrollments.Any(se => se.StudentId == s.Id && se.IsActive && se.SubjectId == assignment.SubjectId && se.AcademicYearId == assignment.AcademicYearId)).Select(s => s.Id).ToListAsync();
+                request.AudienceType = "SpecificStudents";
+            }
+            if (request.AudienceType == "SpecificStudents")
+            {
+                var ids = (request.StudentIds ?? []).Distinct().ToList();
+                if (await AllowedStudents(currentStaff.Id).CountAsync(s => ids.Contains(s.Id)) != ids.Count) return Forbid();
+            }
+            else if (request.AudienceType == "SpecificStaff" && User.IsInRole("Section Head"))
+            {
+                var ids = (request.StaffIds ?? []).Distinct().ToList();
+                if (await AllowedStaff(currentStaff.Id).CountAsync(s => ids.Contains(s.Id)) != ids.Count) return Forbid();
+            }
+            else return Forbid();
+        }
+
         var audienceType =
             request.AudienceType?
                 .Trim();
@@ -89,6 +207,7 @@ public class SchoolAnnouncementsController : ControllerBase
         var allowedAudienceTypes =
             new[]
             {
+                "SpecificStudents", "SpecificStaff", "SpecificSectionHeads", "SpecificParents",
                 "AllStudents",
                 "AllStaff",
                 "Section",
@@ -109,6 +228,35 @@ public class SchoolAnnouncementsController : ControllerBase
                     "Invalid audience type."
             });
         }
+
+        var selectedStudents = (request.StudentIds ?? []).Distinct().ToList();
+        var selectedStaff = (request.StaffIds ?? []).Distinct().ToList();
+        var selectedParents = (request.ParentIds ?? []).Distinct().ToList();
+        if (audienceType.Equals("SpecificParents", StringComparison.OrdinalIgnoreCase))
+        {
+            if (selectedParents.Count == 0 || selectedParents.Count > 500 ||
+                await _context.ParentGuardians.CountAsync(x => x.IsActive && selectedParents.Contains(x.Id)) != selectedParents.Count)
+                return BadRequest(new { message = "Select between 1 and 500 active parents." });
+        }
+        else selectedParents.Clear();
+        if (audienceType.Equals("SpecificStudents", StringComparison.OrdinalIgnoreCase))
+        {
+            if (selectedStudents.Count == 0 || selectedStudents.Count > 500 ||
+                await _context.Students.CountAsync(x => x.IsActive && selectedStudents.Contains(x.Id)) != selectedStudents.Count)
+                return BadRequest(new { message = "Select between 1 and 500 active students." });
+        }
+        else selectedStudents.Clear();
+        if (audienceType.Equals("SpecificStaff", StringComparison.OrdinalIgnoreCase) ||
+            audienceType.Equals("SpecificSectionHeads", StringComparison.OrdinalIgnoreCase))
+        {
+            var eligible = _context.Staff.Where(x => x.IsActive && selectedStaff.Contains(x.Id));
+            if (audienceType.Equals("SpecificSectionHeads", StringComparison.OrdinalIgnoreCase))
+                eligible = eligible.Where(x => _context.UserRoles.Any(ur => ur.UserId == x.ApplicationUserId &&
+                    _context.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Section Head")));
+            if (selectedStaff.Count == 0 || selectedStaff.Count > 500 || await eligible.CountAsync() != selectedStaff.Count)
+                return BadRequest(new { message = "Select between 1 and 500 eligible active staff accounts." });
+        }
+        else selectedStaff.Clear();
 
         // ========================================================
         // AUDIENCE VALIDATION
@@ -251,8 +399,10 @@ public class SchoolAnnouncementsController : ControllerBase
                 Message =
                     request.Message.Trim(),
 
-                AudienceType =
-                    audienceType,
+                AudienceType = audienceType,
+                StudentIds = selectedStudents,
+                StaffIds = selectedStaff,
+                ParentIds = selectedParents,
 
                 SectionId =
                     audienceType.Equals(
@@ -560,6 +710,19 @@ public class SchoolAnnouncementsController : ControllerBase
 
         var notificationMessage =
             announcement.Message;
+
+        if (announcement.AudienceType == "Role" && announcement.RoleName == "Parent")
+            selectedParents = await _context.ParentGuardians.Where(x => x.IsActive).Select(x => x.Id).ToListAsync();
+
+        foreach (var id in selectedParents)
+            _context.Notifications.Add(new Notification { RecipientParentGuardianId = id, Type = NotificationType.General,
+                Title = notificationTitle, Message = notificationMessage, ReferenceType = "SchoolAnnouncement", ReferenceId = announcement.Id });
+        foreach (var id in selectedStudents)
+            _context.Notifications.Add(new Notification { RecipientStudentId = id, Type = NotificationType.General,
+                Title = notificationTitle, Message = notificationMessage, ReferenceType = "SchoolAnnouncement", ReferenceId = announcement.Id });
+        foreach (var id in selectedStaff)
+            _context.Notifications.Add(new Notification { RecipientStaffId = id, Type = NotificationType.General,
+                Title = notificationTitle, Message = notificationMessage, ReferenceType = "SchoolAnnouncement", ReferenceId = announcement.Id });
 
         // ========================================================
         // ALL STUDENTS
@@ -892,14 +1055,6 @@ public class SchoolAnnouncementsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // ========================================================
-        // NOTIFY PARENTS
-        // ========================================================
-
-        await NotifyAnnouncementParentsAsync(
-            announcement,
-            notificationTitle,
-            notificationMessage);
 
         // ========================================================
         // RESPONSE
@@ -942,7 +1097,7 @@ public class SchoolAnnouncementsController : ControllerBase
     // ============================================================
 
     [HttpGet]
-    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
     public async Task<IActionResult> GetAnnouncements(
         bool includeInactive = false)
     {
@@ -955,6 +1110,13 @@ public class SchoolAnnouncementsController : ControllerBase
                     .ThenInclude(x => x!.Grade)
                 .Include(x => x.CreatedByStaff)
                 .AsQueryable();
+
+        if (!IsGlobalCreator())
+        {
+            var currentStaff = await CurrentStaffAsync();
+            if (currentStaff == null) return Forbid();
+            query = query.Where(x => x.CreatedByStaffId == currentStaff.Id);
+        }
 
         if (!includeInactive)
         {
@@ -978,6 +1140,9 @@ public class SchoolAnnouncementsController : ControllerBase
                     x.Message,
 
                     x.AudienceType,
+                    x.StudentIds,
+                    x.StaffIds,
+                    x.ParentIds,
 
                     x.SectionId,
 
@@ -1038,7 +1203,7 @@ public class SchoolAnnouncementsController : ControllerBase
     // ============================================================
 
     [HttpGet("{id:int}")]
-    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
     public async Task<IActionResult> GetAnnouncementById(
         int id)
     {
@@ -1056,6 +1221,9 @@ public class SchoolAnnouncementsController : ControllerBase
                     x.Message,
 
                     x.AudienceType,
+                    x.StudentIds,
+                    x.StaffIds,
+                    x.ParentIds,
 
                     x.SectionId,
 
@@ -1096,6 +1264,8 @@ public class SchoolAnnouncementsController : ControllerBase
                     x.CreatedAt
                 })
                 .FirstOrDefaultAsync();
+
+        if (announcement != null && !await CanManageAsync(announcement.CreatedBy.Id)) return Forbid();
 
         if (announcement == null)
         {
@@ -1174,7 +1344,9 @@ public class SchoolAnnouncementsController : ControllerBase
                         x.ExpiresAt > now
                     ) &&
                     (
+                        (x.AudienceType == "SpecificStudents" && x.StudentIds.Contains(student.Id)) ||
                         x.AudienceType == "AllStudents" ||
+                        (x.AudienceType == "Role" && x.RoleName == "Student") ||
 
                         (
                             x.AudienceType == "Section" &&
@@ -1202,6 +1374,9 @@ public class SchoolAnnouncementsController : ControllerBase
                     x.Message,
 
                     x.AudienceType,
+                    x.StudentIds,
+                    x.StaffIds,
+                    x.ParentIds,
 
                     x.PublishAt,
 
@@ -1296,6 +1471,7 @@ public class SchoolAnnouncementsController : ControllerBase
                         x.ExpiresAt > now
                     ) &&
                     (
+                        ((x.AudienceType == "SpecificStaff" || x.AudienceType == "SpecificSectionHeads") && x.StaffIds.Contains(staff.Id)) ||
                         x.AudienceType == "AllStaff" ||
 
                         (
@@ -1316,6 +1492,9 @@ public class SchoolAnnouncementsController : ControllerBase
                     x.Message,
 
                     x.AudienceType,
+                    x.StudentIds,
+                    x.StaffIds,
+                    x.ParentIds,
 
                     x.RoleName,
 
@@ -1358,7 +1537,7 @@ public class SchoolAnnouncementsController : ControllerBase
     // ============================================================
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
     public async Task<IActionResult> UpdateAnnouncement(
         int id,
         UpdateSchoolAnnouncementRequest request)
@@ -1367,6 +1546,8 @@ public class SchoolAnnouncementsController : ControllerBase
             await _context.SchoolAnnouncements
                 .FirstOrDefaultAsync(x =>
                     x.Id == id);
+
+        if (announcement != null && !await CanManageAsync(announcement.CreatedByStaffId)) return Forbid();
 
         if (announcement == null)
         {
@@ -1498,7 +1679,7 @@ public class SchoolAnnouncementsController : ControllerBase
     // ============================================================
 
     [HttpPatch("{id:int}/disable")]
-    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
     public async Task<IActionResult> DisableAnnouncement(
         int id)
     {
@@ -1506,6 +1687,8 @@ public class SchoolAnnouncementsController : ControllerBase
             await _context.SchoolAnnouncements
                 .FirstOrDefaultAsync(x =>
                     x.Id == id);
+
+        if (announcement != null && !await CanManageAsync(announcement.CreatedByStaffId)) return Forbid();
 
         if (announcement == null)
         {
@@ -1574,7 +1757,7 @@ public class SchoolAnnouncementsController : ControllerBase
     // ============================================================
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal,Section Head,Teacher")]
     public async Task<IActionResult> DeleteAnnouncement(
         int id)
     {
@@ -1582,6 +1765,8 @@ public class SchoolAnnouncementsController : ControllerBase
             await _context.SchoolAnnouncements
                 .FirstOrDefaultAsync(x =>
                     x.Id == id);
+
+        if (announcement != null && !await CanManageAsync(announcement.CreatedByStaffId)) return Forbid();
 
         if (announcement == null)
         {
@@ -1935,176 +2120,7 @@ public class SchoolAnnouncementsController : ControllerBase
                     announcement.Id);
         }
 
-        // ========================================================
-        // NOTIFY LINKED PARENTS
-        // ========================================================
-
-        await NotifyAnnouncementParentsAsync(
-            announcement,
-            notificationTitle,
-            notificationMessage);
     }
 
-
-    // ============================================================
-    // NOTIFY PARENTS FOR STUDENT-TARGETED ANNOUNCEMENT
-    // ============================================================
-
-    private async Task NotifyAnnouncementParentsAsync(
-        SchoolAnnouncement announcement,
-        string notificationTitle,
-        string notificationMessage)
-    {
-        var isStudentAudience =
-            announcement.AudienceType.Equals(
-                "AllStudents",
-                StringComparison.OrdinalIgnoreCase) ||
-
-            announcement.AudienceType.Equals(
-                "Section",
-                StringComparison.OrdinalIgnoreCase) ||
-
-            announcement.AudienceType.Equals(
-                "Grade",
-                StringComparison.OrdinalIgnoreCase) ||
-
-            announcement.AudienceType.Equals(
-                "Class",
-                StringComparison.OrdinalIgnoreCase);
-
-        if (!isStudentAudience)
-        {
-            return;
-        }
-
-        // ========================================================
-        // FIND TARGET STUDENTS
-        // ========================================================
-
-        var studentQuery =
-            _context.Students
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive);
-
-        if (announcement.AudienceType.Equals(
-            "Section",
-            StringComparison.OrdinalIgnoreCase) &&
-            announcement.SectionId.HasValue)
-        {
-            studentQuery =
-                studentQuery.Where(x =>
-                    x.SchoolClass
-                        .Grade
-                        .SectionId ==
-                    announcement.SectionId.Value);
-        }
-        else if (announcement.AudienceType.Equals(
-            "Grade",
-            StringComparison.OrdinalIgnoreCase) &&
-            announcement.GradeId.HasValue)
-        {
-            studentQuery =
-                studentQuery.Where(x =>
-                    x.SchoolClass.GradeId ==
-                    announcement.GradeId.Value);
-        }
-        else if (announcement.AudienceType.Equals(
-            "Class",
-            StringComparison.OrdinalIgnoreCase) &&
-            announcement.SchoolClassId.HasValue)
-        {
-            studentQuery =
-                studentQuery.Where(x =>
-                    x.SchoolClassId ==
-                    announcement.SchoolClassId.Value);
-        }
-
-        var studentIds =
-            await studentQuery
-                .Select(x =>
-                    x.Id)
-                .ToListAsync();
-
-        if (studentIds.Count == 0)
-        {
-            return;
-        }
-
-        // ========================================================
-        // FIND ACTIVE LINKED PARENTS
-        // DISTINCT PREVENTS DUPLICATE NOTIFICATIONS
-        // ========================================================
-
-        var parentIds =
-            await _context.StudentParentGuardians
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive &&
-                    studentIds.Contains(
-                        x.StudentId) &&
-                    x.ParentGuardian.IsActive)
-                .Select(x =>
-                    x.ParentGuardianId)
-                .Distinct()
-                .ToListAsync();
-
-        if (parentIds.Count == 0)
-        {
-            return;
-        }
-
-        // ========================================================
-        // INTERNAL PARENT NOTIFICATIONS
-        // ========================================================
-
-        foreach (var parentId in parentIds)
-        {
-            _context.Notifications.Add(
-                new Notification
-                {
-                    RecipientParentGuardianId =
-                        parentId,
-
-                    Type =
-                        NotificationType.General,
-
-                    Title =
-                        notificationTitle,
-
-                    Message =
-                        notificationMessage,
-
-                    IsRead =
-                        false,
-
-                    CreatedAt =
-                        DateTime.UtcNow,
-
-                    ReferenceType =
-                        "SchoolAnnouncement",
-
-                    ReferenceId =
-                        announcement.Id
-                });
-        }
-
-        await _context.SaveChangesAsync();
-
-        // ========================================================
-        // FIREBASE PUSH -> PARENTS
-        // ========================================================
-
-        foreach (var parentId in parentIds)
-        {
-            await _pushNotificationService
-                .SendToParentAsync(
-                    parentId,
-                    notificationTitle,
-                    notificationMessage,
-                    "SchoolAnnouncement",
-                    announcement.Id);
-        }
-    }
 
 }

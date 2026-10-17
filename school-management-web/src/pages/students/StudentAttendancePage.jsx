@@ -185,7 +185,7 @@ export default function StudentAttendancePage() {
 
                         <>
 
-                            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
 
                                 <SummaryCard
                                     icon={
@@ -201,7 +201,7 @@ export default function StudentAttendancePage() {
                                     icon={
                                         <CheckCircle2 className="h-5 w-5" />
                                     }
-                                    label="Present"
+                                    label="Present (on time)"
                                     value={
                                         data.presentDays ?? 0
                                     }
@@ -221,12 +221,20 @@ export default function StudentAttendancePage() {
                                     icon={
                                         <CalendarCheck2 className="h-5 w-5" />
                                     }
+                                    label="Late"
+                                    value={data.lateDays ?? 0}
+                                />
+
+                                <SummaryCard
+                                    icon={<CalendarCheck2 className="h-5 w-5" />}
                                     label="Attendance"
                                     value={`${data.attendancePercentage ?? 0}%`}
                                 />
 
                             </div>
 
+
+                            <p className="mt-3 text-sm text-slate-500">Attendance includes Present and Late days.</p>
 
                             <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 

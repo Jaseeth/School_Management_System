@@ -27,9 +27,16 @@ public class AcademicController : ControllerBase
     public async Task<IActionResult> CreateSection(
         CreateSectionRequest request)
     {
+        if (!IsValidName(request.Name))
+            return BadRequest(new { message = "Section name is required and must be 100 characters or fewer." });
+
+        var name = request.Name.Trim();
+        if (await _context.Sections.AnyAsync(x => x.Name == name))
+            return BadRequest(new { message = "Section already exists." });
+
         var section = new Section
         {
-            Name = request.Name,
+            Name = name,
             IsActive = true
         };
 
@@ -60,9 +67,12 @@ public class AcademicController : ControllerBase
     public async Task<IActionResult> CreateGrade(
         CreateGradeRequest request)
     {
+        if (!IsValidName(request.Name))
+            return BadRequest(new { message = "Grade name is required and must be 100 characters or fewer." });
+
         var sectionExists =
             await _context.Sections
-                .AnyAsync(x => x.Id == request.SectionId);
+                .AnyAsync(x => x.Id == request.SectionId && x.IsActive);
 
         if (!sectionExists)
         {
@@ -72,9 +82,13 @@ public class AcademicController : ControllerBase
             });
         }
 
+        var name = request.Name.Trim();
+        if (await _context.Grades.AnyAsync(x => x.SectionId == request.SectionId && x.Name == name))
+            return BadRequest(new { message = "Grade already exists in this section." });
+
         var grade = new Grade
         {
-            Name = request.Name,
+            Name = name,
             SectionId = request.SectionId,
             IsActive = true
         };
@@ -109,9 +123,12 @@ public class AcademicController : ControllerBase
     public async Task<IActionResult> CreateClass(
         CreateSchoolClassRequest request)
     {
+        if (!IsValidName(request.Name))
+            return BadRequest(new { message = "Class name is required and must be 100 characters or fewer." });
+
         var gradeExists =
             await _context.Grades
-                .AnyAsync(x => x.Id == request.GradeId);
+                .AnyAsync(x => x.Id == request.GradeId && x.IsActive && x.Section.IsActive);
 
         if (!gradeExists)
         {
@@ -121,9 +138,13 @@ public class AcademicController : ControllerBase
             });
         }
 
+        var name = request.Name.Trim();
+        if (await _context.SchoolClasses.AnyAsync(x => x.GradeId == request.GradeId && x.Name == name))
+            return BadRequest(new { message = "Class already exists in this grade." });
+
         var schoolClass = new SchoolClass
         {
-            Name = request.Name,
+            Name = name,
             GradeId = request.GradeId,
             IsActive = true
         };
@@ -158,11 +179,11 @@ public class AcademicController : ControllerBase
     public async Task<IActionResult> CreateAcademicYear(
     CreateAcademicYearRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
+        if (!IsValidName(request.Name))
         {
             return BadRequest(new
             {
-                message = "Academic year name is required."
+                message = "Academic year name is required and must be 100 characters or fewer."
             });
         }
 
@@ -240,11 +261,11 @@ public class AcademicController : ControllerBase
     public async Task<IActionResult> CreateSubject(
         CreateSubjectRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
+        if (!IsValidName(request.Name))
         {
             return BadRequest(new
             {
-                message = "Subject name is required."
+                message = "Subject name is required and must be 100 characters or fewer."
             });
         }
 
@@ -305,11 +326,11 @@ public class AcademicController : ControllerBase
             });
         }
 
-        if (string.IsNullOrWhiteSpace(request.Name))
+        if (!IsValidName(request.Name))
         {
             return BadRequest(new
             {
-                message = "Academic year name is required."
+                message = "Academic year name is required and must be 100 characters or fewer."
             });
         }
 
@@ -337,7 +358,11 @@ public class AcademicController : ControllerBase
             });
         }
 
-        academicYear.Name = request.Name.Trim();
+        var name = request.Name.Trim();
+        if (await _context.AcademicYears.AnyAsync(x => x.Id != id && x.Name == name))
+            return BadRequest(new { message = "Academic year already exists." });
+
+        academicYear.Name = name;
         academicYear.StartDate = request.StartDate;
         academicYear.EndDate = request.EndDate;
 
@@ -353,4 +378,7 @@ public class AcademicController : ControllerBase
             academicYear.IsActive
         });
     }
+
+    private static bool IsValidName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 100;
 }

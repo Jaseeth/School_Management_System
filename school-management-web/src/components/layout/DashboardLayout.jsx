@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import StaffAccountMenu from "./StaffAccountMenu";
+import api from "../../api/axios";
 
 const menuItems = [
     {
@@ -33,7 +34,7 @@ const menuItems = [
         title: "Students",
         path: "/students",
         icon: GraduationCap,
-        roles: ["Admin", "Principal", "Deputy Principal", "Section Head"],
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
     },
     {
         title: "Children",
@@ -58,6 +59,18 @@ const menuItems = [
         path: "/section-head-assignments",
         icon: ShieldCheck,
         roles: ["Admin"],
+    },
+    {
+        title: "Academic Setup",
+        path: "/academic-setup",
+        icon: BookOpen,
+        roles: ["Admin", "Principal", "Deputy Principal"],
+    },
+    {
+        title: "Teacher Assignments",
+        path: "/teacher-assignments",
+        icon: Users,
+        roles: ["Admin", "Principal", "Deputy Principal"],
     },
     {
         title: "Attendance",
@@ -93,8 +106,6 @@ const menuItems = [
             "Admin",
             "Principal",
             "Deputy Principal",
-            "Section Head",
-            "Student",
         ],
     },
 
@@ -126,10 +137,16 @@ const menuItems = [
         ],
     },
     {
+        title: "Special Classes",
+        path: "/special-classes",
+        icon: CalendarDays,
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
+    },
+    {
         title: "Notifications",
         path: "/notifications",
         icon: Bell,
-        roles: ["Teacher", "Student", "Parent"],
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
     },
     {
         title: "Reports",
@@ -159,7 +176,7 @@ const menuItems = [
         title: "Results Publishing",
         path: "/results/publishing",
         icon: FileText,
-        roles: ["Admin", "Principal", "Deputy Principal"],
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
     },
 
     {
@@ -173,6 +190,27 @@ const menuItems = [
 export default function DashboardLayout() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const [unreadCount, setUnreadCount] = useState(0);
+    useEffect(() => {
+        let active = true;
+        async function refreshUnread() {
+            try {
+                const { data } = await api.get("/notifications/my/unread-count");
+                if (active) setUnreadCount(data.unreadCount ?? 0);
+            } catch { /* Keep the last successful count during connection failures. */ }
+        }
+        if (!user?.email) return;
+        refreshUnread();
+        const timer = window.setInterval(refreshUnread, 30000);
+        window.addEventListener("staff-notifications-changed", refreshUnread);
+        window.addEventListener("focus", refreshUnread);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+            window.removeEventListener("staff-notifications-changed", refreshUnread);
+            window.removeEventListener("focus", refreshUnread);
+        };
+    }, [user?.email]);
 
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(
@@ -468,10 +506,11 @@ export default function DashboardLayout() {
                         <button
                             type="button"
                             aria-label="Notifications"
+                            onClick={() => navigate("/notifications")}
                             className="relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                         >
                             <Bell className="h-5 w-5" />
-                            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-blue-600" />
+                            {unreadCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white" aria-label={`${unreadCount} unread notifications`}>{unreadCount > 99 ? "99+" : unreadCount}</span>}
                         </button>
 
                         <StaffAccountMenu />

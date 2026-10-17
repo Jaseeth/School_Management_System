@@ -62,7 +62,7 @@ public sealed class AttendanceApprovalController : ControllerBase
         var window = await _windows.GetAsync(
             input.AcademicYearId,
             input.SchoolClassId,
-            day);
+            day, teacher.Id);
 
         if (day > window.SchoolNow.Date)
         {
@@ -72,14 +72,12 @@ public sealed class AttendanceApprovalController : ControllerBase
             });
         }
 
-        if (window.CanSaveDirectly)
-        {
-            return Conflict(new
-            {
-                message =
-                    "The direct attendance window is open. Save attendance instead."
-            });
-        }
+        if (input.IsPermissionRequest && window.IsWindowOpen)
+            return Conflict(new { message = "Attendance entry is already available within the current window." });
+        if (!input.IsPermissionRequest && !window.IsWindowOpen)
+            return Conflict(new { message = "The attendance window is closed. Request entry permission before entering corrections." });
+        if (!input.IsPermissionRequest && window.CanSaveDirectly)
+            return Conflict(new { message = "Save attendance directly during the first-entry or approved permission window." });
 
         var schoolClass = await _context.SchoolClasses
             .AsNoTracking()
@@ -119,13 +117,13 @@ public sealed class AttendanceApprovalController : ControllerBase
             });
         }
 
-        if (input.Students == null ||
+        if (!input.IsPermissionRequest && (input.Students == null ||
             input.Students.Count == 0 ||
             input.Students.GroupBy(x => x.StudentId)
                 .Any(x => x.Count() > 1) ||
             input.Students.Any(x =>
                 !Enum.IsDefined(typeof(AttendanceStatus), x.Status) ||
-                (x.Remarks?.Length ?? 0) > 500))
+                (x.Remarks?.Length ?? 0) > 500)))
         {
             return BadRequest(new
             {
@@ -152,6 +150,27 @@ public sealed class AttendanceApprovalController : ControllerBase
                 message =
                     "No active Section Head is assigned to this section and academic year."
             });
+        }
+
+        if (input.IsPermissionRequest)
+        {
+            if (string.IsNullOrWhiteSpace(input.Reason))
+                return BadRequest(new { message = "Enter a reason for attendance entry permission." });
+            await using var permissionTransaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            if (await _context.AttendanceChangeRequests.AnyAsync(x => x.IsPermissionRequest && x.RequestedByStaffId == teacher.Id &&
+                x.AcademicYearId == input.AcademicYearId && x.SchoolClassId == input.SchoolClassId && x.AttendanceDate == day &&
+                x.Status == AttendanceChangeStatus.Pending))
+                return Conflict(new { message = "An entry permission request is already pending." });
+            var permission = new AttendanceChangeRequest { AcademicYearId = input.AcademicYearId, SchoolClassId = input.SchoolClassId,
+                AttendanceDate = day, RequestedByStaffId = teacher.Id, Reason = input.Reason.Trim(), IsPermissionRequest = true };
+            _context.AttendanceChangeRequests.Add(permission);
+            await _context.SaveChangesAsync();
+            foreach (var headId in headIds) _context.Notifications.Add(new Notification { RecipientStaffId = headId,
+                Title = "Attendance entry permission requested", Message = $"{teacher.FullName} requests attendance entry for {schoolClass.GradeName} {schoolClass.Name} on {day:yyyy-MM-dd}.",
+                ReferenceType = "AttendanceChangeRequest", ReferenceId = permission.Id });
+            await _context.SaveChangesAsync();
+            await permissionTransaction.CommitAsync();
+            return Ok(new { message = "Entry permission requested. Wait for section head approval before saving attendance.", requestId = permission.Id });
         }
 
         var studentIds = input.Students
@@ -338,11 +357,18 @@ public sealed class AttendanceApprovalController : ControllerBase
                 x.Id,
                 x.Reason,
                 x.IsWholeClass,
+                x.IsPermissionRequest,
+                x.GrantedUntilUtc,
                 x.Status,
                 x.RequestedAtUtc,
                 x.ReviewedAtUtc,
                 x.ReviewRemarks,
-                StudentCount = x.Items.Count
+                StudentCount = x.Items.Count,
+                Students = x.Items.Select(item => new
+                {
+                    item.StudentId, item.StudentIndexNumber, item.StudentFullName,
+                    item.ProposedStatus, item.ProposedRemarks
+                }).ToList()
             })
             .ToListAsync();
 
@@ -441,6 +467,8 @@ public sealed class AttendanceApprovalController : ControllerBase
                     x.AttendanceDate,
                     x.Reason,
                     x.IsWholeClass,
+                x.IsPermissionRequest,
+                x.GrantedUntilUtc,
                     x.RequestedAtUtc,
                     schoolClass.SectionName,
                     schoolClass.GradeName,
@@ -550,6 +578,26 @@ public sealed class AttendanceApprovalController : ControllerBase
 
         if (teacher == null)
             return Conflict(new { message = "Teacher not found." });
+
+        if (request.IsPermissionRequest)
+        {
+            if (input.PermissionMinutes < 1 || input.PermissionMinutes > 120)
+                return BadRequest(new { message = "Permission duration must be between 1 and 120 minutes." });
+            request.Status = input.Approve ? AttendanceChangeStatus.Approved : AttendanceChangeStatus.Rejected;
+            request.ReviewedByStaffId = head.Id;
+            request.ReviewedAtUtc = DateTime.UtcNow;
+            request.ReviewRemarks = input.Remarks?.Trim();
+            request.GrantedUntilUtc = input.Approve ? _windows.SchoolNow.UtcDateTime.AddMinutes(input.PermissionMinutes) : null;
+            _context.Notifications.Add(new Notification { RecipientStaffId = teacher.Id, Title = "Attendance entry permission reviewed",
+                Message = input.Approve ? $"Entry permission granted for {input.PermissionMinutes} minutes." : "Entry permission rejected.",
+                ReferenceType = "AttendanceChangeRequest", ReferenceId = request.Id });
+            _context.AuditLogs.Add(new AuditLog { StaffId = head.Id, UserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
+                Action = "ReviewAttendanceEntryPermission", EntityName = "AttendanceChangeRequest", EntityId = request.Id.ToString(),
+                Description = $"{request.Status}; teacher {teacher.Id}; class {request.SchoolClassId}; until {request.GrantedUntilUtc:O}", CreatedAt = DateTime.UtcNow });
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return Ok(new { message = input.Approve ? "Attendance entry permission granted." : "Attendance entry permission rejected." });
+        }
 
         var studentIds = request.Items
             .Select(x => x.StudentId)
@@ -741,6 +789,7 @@ public sealed class SubmitAttendanceChangeRequest
     public int SchoolClassId { get; set; }
     public DateTime AttendanceDate { get; set; }
     public string? Reason { get; set; }
+    public bool IsPermissionRequest { get; set; }
     public List<AttendanceChangeStudentRequest> Students { get; set; } = new();
 }
 
@@ -753,6 +802,7 @@ public sealed class AttendanceChangeStudentRequest
 
 public sealed class ReviewAttendanceChangeRequest
 {
+    public int PermissionMinutes { get; set; } = 60;
     public bool Approve { get; set; }
     public string? Remarks { get; set; }
 }

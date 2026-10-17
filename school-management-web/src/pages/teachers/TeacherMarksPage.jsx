@@ -69,6 +69,8 @@ export default function TeacherMarksPage() {
     const [confirmSubmit, setConfirmSubmit] = useState(false);
     const [reload, setReload] = useState(0);
     const [error, setError] = useState("");
+    const [termsError, setTermsError] = useState("");
+    const [examsError, setExamsError] = useState("");
     const [success, setSuccess] = useState("");
 
     const assignment = assignments.find(
@@ -76,7 +78,13 @@ export default function TeacherMarksPage() {
     );
 
     const students = entry?.students ?? [];
-    const locked = students.some(
+    const submissionStatus = entry?.submissionStatus;
+    const statusMessage = {
+        Submitted: "Marks submitted for Section Head approval. Editing is locked while awaiting review.",
+        Approved: "Marks approved by the Section Head. You can now publish these results for students. Editing is locked.",
+        Published: "Results published. Students can now view their results. Editing is locked.",
+    }[submissionStatus];
+    const locked = Boolean(statusMessage) || students.some(
         (student) =>
             student.mark?.isSubmitted || student.mark?.isPublished
     );
@@ -132,6 +140,7 @@ export default function TeacherMarksPage() {
         }
 
         async function loadTerms() {
+            setTermsError("");
             try {
                 setLoadingTerms(true);
 
@@ -144,7 +153,10 @@ export default function TeacherMarksPage() {
                 }
             } catch (err) {
                 if (!cancelled) {
-                    setError(getErrorMessage(err));
+                    setTerms([]);
+                    setTermsError(err?.response?.status === 403
+                        ? "Your Teacher role needs Exams.View permission to load academic terms. Contact the administrator."
+                        : getErrorMessage(err));
                 }
             } finally {
                 if (!cancelled) {
@@ -158,7 +170,7 @@ export default function TeacherMarksPage() {
         return () => {
             cancelled = true;
         };
-    }, [assignment, isTeacher]);
+    }, [assignment, isTeacher, reload]);
 
     useEffect(() => {
         let cancelled = false;
@@ -169,6 +181,7 @@ export default function TeacherMarksPage() {
         }
 
         async function loadExams() {
+            setExamsError("");
             try {
                 setLoadingExams(true);
 
@@ -179,7 +192,10 @@ export default function TeacherMarksPage() {
                 }
             } catch (err) {
                 if (!cancelled) {
-                    setError(getErrorMessage(err));
+                    setExams([]);
+                    setExamsError(err?.response?.status === 403
+                        ? "Your Teacher role needs Exams.View permission to load exams. Contact the administrator."
+                        : getErrorMessage(err));
                 }
             } finally {
                 if (!cancelled) {
@@ -193,7 +209,7 @@ export default function TeacherMarksPage() {
         return () => {
             cancelled = true;
         };
-    }, [termId, isTeacher]);
+    }, [termId, isTeacher, reload]);
 
     useEffect(() => {
         let cancelled = false;
@@ -264,6 +280,8 @@ export default function TeacherMarksPage() {
         if (!canDiscardChanges()) return;
 
         clearMessages();
+        setTermsError("");
+        setExamsError("");
         setAssignmentId(value);
         setTermId("");
         setExamId("");
@@ -278,6 +296,7 @@ export default function TeacherMarksPage() {
         if (!canDiscardChanges()) return;
 
         clearMessages();
+        setExamsError("");
         setTermId(value);
         setExamId("");
         setExams([]);
@@ -304,6 +323,19 @@ export default function TeacherMarksPage() {
 
         setDirty(true);
         clearMessages();
+    }
+
+    async function publishResults() {
+        if (saving || submissionStatus !== "Approved" || !entry?.submissionId) return;
+        if (!window.confirm("Publish these approved results for students?")) return;
+        setSaving(true);
+        clearMessages();
+        try {
+            await teacherMarksApi.publish(entry.submissionId);
+            setSuccess("Results published successfully.");
+            setReload(value => value + 1);
+        } catch (err) { setError(getErrorMessage(err)); }
+        finally { setSaving(false); }
     }
 
     function buildPayload(requireAll) {
@@ -451,12 +483,12 @@ export default function TeacherMarksPage() {
                 </p>
             </div>
 
-            {error && (
+            {(error || termsError || examsError) && (
                 <div
                     role="alert"
                     className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
                 >
-                    {error}
+                    {error || termsError || examsError}
                 </div>
             )}
 
@@ -510,7 +542,7 @@ export default function TeacherMarksPage() {
                         label="Academic Term"
                         value={termId}
                         onChange={changeTerm}
-                        disabled={!assignmentId || loading || saving}
+                        disabled={!assignmentId || loading || saving || !!termsError}
                     >
                         <option value="">
                             {loadingTerms
@@ -529,7 +561,7 @@ export default function TeacherMarksPage() {
                         label="Exam"
                         value={examId}
                         onChange={changeExam}
-                        disabled={!termId || loading || saving}
+                        disabled={!termId || loading || saving || !!examsError}
                     >
                         <option value="">
                             {loadingExams
@@ -547,19 +579,26 @@ export default function TeacherMarksPage() {
                     </SelectField>
                 </div>
 
+                {(termsError || examsError) && (
+                    <button type="button" disabled={loading || saving} onClick={refreshEntry}
+                        className={`${buttonClass} mt-4 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}>
+                        <RefreshCw className="h-4 w-4" /> Retry loading terms and exams
+                    </button>
+                )}
+
                 {!loadingAssignments && assignments.length === 0 && (
                     <p className="mt-4 text-sm text-slate-500">
                         No active class and subject assignments are available.
                     </p>
                 )}
 
-                {assignmentId && !loadingTerms && terms.length === 0 && (
+                {assignmentId && !loadingTerms && !termsError && terms.length === 0 && (
                     <p className="mt-4 text-sm text-slate-500">
                         No active terms are available for this academic year.
                     </p>
                 )}
 
-                {termId && !loadingExams && exams.length === 0 && (
+                {termId && !loadingExams && !examsError && exams.length === 0 && (
                     <p className="mt-4 text-sm text-slate-500">
                         No active exams are available for this term.
                     </p>
@@ -614,8 +653,9 @@ export default function TeacherMarksPage() {
                             role="status"
                             className="m-5 rounded-xl bg-blue-50 p-4 text-sm text-blue-700"
                         >
-                            These marks have been submitted or published.
-                            Editing is locked.
+                            {statusMessage ?? (students.some(student => student.mark?.isPublished)
+                                ? "Results published. Students can now view their results. Editing is locked."
+                                : "Marks submitted for Section Head approval. Editing is locked while awaiting review.")}
                         </p>
                     )}
 
@@ -664,7 +704,9 @@ export default function TeacherMarksPage() {
                                     </label>
 
                                     <span className="text-xs font-semibold text-slate-500">
-                                        {student.mark?.isPublished
+                                        {submissionStatus === "Approved"
+                                            ? "Approved"
+                                            : student.mark?.isPublished
                                             ? "Published"
                                             : student.mark?.isSubmitted
                                                 ? "Submitted"
@@ -674,6 +716,15 @@ export default function TeacherMarksPage() {
                                     </span>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {submissionStatus === "Approved" && (
+                        <div className="border-t border-slate-200 p-5">
+                            <button type="button" onClick={publishResults} disabled={saving || loading}
+                                className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>
+                                {saving ? "Publishing…" : "Publish results"}
+                            </button>
                         </div>
                     )}
 

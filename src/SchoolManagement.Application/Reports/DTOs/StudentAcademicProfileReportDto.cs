@@ -105,6 +105,8 @@ public class AttendanceSummaryReportDto
 
     public int PresentDays { get; set; }
 
+    public int LateDays { get; set; }
+
     public int AbsentDays { get; set; }
 
     public decimal AttendancePercentage { get; set; }

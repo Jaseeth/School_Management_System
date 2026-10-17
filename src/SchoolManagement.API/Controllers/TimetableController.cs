@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +36,8 @@ public class TimetableController : ControllerBase
     public async Task<IActionResult> Create(
         CreateTimetableEntryRequest request)
     {
+        if (request.Room?.Trim().Length > 100)
+            return BadRequest(new { message = "Room must be 100 characters or fewer." });
         var userId =
             User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -80,381 +82,413 @@ public class TimetableController : ControllerBase
             });
         }
 
-        // ========================================================
-        // VALIDATE DAY
-        // ========================================================
-
-        if (!Enum.IsDefined(
-                typeof(SchoolDay),
-                request.Day))
+        var strategy = _context.Database.CreateExecutionStrategy();
+        var attempt = 0;
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
         {
-            return BadRequest(new
+            if (attempt++ > 0) _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            // ========================================================
+            // VALIDATE DAY
+            // ========================================================
+
+            if (!Enum.IsDefined(
+                    typeof(SchoolDay),
+                    request.Day))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Normal timetable supports Monday to Friday only."
+            });
+            }
+
+            if (request.Day == SchoolDay.Monday && request.StartTime < new TimeOnly(8, 15))
+                return BadRequest(new { message = "Monday period 1 is Assembly (07:30-08:15). Teaching periods must start at 08:15 or later." });
+
+            // ========================================================
+            // VALIDATE TIME
+            // ========================================================
+
+            if (request.EndTime <= request.StartTime)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "End time must be later than start time."
+                });
+            }
+
+            // ========================================================
+            // VALIDATE ACADEMIC YEAR
+            // ========================================================
+
+            var academicYear =
+                await _context.AcademicYears
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.AcademicYearId && x.IsActive);
+
+            if (academicYear == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Academic year not found."
+                });
+            }
+
+            // ========================================================
+            // VALIDATE TERM
+            // ========================================================
+
+            var academicTerm =
+                await _context.AcademicTerms
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.AcademicTermId && x.IsActive);
+
+            if (academicTerm == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Academic term not found."
+                });
+            }
+
+            if (academicTerm.AcademicYearId !=
+                request.AcademicYearId)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Selected academic term does not belong to the selected academic year."
+                });
+            }
+
+            // ========================================================
+            // VALIDATE CLASS
+            // ========================================================
+
+            var schoolClass =
+                await _context.SchoolClasses
+                    .Include(x => x.Grade)
+                        .ThenInclude(x => x.Section)
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.SchoolClassId && x.IsActive && x.Grade.IsActive && x.Grade.Section.IsActive);
+
+            if (schoolClass == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "School class not found."
+                });
+            }
+
+            // ========================================================
+            // VALIDATE SUBJECT
+            // ========================================================
+
+            var subject =
+                await _context.Subjects
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.SubjectId && x.IsActive);
+
+            if (subject == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Subject not found."
+                });
+            }
+
+            // ========================================================
+            // VALIDATE TEACHER
+            // ========================================================
+
+            var teacher =
+                await _context.Staff
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.StaffId &&
+                        x.IsActive);
+
+            if (teacher == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Teacher not found or inactive."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                teacher.ApplicationUserId))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Selected teacher does not have a login account."
+                });
+            }
+
+            var teacherUser =
+                await _userManager.FindByIdAsync(
+                    teacher.ApplicationUserId);
+
+            if (teacherUser == null || !teacherUser.IsActive)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Teacher login account not found."
+                });
+            }
+
+            var teacherRoles =
+                await _userManager.GetRolesAsync(
+                    teacherUser);
+
+            if (!teacherRoles.Contains("Teacher"))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Selected staff member does not have the Teacher role."
+                });
+            }
+
+            // ========================================================
+            // VERIFY TEACHER ASSIGNMENT
+            // ========================================================
+
+            var teacherAssigned =
+                await _context.TeacherAssignments
+                    .AnyAsync(x =>
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.SubjectId ==
+                            request.SubjectId &&
+                        x.StaffId ==
+                            request.StaffId &&
+                        x.IsActive);
+
+            if (!teacherAssigned)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This teacher is not assigned to the selected subject in this academic year."
+                });
+            }
+
+            // ========================================================
+            // CLASS TIME CONFLICT
+            // ========================================================
+
+            var classConflict =
+                await _context.TimetableEntries
+                    .AsNoTracking()
+                    .AnyAsync(x =>
+                        x.IsActive &&
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.AcademicTermId ==
+                            request.AcademicTermId &&
+                        x.SchoolClassId ==
+                            request.SchoolClassId &&
+                        x.Day ==
+                            request.Day &&
+                        request.StartTime < x.EndTime &&
+                        request.EndTime > x.StartTime);
+
+            var intervalConflict = await _context.TimetableIntervals.AnyAsync(x => x.IsActive &&
+                x.AcademicYearId == request.AcademicYearId && x.AcademicTermId == request.AcademicTermId &&
+                x.Day == request.Day &&
+                request.StartTime < x.EndTime && request.EndTime > x.StartTime);
+            if (intervalConflict)
+                return BadRequest(new { message = "A school-wide interval is scheduled during the selected time." });
+
+            if (classConflict)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This class already has another timetable period during the selected time."
+                });
+            }
+
+            // ========================================================
+            // TEACHER TIME CONFLICT
+            // ========================================================
+
+            var teacherConflict =
+                await _context.TimetableEntries
+                    .AsNoTracking()
+                    .AnyAsync(x =>
+                        x.IsActive &&
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.AcademicTermId ==
+                            request.AcademicTermId &&
+                        x.StaffId ==
+                            request.StaffId &&
+                        x.Day ==
+                            request.Day &&
+                        request.StartTime < x.EndTime &&
+                        request.EndTime > x.StartTime);
+
+            if (teacherConflict)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This teacher already has another class during the selected time."
+                });
+            }
+
+            // ========================================================
+            // CREATE
+            // ========================================================
+
+            var entry =
+                new TimetableEntry
+                {
+                    AcademicYearId =
+                        request.AcademicYearId,
+
+                    AcademicTermId =
+                        request.AcademicTermId,
+
+                    SchoolClassId =
+                        request.SchoolClassId,
+
+                    SubjectId =
+                        request.SubjectId,
+
+                    StaffId =
+                        request.StaffId,
+
+                    Day =
+                        request.Day,
+
+                    StartTime =
+                        request.StartTime,
+
+                    EndTime =
+                        request.EndTime,
+
+                    Room =
+                        string.IsNullOrWhiteSpace(
+                            request.Room)
+                            ? null
+                            : request.Room.Trim(),
+
+                    CreatedByStaffId =
+                        currentStaff.Id,
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    IsActive =
+                        true
+                };
+
+
+            if (true)
+            {
+                var maximum = request.Day == SchoolDay.Friday ? 5 : request.Day == SchoolDay.Monday ? 8 : 9;
+                var count = await _context.TimetableEntries.CountAsync(x => x.IsActive &&
+                    x.AcademicYearId == request.AcademicYearId && x.AcademicTermId == request.AcademicTermId &&
+                    x.SchoolClassId == request.SchoolClassId && x.Day == request.Day);
+                if (count >= maximum)
+                    return BadRequest(new { message = $"{request.Day} allows a maximum of {maximum} teaching periods per class" + (request.Day == SchoolDay.Monday ? ", plus automatic Assembly as period 1." : ".") });
+                var assignment = await _context.TeacherAssignments.FirstOrDefaultAsync(x =>
+                    x.AcademicYearId == request.AcademicYearId && x.SchoolClassId == request.SchoolClassId &&
+                    x.SubjectId == request.SubjectId && x.StaffId == request.StaffId);
+                if (assignment == null)
+                    _context.TeacherAssignments.Add(new TeacherAssignment { AcademicYearId = request.AcademicYearId,
+                        SchoolClassId = request.SchoolClassId, SubjectId = request.SubjectId, StaffId = request.StaffId });
+                else assignment.IsActive = true;
+            }
+            _context.TimetableEntries.Add(entry);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Ok(new
             {
                 message =
-                    "Normal timetable supports Monday to Friday only."
+                    "Timetable entry created successfully.",
+
+                timetableEntryId =
+                    entry.Id,
+
+                academicYear = new
+                {
+                    id =
+                        academicYear.Id,
+
+                    name =
+                        academicYear.Name
+                },
+
+                academicTerm = new
+                {
+                    id =
+                        academicTerm.Id,
+
+                    name =
+                        academicTerm.Name
+                },
+
+                schoolClass = new
+                {
+                    id =
+                        schoolClass.Id,
+
+                    name =
+                        schoolClass.Name,
+
+                    grade =
+                        schoolClass.Grade.Name,
+
+                    section =
+                        schoolClass.Grade.Section.Name
+                },
+
+                subject = new
+                {
+                    id =
+                        subject.Id,
+
+                    name =
+                        subject.Name
+                },
+
+                teacher = new
+                {
+                    id =
+                        teacher.Id,
+
+                    staffNumber =
+                        teacher.StaffNumber,
+
+                    fullName =
+                        teacher.FullName
+                },
+
+                day =
+                    entry.Day.ToString(),
+
+                startTime =
+                    entry.StartTime,
+
+                endTime =
+                    entry.EndTime,
+
+                room =
+                    entry.Room
             });
-        }
-
-        // ========================================================
-        // VALIDATE TIME
-        // ========================================================
-
-        if (request.EndTime <= request.StartTime)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "End time must be later than start time."
-            });
-        }
-
-        // ========================================================
-        // VALIDATE ACADEMIC YEAR
-        // ========================================================
-
-        var academicYear =
-            await _context.AcademicYears
-                .FirstOrDefaultAsync(x =>
-                    x.Id == request.AcademicYearId);
-
-        if (academicYear == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Academic year not found."
-            });
-        }
-
-        // ========================================================
-        // VALIDATE TERM
-        // ========================================================
-
-        var academicTerm =
-            await _context.AcademicTerms
-                .FirstOrDefaultAsync(x =>
-                    x.Id == request.AcademicTermId);
-
-        if (academicTerm == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Academic term not found."
-            });
-        }
-
-        if (academicTerm.AcademicYearId !=
-            request.AcademicYearId)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected academic term does not belong to the selected academic year."
-            });
-        }
-
-        // ========================================================
-        // VALIDATE CLASS
-        // ========================================================
-
-        var schoolClass =
-            await _context.SchoolClasses
-                .Include(x => x.Grade)
-                    .ThenInclude(x => x.Section)
-                .FirstOrDefaultAsync(x =>
-                    x.Id == request.SchoolClassId);
-
-        if (schoolClass == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "School class not found."
-            });
-        }
-
-        // ========================================================
-        // VALIDATE SUBJECT
-        // ========================================================
-
-        var subject =
-            await _context.Subjects
-                .FirstOrDefaultAsync(x =>
-                    x.Id == request.SubjectId);
-
-        if (subject == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Subject not found."
-            });
-        }
-
-        // ========================================================
-        // VALIDATE TEACHER
-        // ========================================================
-
-        var teacher =
-            await _context.Staff
-                .FirstOrDefaultAsync(x =>
-                    x.Id == request.StaffId &&
-                    x.IsActive);
-
-        if (teacher == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Teacher not found or inactive."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(
-            teacher.ApplicationUserId))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected teacher does not have a login account."
-            });
-        }
-
-        var teacherUser =
-            await _userManager.FindByIdAsync(
-                teacher.ApplicationUserId);
-
-        if (teacherUser == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Teacher login account not found."
-            });
-        }
-
-        var teacherRoles =
-            await _userManager.GetRolesAsync(
-                teacherUser);
-
-        if (!teacherRoles.Contains("Teacher"))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected staff member does not have the Teacher role."
-            });
-        }
-
-        // ========================================================
-        // VERIFY TEACHER ASSIGNMENT
-        // ========================================================
-
-        var teacherAssigned =
-            await _context.TeacherAssignments
-                .AnyAsync(x =>
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.SubjectId ==
-                        request.SubjectId &&
-                    x.StaffId ==
-                        request.StaffId &&
-                    x.IsActive);
-
-        if (!teacherAssigned)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This teacher is not assigned to the selected subject and class."
-            });
-        }
-
-        // ========================================================
-        // CLASS TIME CONFLICT
-        // ========================================================
-
-        var classConflict =
-            await _context.TimetableEntries
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.AcademicTermId ==
-                        request.AcademicTermId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.Day ==
-                        request.Day &&
-                    request.StartTime < x.EndTime &&
-                    request.EndTime > x.StartTime);
-
-        if (classConflict)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This class already has another timetable period during the selected time."
-            });
-        }
-
-        // ========================================================
-        // TEACHER TIME CONFLICT
-        // ========================================================
-
-        var teacherConflict =
-            await _context.TimetableEntries
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.AcademicTermId ==
-                        request.AcademicTermId &&
-                    x.StaffId ==
-                        request.StaffId &&
-                    x.Day ==
-                        request.Day &&
-                    request.StartTime < x.EndTime &&
-                    request.EndTime > x.StartTime);
-
-        if (teacherConflict)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This teacher already has another class during the selected time."
-            });
-        }
-
-        // ========================================================
-        // CREATE
-        // ========================================================
-
-        var entry =
-            new TimetableEntry
-            {
-                AcademicYearId =
-                    request.AcademicYearId,
-
-                AcademicTermId =
-                    request.AcademicTermId,
-
-                SchoolClassId =
-                    request.SchoolClassId,
-
-                SubjectId =
-                    request.SubjectId,
-
-                StaffId =
-                    request.StaffId,
-
-                Day =
-                    request.Day,
-
-                StartTime =
-                    request.StartTime,
-
-                EndTime =
-                    request.EndTime,
-
-                Room =
-                    string.IsNullOrWhiteSpace(
-                        request.Room)
-                        ? null
-                        : request.Room.Trim(),
-
-                CreatedByStaffId =
-                    currentStaff.Id,
-
-                CreatedAt =
-                    DateTime.UtcNow,
-
-                IsActive =
-                    true
-            };
-
-        _context.TimetableEntries.Add(entry);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message =
-                "Timetable entry created successfully.",
-
-            timetableEntryId =
-                entry.Id,
-
-            academicYear = new
-            {
-                id =
-                    academicYear.Id,
-
-                name =
-                    academicYear.Name
-            },
-
-            academicTerm = new
-            {
-                id =
-                    academicTerm.Id,
-
-                name =
-                    academicTerm.Name
-            },
-
-            schoolClass = new
-            {
-                id =
-                    schoolClass.Id,
-
-                name =
-                    schoolClass.Name,
-
-                grade =
-                    schoolClass.Grade.Name,
-
-                section =
-                    schoolClass.Grade.Section.Name
-            },
-
-            subject = new
-            {
-                id =
-                    subject.Id,
-
-                name =
-                    subject.Name
-            },
-
-            teacher = new
-            {
-                id =
-                    teacher.Id,
-
-                staffNumber =
-                    teacher.StaffNumber,
-
-                fullName =
-                    teacher.FullName
-            },
-
-            day =
-                entry.Day.ToString(),
-
-            startTime =
-                entry.StartTime,
-
-            endTime =
-                entry.EndTime,
-
-            room =
-                entry.Room
         });
     }
 
@@ -468,6 +502,8 @@ public class TimetableController : ControllerBase
         int id,
         UpdateTimetableEntryRequest request)
     {
+        if (request.Room?.Trim().Length > 100)
+            return BadRequest(new { message = "Room must be 100 characters or fewer." });
         var userId =
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier);
@@ -498,288 +534,320 @@ public class TimetableController : ControllerBase
             return Forbid();
         }
 
-        var entry =
-            await _context.TimetableEntries
-                .FirstOrDefaultAsync(x =>
-                    x.Id == id);
-
-        if (entry == null)
+        var strategy = _context.Database.CreateExecutionStrategy();
+        var attempt = 0;
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
         {
-            return NotFound(new
+            if (attempt++ > 0) _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var entry =
+                await _context.TimetableEntries
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == id);
+
+            if (entry == null)
+            {
+                return NotFound(new
+                {
+                    message =
+                        "Timetable entry not found."
+            });
+            }
+
+            if (!Enum.IsDefined(
+                    typeof(SchoolDay),
+                    request.Day))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Normal timetable supports Monday to Friday only."
+                });
+            }
+
+            if (request.IsActive && request.Day == SchoolDay.Monday && request.StartTime < new TimeOnly(8, 15))
+                return BadRequest(new { message = "Monday period 1 is Assembly (07:30-08:15). Teaching periods must start at 08:15 or later." });
+
+            if (request.EndTime <=
+                request.StartTime)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "End time must be later than start time."
+                });
+            }
+
+            var academicYear =
+                await _context.AcademicYears
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.AcademicYearId && x.IsActive);
+
+            if (academicYear == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Academic year not found."
+                });
+            }
+
+            var academicTerm =
+                await _context.AcademicTerms
+                    .FirstOrDefaultAsync(x =>
+                        x.Id ==
+                            request.AcademicTermId && x.IsActive);
+
+            if (academicTerm == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Academic term not found."
+                });
+            }
+
+            if (academicTerm.AcademicYearId !=
+                request.AcademicYearId)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Selected academic term does not belong to the selected academic year."
+                });
+            }
+
+            var schoolClass =
+                await _context.SchoolClasses
+                    .Include(x => x.Grade)
+                        .ThenInclude(x => x.Section)
+                    .FirstOrDefaultAsync(x =>
+                        x.Id ==
+                            request.SchoolClassId && x.IsActive && x.Grade.IsActive && x.Grade.Section.IsActive);
+
+            if (schoolClass == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "School class not found."
+                });
+            }
+
+            var subject =
+                await _context.Subjects
+                    .FirstOrDefaultAsync(x =>
+                        x.Id ==
+                            request.SubjectId && x.IsActive);
+
+            if (subject == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Subject not found."
+                });
+            }
+
+            var teacher =
+                await _context.Staff
+                    .FirstOrDefaultAsync(x =>
+                        x.Id ==
+                            request.StaffId &&
+                        x.IsActive);
+
+            if (teacher == null)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Teacher not found or inactive."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                teacher.ApplicationUserId))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Selected teacher does not have a login account."
+                });
+            }
+
+            var teacherUser =
+                await _userManager.FindByIdAsync(
+                    teacher.ApplicationUserId);
+
+            if (teacherUser == null || !teacherUser.IsActive)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Teacher login account not found."
+                });
+            }
+
+            var teacherRoles =
+                await _userManager.GetRolesAsync(
+                    teacherUser);
+
+            if (!teacherRoles.Contains("Teacher"))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Selected staff member does not have the Teacher role."
+                });
+            }
+
+            var teacherAssigned =
+                await _context.TeacherAssignments
+                    .AnyAsync(x =>
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.SubjectId ==
+                            request.SubjectId &&
+                        x.StaffId ==
+                            request.StaffId &&
+                        x.IsActive);
+
+            if (!teacherAssigned)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This teacher is not assigned to the selected subject in this academic year."
+                });
+            }
+
+            // ========================================================
+            // CLASS CONFLICT
+            // ========================================================
+
+            var classConflict =
+                await _context.TimetableEntries
+                    .AsNoTracking()
+                    .AnyAsync(x =>
+                        x.Id != id &&
+                        x.IsActive &&
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.AcademicTermId ==
+                            request.AcademicTermId &&
+                        x.SchoolClassId ==
+                            request.SchoolClassId &&
+                        x.Day ==
+                            request.Day &&
+                        request.StartTime < x.EndTime &&
+                        request.EndTime > x.StartTime);
+
+            var intervalConflict = await _context.TimetableIntervals.AnyAsync(x => x.IsActive &&
+                x.AcademicYearId == request.AcademicYearId && x.AcademicTermId == request.AcademicTermId &&
+                x.Day == request.Day &&
+                request.StartTime < x.EndTime && request.EndTime > x.StartTime);
+            if (intervalConflict)
+                return BadRequest(new { message = "A school-wide interval is scheduled during the selected time." });
+
+            if (classConflict)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This class already has another timetable period during the selected time."
+                });
+            }
+
+            // ========================================================
+            // TEACHER CONFLICT
+            // ========================================================
+
+            var teacherConflict =
+                await _context.TimetableEntries
+                    .AsNoTracking()
+                    .AnyAsync(x =>
+                        x.Id != id &&
+                        x.IsActive &&
+                        x.AcademicYearId ==
+                            request.AcademicYearId &&
+                        x.AcademicTermId ==
+                            request.AcademicTermId &&
+                        x.StaffId ==
+                            request.StaffId &&
+                        x.Day ==
+                            request.Day &&
+                        request.StartTime < x.EndTime &&
+                        request.EndTime > x.StartTime);
+
+            if (teacherConflict)
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "This teacher already has another class during the selected time."
+                });
+            }
+
+            if (request.IsActive)
+            {
+                var maximum = request.Day == SchoolDay.Friday ? 5 : request.Day == SchoolDay.Monday ? 8 : 9;
+                var count = await _context.TimetableEntries.CountAsync(x => x.Id != id && x.IsActive &&
+                    x.AcademicYearId == request.AcademicYearId && x.AcademicTermId == request.AcademicTermId &&
+                    x.SchoolClassId == request.SchoolClassId && x.Day == request.Day);
+                if (count >= maximum)
+                    return BadRequest(new { message = $"{request.Day} allows a maximum of {maximum} teaching periods per class" + (request.Day == SchoolDay.Monday ? ", plus automatic Assembly as period 1." : ".") });
+                var assignment = await _context.TeacherAssignments.FirstOrDefaultAsync(x =>
+                    x.AcademicYearId == request.AcademicYearId && x.SchoolClassId == request.SchoolClassId &&
+                    x.SubjectId == request.SubjectId && x.StaffId == request.StaffId);
+                if (assignment == null)
+                    _context.TeacherAssignments.Add(new TeacherAssignment { AcademicYearId = request.AcademicYearId,
+                        SchoolClassId = request.SchoolClassId, SubjectId = request.SubjectId, StaffId = request.StaffId });
+                else assignment.IsActive = true;
+            }
+            entry.AcademicYearId =
+                request.AcademicYearId;
+
+            entry.AcademicTermId =
+                request.AcademicTermId;
+
+            entry.SchoolClassId =
+                request.SchoolClassId;
+
+            entry.SubjectId =
+                request.SubjectId;
+
+            entry.StaffId =
+                request.StaffId;
+
+            entry.Day =
+                request.Day;
+
+            entry.StartTime =
+                request.StartTime;
+
+            entry.EndTime =
+                request.EndTime;
+
+            entry.Room =
+                string.IsNullOrWhiteSpace(
+                    request.Room)
+                    ? null
+                    : request.Room.Trim();
+
+            entry.IsActive =
+                request.IsActive;
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Ok(new
             {
                 message =
-                    "Timetable entry not found."
+                    "Timetable entry updated successfully.",
+
+                timetableEntryId =
+                    entry.Id
             });
-        }
-
-        if (!Enum.IsDefined(
-                typeof(SchoolDay),
-                request.Day))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Normal timetable supports Monday to Friday only."
-            });
-        }
-
-        if (request.EndTime <=
-            request.StartTime)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "End time must be later than start time."
-            });
-        }
-
-        var academicYear =
-            await _context.AcademicYears
-                .FirstOrDefaultAsync(x =>
-                    x.Id == request.AcademicYearId);
-
-        if (academicYear == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Academic year not found."
-            });
-        }
-
-        var academicTerm =
-            await _context.AcademicTerms
-                .FirstOrDefaultAsync(x =>
-                    x.Id ==
-                        request.AcademicTermId);
-
-        if (academicTerm == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Academic term not found."
-            });
-        }
-
-        if (academicTerm.AcademicYearId !=
-            request.AcademicYearId)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected academic term does not belong to the selected academic year."
-            });
-        }
-
-        var schoolClass =
-            await _context.SchoolClasses
-                .Include(x => x.Grade)
-                    .ThenInclude(x => x.Section)
-                .FirstOrDefaultAsync(x =>
-                    x.Id ==
-                        request.SchoolClassId);
-
-        if (schoolClass == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "School class not found."
-            });
-        }
-
-        var subject =
-            await _context.Subjects
-                .FirstOrDefaultAsync(x =>
-                    x.Id ==
-                        request.SubjectId);
-
-        if (subject == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Subject not found."
-            });
-        }
-
-        var teacher =
-            await _context.Staff
-                .FirstOrDefaultAsync(x =>
-                    x.Id ==
-                        request.StaffId &&
-                    x.IsActive);
-
-        if (teacher == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Teacher not found or inactive."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(
-            teacher.ApplicationUserId))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected teacher does not have a login account."
-            });
-        }
-
-        var teacherUser =
-            await _userManager.FindByIdAsync(
-                teacher.ApplicationUserId);
-
-        if (teacherUser == null)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Teacher login account not found."
-            });
-        }
-
-        var teacherRoles =
-            await _userManager.GetRolesAsync(
-                teacherUser);
-
-        if (!teacherRoles.Contains("Teacher"))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected staff member does not have the Teacher role."
-            });
-        }
-
-        var teacherAssigned =
-            await _context.TeacherAssignments
-                .AnyAsync(x =>
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.SubjectId ==
-                        request.SubjectId &&
-                    x.StaffId ==
-                        request.StaffId &&
-                    x.IsActive);
-
-        if (!teacherAssigned)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This teacher is not assigned to the selected subject and class."
-            });
-        }
-
-        // ========================================================
-        // CLASS CONFLICT
-        // ========================================================
-
-        var classConflict =
-            await _context.TimetableEntries
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    x.Id != id &&
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.AcademicTermId ==
-                        request.AcademicTermId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.Day ==
-                        request.Day &&
-                    request.StartTime < x.EndTime &&
-                    request.EndTime > x.StartTime);
-
-        if (classConflict)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This class already has another timetable period during the selected time."
-            });
-        }
-
-        // ========================================================
-        // TEACHER CONFLICT
-        // ========================================================
-
-        var teacherConflict =
-            await _context.TimetableEntries
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    x.Id != id &&
-                    x.IsActive &&
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.AcademicTermId ==
-                        request.AcademicTermId &&
-                    x.StaffId ==
-                        request.StaffId &&
-                    x.Day ==
-                        request.Day &&
-                    request.StartTime < x.EndTime &&
-                    request.EndTime > x.StartTime);
-
-        if (teacherConflict)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This teacher already has another class during the selected time."
-            });
-        }
-
-        entry.AcademicYearId =
-            request.AcademicYearId;
-
-        entry.AcademicTermId =
-            request.AcademicTermId;
-
-        entry.SchoolClassId =
-            request.SchoolClassId;
-
-        entry.SubjectId =
-            request.SubjectId;
-
-        entry.StaffId =
-            request.StaffId;
-
-        entry.Day =
-            request.Day;
-
-        entry.StartTime =
-            request.StartTime;
-
-        entry.EndTime =
-            request.EndTime;
-
-        entry.Room =
-            string.IsNullOrWhiteSpace(
-                request.Room)
-                ? null
-                : request.Room.Trim();
-
-        entry.IsActive =
-            request.IsActive;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message =
-                "Timetable entry updated successfully.",
-
-            timetableEntryId =
-                entry.Id
         });
     }
 
