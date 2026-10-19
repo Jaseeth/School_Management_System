@@ -149,6 +149,13 @@ export default function StudentDashboardPage() {
 
 
                 <div className="mt-8 grid gap-5 md:grid-cols-3">
+                    <DashboardCard
+                        icon={<CalendarDays className="h-5 w-5" />}
+                        title="School Calendar"
+                        description="View school days, public holidays and school breaks."
+                        onClick={() => navigate("/student/school-calendar")}
+                    />
+
 
 
                     <DashboardCard

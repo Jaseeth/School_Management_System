@@ -57,7 +57,11 @@ export default function LoginPage() {
         } catch (err) {
             const message =
                 err?.response?.data?.message ||
-                "Unable to login. Please try again.";
+                (!err?.response
+                    ? "Cannot connect to the school server. Check that the API is running, then try again."
+                    : err.response.status >= 500
+                        ? "The school server could not complete sign-in. Please check the API terminal for the error."
+                        : "Unable to sign in. Please try again.");
 
             setError(message);
         } finally {

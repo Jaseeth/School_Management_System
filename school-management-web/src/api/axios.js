@@ -2,7 +2,7 @@ import { getPortalToken } from "../services/portalSession";
 import axios from "axios";
 
 const api = axios.create({
-    baseURL: "https://localhost:7063/api",
+    baseURL: import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : "https://localhost:7063/api"),
     headers: {
         "Content-Type": "application/json",
     },

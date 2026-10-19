@@ -263,6 +263,9 @@ builder.Services
 // CORS
 // =====================================
 
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<SchoolManagement.API.Services.PublicHolidayService>(client => client.Timeout = TimeSpan.FromSeconds(20)).RemoveAllLoggers();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(
@@ -337,6 +340,8 @@ builder.Services.AddSwaggerGen(
 
 builder.Services
     .AddScoped<JwtTokenService>();
+builder.Services.AddScoped<SchoolManagement.API.Services.AnnualPromotionService>();
+builder.Services.AddHostedService<SchoolManagement.API.Services.AnnualPromotionWorker>();
 
 builder.Services.Configure<
     ResendSettings>(

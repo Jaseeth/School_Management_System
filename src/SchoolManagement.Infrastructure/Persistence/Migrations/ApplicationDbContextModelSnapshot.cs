@@ -214,6 +214,125 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("AcademicYears");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AnnualPromotionChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AfterState")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeState")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Pending")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UndoneAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UndoneByStaffId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("UndoneByStaffId");
+
+                    b.HasIndex("StudentId", "AcademicYearId", "Id");
+
+                    b.ToTable("AnnualPromotionChanges");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AnnualPromotionException", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProcessedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("ProcessedByStaffId");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("StudentId", "AcademicYearId")
+                        .IsUnique();
+
+                    b.ToTable("AnnualPromotionExceptions");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AnnualPromotionRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ConfiguredByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FromSchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Graduate")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ToSchoolClassId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfiguredByStaffId");
+
+                    b.HasIndex("FromSchoolClassId")
+                        .IsUnique();
+
+                    b.HasIndex("ToSchoolClassId");
+
+                    b.ToTable("AnnualPromotionRules");
+                });
+
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeItem", b =>
                 {
                     b.Property<int>("Id")
@@ -566,6 +685,89 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("SectionId");
 
                     b.ToTable("Grades");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.LeaveTeacherCoverage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AssignedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("CoverDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Duty")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<TimeOnly?>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ReplacesCoverageId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RevokedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StaffLeaveRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly?>("StartTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("AssignedByStaffId");
+
+                    b.HasIndex("ReplacesCoverageId");
+
+                    b.HasIndex("RevokedByStaffId");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("StaffLeaveRequestId");
+
+                    b.HasIndex("StaffId", "CoverDate");
+
+                    b.HasIndex("SourceKind", "SourceId", "CoverDate")
+                        .IsUnique()
+                        .HasFilter("[IsRevoked] = 0");
+
+                    b.ToTable("LeaveTeacherCoverages");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.MarksSubmission", b =>
@@ -1136,6 +1338,49 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("Staff");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffAttendanceRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("AttendanceDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("LeaveConflictConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RecordedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedByStaffId");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("AttendanceDate", "StaffId", "Id");
+
+                    b.ToTable("StaffAttendanceRecords");
+                });
+
             modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffDeviceToken", b =>
                 {
                     b.Property<int>("Id")
@@ -1179,6 +1424,180 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("StaffId", "IsActive");
 
                     b.ToTable("StaffDeviceTokens");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveAllowance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Days")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LeaveType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("UpdatedByStaffId");
+
+                    b.HasIndex("Year", "LeaveType")
+                        .IsUnique()
+                        .HasFilter("[StaffId] IS NULL");
+
+                    b.HasIndex("Year", "LeaveType", "StaffId")
+                        .IsUnique()
+                        .HasFilter("[StaffId] IS NOT NULL");
+
+                    b.ToTable("StaffLeaveAllowances");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveCalendar", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("SchoolEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("SchoolStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WeekendMask")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedByStaffId");
+
+                    b.HasIndex("Year")
+                        .IsUnique();
+
+                    b.ToTable("StaffLeaveCalendars");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveCancellation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("OriginalToDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReviewedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StaffLeaveRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByStaffId");
+
+                    b.HasIndex("StaffLeaveRequestId")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Pending'");
+
+                    b.ToTable("StaffLeaveCancellations");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveHoliday", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByStaffId");
+
+                    b.ToTable("StaffLeaveHolidays");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveRequest", b =>
@@ -2165,6 +2584,73 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("AcademicYear");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AnnualPromotionChange", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Student", null)
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("UndoneByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AnnualPromotionException", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Student", null)
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AnnualPromotionRule", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("ConfiguredByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", null)
+                        .WithMany()
+                        .HasForeignKey("FromSchoolClassId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", null)
+                        .WithMany()
+                        .HasForeignKey("ToSchoolClassId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeItem", b =>
                 {
                     b.HasOne("SchoolManagement.Domain.Entities.AttendanceChangeRequest", "Request")
@@ -2284,6 +2770,55 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.LeaveTeacherCoverage", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.LeaveTeacherCoverage", null)
+                        .WithMany()
+                        .HasForeignKey("ReplacesCoverageId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("RevokedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", "SchoolClass")
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.StaffLeaveRequest", "StaffLeaveRequest")
+                        .WithMany()
+                        .HasForeignKey("StaffLeaveRequestId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("SchoolClass");
+
+                    b.Navigation("Staff");
+
+                    b.Navigation("StaffLeaveRequest");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.MarksSubmission", b =>
@@ -2513,6 +3048,25 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffAttendanceRecord", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "RecordedByStaff")
+                        .WithMany()
+                        .HasForeignKey("RecordedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("RecordedByStaff");
+
+                    b.Navigation("Staff");
+                });
+
             modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffDeviceToken", b =>
                 {
                     b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
@@ -2522,6 +3076,58 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveAllowance", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveCalendar", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveCancellation", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", "ReviewedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Domain.Entities.StaffLeaveRequest", "StaffLeaveRequest")
+                        .WithMany()
+                        .HasForeignKey("StaffLeaveRequestId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedByStaff");
+
+                    b.Navigation("StaffLeaveRequest");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveHoliday", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.StaffLeaveRequest", b =>

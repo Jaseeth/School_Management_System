@@ -61,8 +61,10 @@ public class AttendanceController : ControllerBase
             })
             .ToListAsync();
 
+        var cover = await LeaveCoverageAccess.Attendance(_context, staff.Id, DateOnly.FromDateTime(_attendanceWindow.SchoolNow.Date))
+            .Select(x => new { x.AcademicYearId, x.SchoolClassId }).ToListAsync();
         var allowed = permanent
-            .Concat(temporary)
+            .Concat(temporary).Concat(cover)
             .Distinct()
             .ToList();
 
@@ -158,7 +160,7 @@ public class AttendanceController : ControllerBase
         if (!await HasAttendanceAccessAsync(
             staff.Id,
             academicYearId,
-            classId))
+            classId, day))
         {
             return StatusCode(403, new
             {
@@ -297,7 +299,7 @@ public class AttendanceController : ControllerBase
         if (!await HasAttendanceAccessAsync(
             staff.Id,
             request.AcademicYearId,
-            request.SchoolClassId))
+            request.SchoolClassId, request.AttendanceDate))
         {
             return StatusCode(403, new
             {
@@ -950,7 +952,7 @@ public class AttendanceController : ControllerBase
         HasAttendanceAccessAsync(
             int staffId,
             int yearId,
-            int classId)
+            int classId, DateTime attendanceDate)
     {
         if (await _context.ClassTeacherAssignments
             .AnyAsync(x =>
@@ -962,6 +964,7 @@ public class AttendanceController : ControllerBase
             return true;
         }
 
+        if (attendanceDate.Date == _attendanceWindow.SchoolNow.Date && await LeaveCoverageAccess.HasAttendance(_context, staffId, yearId, classId, DateOnly.FromDateTime(attendanceDate))) return true;
         return await _context
             .TemporaryClassTeacherAssignments
             .AnyAsync(x =>

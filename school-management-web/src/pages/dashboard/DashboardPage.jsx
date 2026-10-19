@@ -12,9 +12,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { dashboardApi } from "../../api/dashboardApi";
+import api from "../../api/axios";
+import { Link } from "react-router-dom";
 
 export default function DashboardPage() {
     const { user } = useAuth();
+    const [staffAttendance, setStaffAttendance] = useState(null);
+    useEffect(() => {
+        if (!["Admin", "Principal", "Deputy Principal", "Section Head"].some(role => user?.roles?.includes(role))) return;
+        const controller = new AbortController();
+        api.get("/staff-attendance", { signal: controller.signal }).then(response => setStaffAttendance(response.data.summary)).catch(() => {});
+        return () => controller.abort();
+    }, [user]);
 
     const [dashboardData, setDashboardData] =
         useState(null);
@@ -530,12 +539,12 @@ export default function DashboardPage() {
                                         </p>
 
                                         <p className="mt-1 text-xs text-slate-400">
-                                            Current staff absences
+                                            {staffAttendance ? `${staffAttendance.onLeave} on approved leave · ${staffAttendance.reviewRequired} attendance conflicts` : "Current staff absences"}
                                         </p>
                                     </div>
 
                                     <span className="min-w-10 rounded-lg bg-red-50 px-3 py-1.5 text-center text-sm font-semibold text-red-700">
-                                        —
+                                        <Link to="/staff-attendance" aria-label="Open staff attendance">{staffAttendance?.absent ?? "—"}</Link>
                                     </span>
                                 </div>
 

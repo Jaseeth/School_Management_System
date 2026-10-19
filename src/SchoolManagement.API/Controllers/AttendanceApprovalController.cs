@@ -52,7 +52,7 @@ public sealed class AttendanceApprovalController : ControllerBase
         if (!await HasTeacherAccessAsync(
                 teacher.Id,
                 input.AcademicYearId,
-                input.SchoolClassId))
+                input.SchoolClassId, input.AttendanceDate))
         {
             return Forbid();
         }
@@ -337,7 +337,7 @@ public sealed class AttendanceApprovalController : ControllerBase
         if (!await HasTeacherAccessAsync(
                 teacher.Id,
                 academicYearId,
-                schoolClassId))
+                schoolClassId, attendanceDate))
         {
             return Forbid();
         }
@@ -761,7 +761,7 @@ public sealed class AttendanceApprovalController : ControllerBase
     private async Task<bool> HasTeacherAccessAsync(
         int staffId,
         int academicYearId,
-        int schoolClassId)
+        int schoolClassId, DateTime attendanceDate)
     {
         var permanent = await _context.ClassTeacherAssignments
             .AnyAsync(x =>
@@ -773,6 +773,7 @@ public sealed class AttendanceApprovalController : ControllerBase
         if (permanent)
             return true;
 
+        if (attendanceDate.Date == _windows.SchoolNow.Date && await LeaveCoverageAccess.HasAttendance(_context, staffId, academicYearId, schoolClassId, DateOnly.FromDateTime(attendanceDate))) return true;
         return await _context.TemporaryClassTeacherAssignments
             .AnyAsync(x =>
                 x.StaffId == staffId &&

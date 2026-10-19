@@ -23,6 +23,636 @@ namespace SchoolManagement.IntegrationTests;
 
 public class TeacherAssignmentTests
 {
+    [Fact]
+    public void GovernmentCalendarReaderValidatesCsvAndExcelWithoutEvaluatingFormulas()
+    {
+        using var csv = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("From,Through,Name\r\n2026-02-01,2026-03-02,\"Ramadan vacation, approved\"\r\n2026-12-25,,Holiday\r\n2027-01-01,,Wrong year\r\n03/04/2026,,Ambiguous date\r\n2026-05-05,2026-05-01,Backwards\r\n"));
+        var rows = GovernmentCalendarReader.Read(csv, ".csv", 2026);
+        Assert.Equal(30, rows[0].Days); Assert.Equal("Ramadan vacation, approved", rows[0].Name);
+        Assert.Equal(1, rows[1].Days); Assert.Null(rows[1].Error);
+        Assert.All(rows.Skip(2), row => Assert.NotNull(row.Error));
+        using var workbook = new ClosedXML.Excel.XLWorkbook(); var sheet = workbook.AddWorksheet("Calendar");
+        sheet.Cell(1, 1).Value = "Date"; sheet.Cell(1, 2).Value = "Holiday";
+        sheet.Cell(2, 1).Value = new DateTime(2026, 4, 14); sheet.Cell(2, 2).Value = "Approved school holiday";
+        using var excel = new MemoryStream(); workbook.SaveAs(excel); excel.Position = 0;
+        var excelRows = GovernmentCalendarReader.Read(excel, ".xlsx", 2026);
+        Assert.Equal(new DateOnly(2026, 4, 14), excelRows[0].From); Assert.Null(excelRows[0].Error);
+        sheet.Cell(2, 2).FormulaA1 = "1+1";
+        using var formulaFile = new MemoryStream(); workbook.SaveAs(formulaFile); formulaFile.Position = 0;
+        Assert.Throws<CalendarFileException>(() => GovernmentCalendarReader.Read(formulaFile, ".xlsx", 2026));
+        using var pdf = new MemoryStream([1, 2, 3]);
+        Assert.Throws<CalendarFileException>(() => GovernmentCalendarReader.Read(pdf, ".pdf", 2026));
+    }
+
+    [Fact]
+    public async Task GovernmentCalendarUploadPreviewsBeforeImportAndAppliesClosuresToSharedCalendar()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        StaffLeaveController Controller(string id) => new(db.Context, db.Users, new LeavePushFailure()) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id)], "Test")) } } };
+        using var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var admin = Controller(db.AdminUserId); var teacher = Controller(db.TeacherUserIds[0]);
+        Assert.IsType<ForbidResult>(await teacher.CalendarTemplate(2026));
+        var template = Assert.IsType<FileContentResult>(await admin.CalendarTemplate(2026));
+        using var templateStream = new MemoryStream(template.FileContents);
+        Assert.Throws<CalendarFileException>(() => GovernmentCalendarReader.Read(templateStream, ".xlsx", 2026)); // Empty template never imports fake holidays.
+        Assert.IsType<OkObjectResult>(await admin.SaveCalendar(new(2026, "LK", null, [0, 6])));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 2, 4), "Existing national holiday")));
+        using var csv = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("From,Through,Name\n2026-02-01,2026-03-02,Ramadan vacation\n2026-02-10,,Overlapping holiday\n2027-01-01,,Wrong year\n"));
+        var file = new FormFile(csv, 0, csv.Length, "file", "calendar.csv");
+        Assert.IsType<ForbidResult>(await teacher.PreviewGovernmentCalendar(2026, file, cache));
+        var preview = Assert.IsType<OkObjectResult>(await admin.PreviewGovernmentCalendar(2026, file, cache));
+        var json = JsonSerializer.SerializeToElement(preview.Value);
+        var token = json.GetProperty("previewToken").GetString()!;
+        Assert.Equal(3, json.GetProperty("rows").GetArrayLength());
+        Assert.Equal(1, await db.Context.StaffLeaveHolidays.CountAsync()); // Preview writes nothing.
+        Assert.IsType<ForbidResult>(await teacher.ImportGovernmentCalendar(new(token, [2]), cache));
+        Assert.IsType<BadRequestObjectResult>(await admin.ImportGovernmentCalendar(new(token, [4]), cache));
+        var imported = Assert.IsType<OkObjectResult>(await admin.ImportGovernmentCalendar(new(token, [2, 3]), cache));
+        Assert.Equal(29, JsonSerializer.SerializeToElement(imported.Value).GetProperty("added").GetInt32());
+        Assert.Equal(30, await db.Context.StaffLeaveHolidays.CountAsync());
+        Assert.Equal("Existing national holiday", await db.Context.StaffLeaveHolidays.Where(h => h.Date == new DateOnly(2026, 2, 4)).Select(h => h.Name).SingleAsync());
+        Assert.Equal(0, await new StaffLeaveBalanceService(db.Context).WorkingDays(new(2026, 2, 1), new(2026, 3, 2)));
+        var calendar = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(await teacher.SchoolCalendar(2026)).Value);
+        Assert.False(calendar.GetProperty("days").EnumerateArray().Single(d => d.GetProperty("date").GetString() == "2026-02-16").GetProperty("schoolDay").GetBoolean());
+        Assert.IsType<ConflictObjectResult>(await admin.ImportGovernmentCalendar(new(token, [2]), cache)); // Consumed preview cannot be reused.
+        using var wrongHeader = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("Something,Else\nOne,Two\n"));
+        Assert.IsType<BadRequestObjectResult>(await admin.PreviewGovernmentCalendar(2026, new FormFile(wrongHeader, 0, wrongHeader.Length, "file", "wrong.csv"), cache));
+    }
+
+    [Fact]
+    public async Task HolidayImportIsAdminOnlyDeduplicatesAndPreservesExistingSchoolDates()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        StaffLeaveController Controller(string id) => new(db.Context, db.Users, new LeavePushFailure()) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id)], "Test")) } } };
+        var admin = Controller(db.AdminUserId); var teacher = Controller(db.TeacherUserIds[0]);
+        using var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var handler = new HolidayHttpHandler();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["PublicHolidays:CalendarificApiKey"] = "test-key" }).Build();
+        var provider = new PublicHolidayService(new HttpClient(handler), configuration, cache);
+        Assert.IsType<ForbidResult>(await teacher.PreviewPublicHolidays(2026, provider));
+        Assert.IsType<BadRequestObjectResult>(await admin.PreviewPublicHolidays(2026, provider));
+        Assert.IsType<OkObjectResult>(await admin.SaveCalendar(new(2026, "LK", null, [0, 6])));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 1, 1), "School-specific name")));
+        db.Context.StaffLeaveHolidays.Add(new StaffLeaveHoliday { Date = new(2026, 12, 25), Name = "Previously excluded", IsActive = false, UpdatedByStaffId = db.AdminStaffId }); await db.Context.SaveChangesAsync();
+        var preview = Assert.IsType<OkObjectResult>(await admin.PreviewPublicHolidays(2026, provider));
+        var previewJson = JsonSerializer.SerializeToElement(preview.Value);
+        Assert.Equal(3, previewJson.GetProperty("holidays").GetArrayLength());
+        Assert.Equal(1, handler.Calls);
+        Assert.IsType<ForbidResult>(await teacher.ImportPublicHolidays(new(2026, "LK", [new(2026, 2, 4)]), provider));
+        Assert.IsType<BadRequestObjectResult>(await admin.ImportPublicHolidays(new(2026, "LK", [new(2026, 5, 5)]), provider));
+        var imported = Assert.IsType<OkObjectResult>(await admin.ImportPublicHolidays(new(2026, "LK", [new(2026, 1, 1), new(2026, 2, 4), new(2026, 12, 25)]), provider));
+        Assert.Equal(1, JsonSerializer.SerializeToElement(imported.Value).GetProperty("added").GetInt32());
+        Assert.Equal("School-specific name", await db.Context.StaffLeaveHolidays.Where(h => h.Date == new DateOnly(2026, 1, 1)).Select(h => h.Name).SingleAsync());
+        Assert.False(await db.Context.StaffLeaveHolidays.Where(h => h.Date == new DateOnly(2026, 12, 25)).Select(h => h.IsActive).SingleAsync());
+        Assert.Equal(1, handler.Calls); // Preview and import reuse the provider cache.
+        var repeated = Assert.IsType<OkObjectResult>(await admin.ImportPublicHolidays(new(2026, "LK", [new(2026, 2, 4)]), provider));
+        Assert.Equal(0, JsonSerializer.SerializeToElement(repeated.Value).GetProperty("added").GetInt32());
+        Assert.IsType<ConflictObjectResult>(await admin.ImportPublicHolidays(new(2026, "SA", [new(2026, 2, 4)]), provider));
+        var missing = new PublicHolidayService(new HttpClient(handler), new ConfigurationBuilder().Build(), cache);
+        Assert.IsType<ObjectResult>(await admin.PreviewPublicHolidays(2026, missing));
+        Assert.Equal(3, await db.Context.StaffLeaveHolidays.CountAsync());
+        using var errorCache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var unavailable = new PublicHolidayService(new HttpClient(new HolidayHttpHandler { Status = System.Net.HttpStatusCode.TooManyRequests }), configuration, errorCache);
+        var error = await Assert.ThrowsAsync<PublicHolidayException>(() => unavailable.Load("LK", 2026));
+        Assert.DoesNotContain("test-key", error.Message);
+        Assert.Equal(3, await db.Context.StaffLeaveHolidays.CountAsync());
+    }
+
+    private sealed class HolidayHttpHandler : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        public System.Net.HttpStatusCode Status { get; set; } = System.Net.HttpStatusCode.OK;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent("""
+                {"meta":{"code":200},"response":{"holidays":[
+                  {"name":"Example nationwide holiday","date":{"iso":"2026-01-01"},"type":["National holiday"],"locations":"All"},
+                  {"name":"Example public holiday","date":{"iso":"2026-02-04"},"type":["National holiday"],"locations":"All"},
+                  {"name":"Second observance on same public date","date":{"iso":"2026-02-04"},"type":["National holiday"],"locations":"All"},
+                  {"name":"Example year-end holiday","date":{"iso":"2026-12-25"},"type":["National holiday"],"locations":"All"},
+                  {"name":"Bank only","date":{"iso":"2026-05-05"},"type":["Bank holiday"],"locations":"All"},
+                  {"name":"Observance only","date":{"iso":"2026-06-06"},"type":["Observance"],"locations":"All"},
+                  {"name":"Regional only","date":{"iso":"2026-07-07"},"type":["Public holiday"],"locations":"Western"},
+                  {"name":"Wrong year","date":{"iso":"2027-01-01"},"type":["National holiday"],"locations":"All"}
+                ]}}
+                """) });
+        }
+    }
+
+    [Fact]
+    public async Task LeaveAllowancesExcludeConfiguredWeekendsAndWeekdayHolidaysAcrossYears()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        StaffLeaveController Controller(string id) => new(db.Context, db.Users, new LeavePushFailure()) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id)], "Test")) } } };
+        var admin = Controller(db.AdminUserId); var teacher = Controller(db.TeacherUserIds[0]);
+        Assert.IsType<ForbidResult>(await teacher.LeaveSettings(2026));
+        Assert.IsType<ForbidResult>(await teacher.SaveCalendar(new(2026, "LK", null, [0, 6])));
+        Assert.IsType<OkObjectResult>(await admin.SaveCalendar(new(2026, "LK", "Western", [0, 6])));
+        Assert.IsType<BadRequestObjectResult>(await admin.SaveCalendar(new(2026, "LK", null, [0, 1, 2, 3, 4, 5, 6])));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 1, 7), "Weekday public holiday")));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 1, 10), "Weekend public holiday")));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 1, 7), "Updated holiday name")));
+        Assert.Equal(2, await db.Context.StaffLeaveHolidays.CountAsync());
+        Assert.IsType<OkObjectResult>(await admin.SaveAllowance(new(2026, null, 40)));
+        Assert.IsType<OkObjectResult>(await admin.SaveAllowance(new(2026, db.TeacherIds[0], 8)));
+        var service = new StaffLeaveBalanceService(db.Context);
+        Assert.Equal(5, await service.WorkingDays(new(2026, 1, 5), new(2026, 1, 12)));
+        StaffLeaveRequest Leave(StaffLeaveStatus status, DateTime from, DateTime to) => new() { StaffId = db.TeacherIds[0], LeaveType = StaffLeaveType.Sick, FromDate = from, ToDate = to, Status = status, Reason = "Count check" };
+        var used = Leave(StaffLeaveStatus.Approved, new(2026, 1, 5), new(2026, 1, 12));
+        db.Context.AddRange(used, Leave(StaffLeaveStatus.Pending, new(2026, 1, 13), new(2026, 1, 13)), Leave(StaffLeaveStatus.Rejected, new(2026, 1, 14), new(2026, 1, 14)), Leave(StaffLeaveStatus.Cancelled, new(2026, 1, 15), new(2026, 1, 15))); await db.Context.SaveChangesAsync();
+        var balance = (await service.Total(db.TeacherIds[0], 2026));
+        Assert.Equal(8, balance.Allowance); Assert.Equal(5, balance.Used); Assert.Equal(1, balance.Pending); Assert.Equal(3, balance.Remaining);
+        Assert.Equal(40, (await service.Total(db.TeacherIds[1], 2026)).Allowance);
+        Assert.IsType<ForbidResult>(await teacher.LeaveBalances(2026, db.TeacherIds[1]));
+        var preview = Assert.IsType<OkObjectResult>(await teacher.LeavePreview(StaffLeaveType.Sick, new(2026, 1, 19), new(2026, 1, 23)));
+        Assert.True(JsonSerializer.SerializeToElement(preview.Value).GetProperty("years")[0].GetProperty("exceedsBalance").GetBoolean());
+        // Early return restores counted days without altering the allowance.
+        used.ToDate = new(2026, 1, 6); await db.Context.SaveChangesAsync();
+        Assert.Equal(6, (await service.Total(db.TeacherIds[0], 2026)).Remaining);
+        used.Status = StaffLeaveStatus.Cancelled; await db.Context.SaveChangesAsync();
+        Assert.Equal(8, (await service.Total(db.TeacherIds[0], 2026)).Remaining);
+        Assert.IsType<OkObjectResult>(await admin.SaveCalendar(new(2027, "SA", null, [5, 6])));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2027, 1, 3), "Sunday school holiday")));
+        Assert.Equal(2, await service.WorkingDays(new(2026, 12, 31), new(2027, 1, 4)));
+        var holidayId = await db.Context.StaffLeaveHolidays.Where(h => h.Date == new DateOnly(2027, 1, 3)).Select(h => h.Id).SingleAsync();
+        Assert.IsType<ForbidResult>(await teacher.RemoveHoliday(holidayId));
+        Assert.IsType<OkObjectResult>(await admin.RemoveHoliday(holidayId));
+        Assert.Equal(3, await service.WorkingDays(new(2026, 12, 31), new(2027, 1, 4)));
+        Assert.False((await db.Context.StaffLeaveHolidays.FindAsync(holidayId))!.IsActive);
+        // Sick and Casual leave share the same total, while reporting stays separate.
+        var casual = Leave(StaffLeaveStatus.Approved, new(2026, 1, 14), new(2026, 1, 15)); casual.LeaveType = StaffLeaveType.Casual;
+        used.Status = StaffLeaveStatus.Approved; used.ToDate = new(2026, 1, 12);
+        db.Context.StaffLeaveRequests.Add(casual); await db.Context.SaveChangesAsync();
+        var shared = await service.Total(db.TeacherIds[0], 2026);
+        Assert.Equal(7, shared.Used); Assert.Equal(1, shared.Remaining);
+        var breakdown = await service.Balances(db.TeacherIds[0], 2026);
+        Assert.Equal(5, breakdown.Single(b => b.LeaveType == (int)StaffLeaveType.Sick).Used);
+        Assert.Equal(2, breakdown.Single(b => b.LeaveType == (int)StaffLeaveType.Casual).Used);
+        Assert.All(breakdown, b => Assert.Null(b.Allowance));
+        Assert.IsType<OkObjectResult>(await admin.SaveCalendar(new(2026, "LK", null, [0, 6], new(2026, 1, 5), new(2026, 1, 30))));
+        Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 1, 20), "Term break", new DateOnly(2026, 1, 22))));
+        var calendar = Assert.IsType<OkObjectResult>(await teacher.SchoolCalendar(2026));
+        var calendarJson = JsonSerializer.SerializeToElement(calendar.Value);
+        Assert.Equal(365, calendarJson.GetProperty("days").GetArrayLength());
+        Assert.Equal(16, calendarJson.GetProperty("summary").GetProperty("schoolDays").GetInt32());
+        Assert.Equal(16, await service.WorkingDays(new(2026, 1, 1), new(2026, 12, 31)));
+        Assert.False(calendarJson.GetProperty("canManage").GetBoolean());
+        Assert.IsType<BadRequestObjectResult>(await admin.SaveCalendar(new(2026, "LK", null, [0, 6], new(2026, 5, 1), new(2026, 4, 1))));
+    }
+
+    [Fact]
+    public async Task StaffAttendanceShowsApprovedLeaveFlagsConflictsAndRetainsCorrections()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var day = AnnualPromotionService.SchoolToday; var date = DateOnly.FromDateTime(day);
+        StaffAttendanceController Controller(string id) => new(db.Context, db.Users) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id)], "Test")) } } };
+        JsonElement Json(OkObjectResult result) => JsonSerializer.SerializeToElement(result.Value, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        var admin = Controller(db.AdminUserId);
+        Assert.IsType<ForbidResult>(await Controller(db.TeacherUserIds[0]).Day(date));
+        var leave = new StaffLeaveRequest { StaffId = db.TeacherIds[0], FromDate = day, ToDate = day.AddDays(2), Reason = "Leave test", Status = StaffLeaveStatus.Pending };
+        db.Context.StaffLeaveRequests.Add(leave); await db.Context.SaveChangesAsync();
+        var request = new StaffAttendanceController.MarkRequest(db.TeacherIds[0], date, "Present", null, null);
+        Assert.IsType<OkObjectResult>(await admin.Mark(request));
+        leave = (await db.Context.StaffLeaveRequests.FindAsync(leave.Id))!; leave.Status = StaffLeaveStatus.Approved; await db.Context.SaveChangesAsync();
+        var dayData = Json(Assert.IsType<OkObjectResult>(await admin.Day(date)));
+        var row = dayData.GetProperty("rows").EnumerateArray().Single(r => r.GetProperty("id").GetInt32() == db.TeacherIds[0]);
+        Assert.True(row.GetProperty("reviewRequired").GetBoolean());
+        var recordId = row.GetProperty("recordId").GetInt32();
+        Assert.IsType<ConflictObjectResult>(await admin.Mark(request with { ExpectedRecordId = recordId }));
+        Assert.IsType<BadRequestObjectResult>(await admin.Mark(request with { ExpectedRecordId = recordId, ConfirmLeaveConflict = true }));
+        Assert.IsType<OkObjectResult>(await admin.Mark(request with { ExpectedRecordId = recordId, ConfirmLeaveConflict = true, Remarks = "Staff arrived; leave correction being reviewed" }));
+        Assert.IsType<ConflictObjectResult>(await admin.Mark(request with { ExpectedRecordId = recordId, ConfirmLeaveConflict = true, Remarks = "Stale entry" }));
+        dayData = Json(Assert.IsType<OkObjectResult>(await admin.Day(date)));
+        row = dayData.GetProperty("rows").EnumerateArray().Single(r => r.GetProperty("id").GetInt32() == db.TeacherIds[0]);
+        Assert.True(row.GetProperty("conflict").GetBoolean()); Assert.False(row.GetProperty("reviewRequired").GetBoolean());
+        Assert.Equal(2, Json(Assert.IsType<OkObjectResult>(await admin.History(db.TeacherIds[0], date))).GetProperty("rows").GetArrayLength());
+        Assert.IsType<ForbidResult>(await Controller(db.TeacherUserIds[1]).Mark(request with { StaffId = db.TeacherIds[1] }));
+        Assert.IsType<BadRequestObjectResult>(await admin.Mark(request with { Date = date.AddDays(1) }));
+        // Unrecorded staff on approved leave appear automatically, not as absent or present.
+        var secondLeave = new StaffLeaveRequest { StaffId = db.TeacherIds[1], FromDate = day, ToDate = day, Reason = "Approved leave", Status = StaffLeaveStatus.Approved };
+        db.Context.StaffLeaveRequests.Add(secondLeave); await db.Context.SaveChangesAsync();
+        dayData = Json(Assert.IsType<OkObjectResult>(await admin.Day(date)));
+        Assert.Equal("On approved leave", dayData.GetProperty("rows").EnumerateArray().Single(r => r.GetProperty("id").GetInt32() == db.TeacherIds[1]).GetProperty("status").GetString());
+        leave = (await db.Context.StaffLeaveRequests.FindAsync(leave.Id))!;
+        secondLeave.Status = StaffLeaveStatus.Cancelled; leave.ToDate = day.AddDays(-1); await db.Context.SaveChangesAsync();
+        dayData = Json(Assert.IsType<OkObjectResult>(await admin.Day(date)));
+        Assert.False(dayData.GetProperty("rows").EnumerateArray().Single(r => r.GetProperty("id").GetInt32() == db.TeacherIds[0]).GetProperty("conflict").GetBoolean());
+        Assert.Equal("Not marked", dayData.GetProperty("rows").EnumerateArray().Single(r => r.GetProperty("id").GetInt32() == db.TeacherIds[1]).GetProperty("status").GetString());
+        var headUser = await db.CreateUserAsync("attendance-head", "Section Head");
+        var head = new Staff { StaffNumber = "ATT-HEAD", FullName = "Attendance head", ApplicationUserId = headUser.Id };
+        db.Context.Staff.Add(head); await db.Context.SaveChangesAsync();
+        db.Context.SectionHeadAssignments.Add(new SectionHeadAssignment { StaffId = head.Id, SectionId = db.SectionId, AcademicYearId = db.YearId });
+        db.Context.ClassTeacherAssignments.Add(new ClassTeacherAssignment { StaffId = db.TeacherIds[0], SchoolClassId = db.ClassId, AcademicYearId = db.YearId, AssignedByStaffId = db.AdminStaffId }); await db.Context.SaveChangesAsync();
+        var headData = Json(Assert.IsType<OkObjectResult>(await Controller(headUser.Id).Day(date)));
+        Assert.False(headData.GetProperty("canMark").GetBoolean());
+        Assert.Contains(headData.GetProperty("rows").EnumerateArray(), r => r.GetProperty("id").GetInt32() == db.TeacherIds[0]);
+        Assert.DoesNotContain(headData.GetProperty("rows").EnumerateArray(), r => r.GetProperty("id").GetInt32() == db.TeacherIds[1]);
+        Assert.IsType<ForbidResult>(await Controller(headUser.Id).History(db.TeacherIds[1], date));
+        Assert.IsType<ForbidResult>(await Controller(headUser.Id).Mark(request));
+    }
+
+    [Fact]
+    public async Task LeaveCancellationPreservesEarlierDaysAndRevokesOnlyAffectedCoverAfterApproval()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var day = AnnualPromotionService.SchoolToday.AddDays(10);
+        StaffLeaveController Controller(string id) => new(db.Context, db.Users, new LeavePushFailure()) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id)], "Test")) } } };
+        var owner = Controller(db.TeacherUserIds[0]); var admin = Controller(db.AdminUserId);
+        var pending = new StaffLeaveRequest { StaffId = db.TeacherIds[0], FromDate = day, ToDate = day, Reason = "Pending" };
+        db.Context.StaffLeaveRequests.Add(pending); await db.Context.SaveChangesAsync();
+        Assert.IsType<ForbidResult>(await Controller(db.TeacherUserIds[1]).Withdraw(pending.Id));
+        Assert.IsType<OkObjectResult>(await owner.Withdraw(pending.Id));
+        Assert.IsType<ConflictObjectResult>(await owner.Withdraw(pending.Id));
+        Assert.Equal(StaffLeaveStatus.Cancelled, (await db.Context.StaffLeaveRequests.FindAsync(pending.Id))!.Status);
+        var leave = new StaffLeaveRequest { StaffId = db.TeacherIds[0], FromDate = day, ToDate = day.AddDays(3), Reason = "Approved", Status = StaffLeaveStatus.Approved };
+        db.Context.StaffLeaveRequests.Add(leave); await db.Context.SaveChangesAsync();
+        LeaveTeacherCoverage Cover(DateTime date) => new() { StaffLeaveRequestId = leave.Id, AcademicYearId = db.YearId, SchoolClassId = db.ClassId, StaffId = db.TeacherIds[1], AssignedByStaffId = db.AdminStaffId, CoverDate = DateOnly.FromDateTime(date), SourceKind = "ClassTeacher", SourceId = 123, Duty = "Attendance" };
+        var earlier = Cover(day); var later = Cover(day.AddDays(2)); db.Context.AddRange(earlier, later); await db.Context.SaveChangesAsync();
+        var request = new StaffLeaveController.CancelLeaveRequest(day.AddDays(2), "Returning early");
+        Assert.IsType<ForbidResult>(await Controller(db.TeacherUserIds[1]).RequestCancellation(leave.Id, request));
+        Assert.IsType<OkObjectResult>(await owner.RequestCancellation(leave.Id, request));
+        Assert.IsType<ConflictObjectResult>(await owner.RequestCancellation(leave.Id, request));
+        var cancellationId = await db.Context.StaffLeaveCancellations.Select(c => c.Id).SingleAsync();
+        Assert.Equal(StaffLeaveStatus.Approved, (await db.Context.StaffLeaveRequests.FindAsync(leave.Id))!.Status);
+        Assert.False((await db.Context.LeaveTeacherCoverages.FindAsync(later.Id))!.IsRevoked);
+        Assert.IsType<ForbidResult>(await owner.ReviewCancellation(cancellationId, new(true, null)));
+        Assert.IsType<OkObjectResult>(await admin.ReviewCancellation(cancellationId, new(false, "Please discuss dates")));
+        Assert.False((await db.Context.LeaveTeacherCoverages.FindAsync(later.Id))!.IsRevoked);
+        Assert.IsType<OkObjectResult>(await owner.RequestCancellation(leave.Id, request));
+        cancellationId = await db.Context.StaffLeaveCancellations.Where(c => c.Status == "Pending").Select(c => c.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await admin.ReviewCancellation(cancellationId, new(true, "Confirmed")));
+        Assert.IsType<ConflictObjectResult>(await admin.ReviewCancellation(cancellationId, new(true, null)));
+        leave = (await db.Context.StaffLeaveRequests.FindAsync(leave.Id))!;
+        Assert.Equal(day.AddDays(1), leave.ToDate); Assert.Equal(StaffLeaveStatus.Approved, leave.Status);
+        Assert.False((await db.Context.LeaveTeacherCoverages.FindAsync(earlier.Id))!.IsRevoked);
+        Assert.True((await db.Context.LeaveTeacherCoverages.FindAsync(later.Id))!.IsRevoked);
+        Assert.Equal(db.AdminStaffId, (await db.Context.LeaveTeacherCoverages.FindAsync(later.Id))!.RevokedByStaffId);
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.RecipientStaffId == db.TeacherIds[1] && n.Title == "Leave cover cancelled"));
+        var visible = Assert.IsType<OkObjectResult>(await owner.Cancellations());
+        Assert.Equal(2, JsonSerializer.SerializeToElement(visible.Value).GetProperty("rows").GetArrayLength());
+        var hidden = Assert.IsType<OkObjectResult>(await Controller(db.TeacherUserIds[1]).Cancellations());
+        Assert.Equal(0, JsonSerializer.SerializeToElement(hidden.Value).GetProperty("rows").GetArrayLength());
+        var oldRequest = new StaffLeaveCancellation { StaffLeaveRequestId = leave.Id, EffectiveFrom = day, OriginalToDate = day.AddDays(3), Reason = "Archived request", Status = "Rejected", RequestedAt = DateTime.UtcNow.AddMonths(-8) };
+        db.Context.StaffLeaveCancellations.Add(oldRequest);
+        for (var i = 0; i < 28; i++) db.Context.StaffLeaveCancellations.Add(new StaffLeaveCancellation { StaffLeaveRequestId = leave.Id, EffectiveFrom = day, OriginalToDate = day.AddDays(3), Reason = "Page check", Status = "Rejected", RequestedAt = DateTime.UtcNow.AddMinutes(-i - 1) });
+        await db.Context.SaveChangesAsync();
+        var recent = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(await owner.Cancellations()).Value);
+        Assert.Equal(30, recent.GetProperty("total").GetInt32());
+        Assert.Equal(25, recent.GetProperty("rows").GetArrayLength());
+        Assert.Equal(2, recent.GetProperty("totalPages").GetInt32());
+        var secondPage = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(await owner.Cancellations(page: 2)).Value);
+        Assert.Equal(5, secondPage.GetProperty("rows").GetArrayLength());
+        var firstIds = recent.GetProperty("rows").EnumerateArray().Select(r => r.GetProperty("Id").GetInt32()).ToArray();
+        Assert.DoesNotContain(secondPage.GetProperty("rows").EnumerateArray(), r => firstIds.Contains(r.GetProperty("Id").GetInt32()));
+        var archived = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(await owner.Cancellations(from: DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-9)), to: DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-7)))).Value);
+        Assert.Equal(1, archived.GetProperty("total").GetInt32());
+        Assert.Equal(oldRequest.Id, archived.GetProperty("rows")[0].GetProperty("Id").GetInt32());
+        Assert.Equal(31, await db.Context.StaffLeaveCancellations.CountAsync());
+        Assert.IsType<BadRequestObjectResult>(await owner.Cancellations(from: DateOnly.FromDateTime(day), to: DateOnly.FromDateTime(day.AddDays(-1))));
+        Assert.IsType<BadRequestObjectResult>(await owner.Cancellations(pageSize: 101));
+        // A leader cannot approve cancellation of their own leave.
+        var ownLeave = new StaffLeaveRequest { StaffId = db.AdminStaffId, FromDate = day, ToDate = day.AddDays(1), Reason = "Leader leave", Status = StaffLeaveStatus.Approved };
+        db.Context.StaffLeaveRequests.Add(ownLeave); await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await admin.RequestCancellation(ownLeave.Id, new(day, "No longer needed")));
+        var ownCancelId = await db.Context.StaffLeaveCancellations.Where(c => c.StaffLeaveRequestId == ownLeave.Id).Select(c => c.Id).SingleAsync();
+        Assert.IsType<BadRequestObjectResult>(await admin.ReviewCancellation(ownCancelId, new(true, null)));
+        var leaderUser = await db.CreateUserAsync("cancellation-reviewer", "Admin");
+        db.Context.Staff.Add(new Staff { StaffNumber = "CANCEL-LEADER", FullName = "Second leader", ApplicationUserId = leaderUser.Id }); await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await Controller(leaderUser.Id).ReviewCancellation(ownCancelId, new(true, null)));
+        Assert.Equal(StaffLeaveStatus.Cancelled, (await db.Context.StaffLeaveRequests.FindAsync(ownLeave.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task LeaveCoverChecksScopeConflictsNotificationsRevocationAndDateExpiry()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var monday = DateTime.Today.AddDays(1); while (monday.DayOfWeek != DayOfWeek.Monday) monday = monday.AddDays(1);
+        var date = DateOnly.FromDateTime(monday);
+        var time = new AttendanceClock(new DateTimeOffset(DateTime.SpecifyKind(monday.AddHours(8), DateTimeKind.Unspecified), TimeSpan.Zero));
+        var window = new AttendanceWindowService(db.Context, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Attendance:SchoolTimeZoneId"] = "UTC" }).Build(), time);
+        var headUser = await db.CreateUserAsync("cover-head", "Section Head");
+        var head = new Staff { StaffNumber = "COVER-HEAD", FullName = "Cover head", ApplicationUserId = headUser.Id };
+        var term = new AcademicTerm { Name = "Cover term", AcademicYearId = db.YearId, StartDate = monday.AddDays(-1), EndDate = monday.AddMonths(2) };
+        var otherClass = new SchoolClass { Name = "C", GradeId = (await db.Context.SchoolClasses.FindAsync(db.ClassId))!.GradeId };
+        db.Context.AddRange(head, term, otherClass); await db.Context.SaveChangesAsync();
+        db.Context.SectionHeadAssignments.Add(new SectionHeadAssignment { StaffId = head.Id, SectionId = db.SectionId, AcademicYearId = db.YearId });
+        var duty = new ClassTeacherAssignment { StaffId = db.TeacherIds[0], SchoolClassId = db.ClassId, AcademicYearId = db.YearId, AssignedByStaffId = db.AdminStaffId };
+        var original = new TimetableEntry { StaffId = db.TeacherIds[0], SchoolClassId = db.ClassId, SubjectId = db.SubjectRequest().SubjectId, AcademicYearId = db.YearId, AcademicTermId = term.Id, Day = SchoolDay.Monday, StartTime = new(9, 0), EndTime = new(10, 0), CreatedByStaffId = db.AdminStaffId };
+        var conflict = new TimetableEntry { StaffId = db.TeacherIds[1], SchoolClassId = otherClass.Id, SubjectId = db.SubjectRequest().SubjectId, AcademicYearId = db.YearId, AcademicTermId = term.Id, Day = SchoolDay.Monday, StartTime = new(9, 30), EndTime = new(10, 15), CreatedByStaffId = db.AdminStaffId };
+        var leave = new StaffLeaveRequest { StaffId = db.TeacherIds[0], LeaveType = StaffLeaveType.Sick, FromDate = monday, ToDate = monday.AddDays(1), Reason = "Absent", Status = StaffLeaveStatus.Approved };
+        db.Context.AddRange(duty, original, conflict, leave); await db.Context.SaveChangesAsync();
+        LeaveCoverageController Controller(string id) => new(db.Context, db.Users, window, new LeavePushFailure(), Microsoft.Extensions.Logging.Abstractions.NullLogger<LeaveCoverageController>.Instance) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id)], "Test")) } } };
+        var manager = Controller(headUser.Id);
+        Assert.IsType<ForbidResult>(await Controller(db.TeacherUserIds[1]).Options(date));
+        var otherHeadUser = await db.CreateUserAsync("cover-other-head", "Section Head");
+        var otherHead = new Staff { StaffNumber = "COVER-OTHER", FullName = "Other section head", ApplicationUserId = otherHeadUser.Id };
+        var otherSection = new Section { Name = "Other coverage section" };
+        db.Context.AddRange(otherHead, otherSection); await db.Context.SaveChangesAsync();
+        db.Context.SectionHeadAssignments.Add(new SectionHeadAssignment { StaffId = otherHead.Id, SectionId = otherSection.Id, AcademicYearId = db.YearId });
+        await db.Context.SaveChangesAsync();
+        var outside = Assert.IsType<OkObjectResult>(await Controller(otherHeadUser.Id).Options(date));
+        Assert.Equal(0, JsonSerializer.SerializeToElement(outside.Value).GetProperty("leaves").GetArrayLength());
+        var options = Assert.IsType<OkObjectResult>(await manager.Options(date));
+        Assert.Equal(1, JsonSerializer.SerializeToElement(options.Value).GetProperty("leaves").GetArrayLength());
+        var teaching = new LeaveCoverageController.AssignRequest(leave.Id, date, "Timetable", original.Id, db.TeacherIds[1]);
+        Assert.IsType<ForbidResult>(await Controller(otherHeadUser.Id).Assign(teaching));
+        Assert.IsType<ConflictObjectResult>(await manager.Assign(teaching));
+        conflict = await db.Context.TimetableEntries.SingleAsync(t => t.Id == conflict.Id); conflict.IsActive = false; await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await manager.Assign(teaching));
+        Assert.IsType<ConflictObjectResult>(await manager.Assign(teaching));
+        Assert.Equal(1, await db.Context.Notifications.CountAsync(n => n.ReferenceType == "LeaveTeacherCoverage"));
+        var replacementLeave = new StaffLeaveRequest { StaffId = db.TeacherIds[1], LeaveType = StaffLeaveType.Casual, FromDate = monday, ToDate = monday, Reason = "Unavailable", Status = StaffLeaveStatus.Approved };
+        db.Context.StaffLeaveRequests.Add(replacementLeave); await db.Context.SaveChangesAsync();
+        var attendance = new LeaveCoverageController.AssignRequest(leave.Id, date, "ClassTeacher", duty.Id, db.TeacherIds[1]);
+        Assert.IsType<ConflictObjectResult>(await manager.Assign(attendance));
+        replacementLeave = await db.Context.StaffLeaveRequests.SingleAsync(l => l.Id == replacementLeave.Id); replacementLeave.Status = StaffLeaveStatus.Rejected; await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await manager.Assign(attendance));
+        Assert.True(await LeaveCoverageAccess.HasAttendance(db.Context, db.TeacherIds[1], db.YearId, db.ClassId, date));
+        var attendanceController = new AttendanceController(db.Context, db.Users, window) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, db.TeacherUserIds[1])], "Test")) } } };
+        var classes = Assert.IsType<OkObjectResult>(await attendanceController.GetMyAttendanceClasses());
+        Assert.Equal(1, JsonSerializer.SerializeToElement(classes.Value).GetProperty("classes").GetArrayLength());
+        time.Now = time.Now.AddDays(1);
+        classes = Assert.IsType<OkObjectResult>(await attendanceController.GetMyAttendanceClasses());
+        Assert.Equal(0, JsonSerializer.SerializeToElement(classes.Value).GetProperty("classes").GetArrayLength());
+        time.Now = time.Now.AddDays(-1);
+        var coverageId = await db.Context.LeaveTeacherCoverages.Where(c => c.SourceKind == "ClassTeacher").Select(c => c.Id).SingleAsync();
+        Assert.IsType<ForbidResult>(await Controller(db.TeacherUserIds[0]).Revoke(coverageId));
+        Assert.IsType<ForbidResult>(await Controller(otherHeadUser.Id).Revoke(coverageId));
+        Assert.IsType<OkObjectResult>(await manager.Revoke(coverageId));
+        Assert.False(await LeaveCoverageAccess.HasAttendance(db.Context, db.TeacherIds[1], db.YearId, db.ClassId, date));
+        Assert.IsType<ConflictObjectResult>(await manager.Revoke(coverageId));
+        Assert.Equal(2, await db.Context.Notifications.CountAsync(n => n.ReferenceId == coverageId && n.ReferenceType == "LeaveTeacherCoverage"));
+        Assert.IsType<OkObjectResult>(await manager.Assign(attendance with { Date = date.AddDays(1) }));
+        Assert.False(await LeaveCoverageAccess.HasAttendance(db.Context, db.TeacherIds[1], db.YearId, db.ClassId, date));
+        time.Now = time.Now.AddDays(2);
+        classes = Assert.IsType<OkObjectResult>(await attendanceController.GetMyAttendanceClasses());
+        Assert.Equal(0, JsonSerializer.SerializeToElement(classes.Value).GetProperty("classes").GetArrayLength());
+        time.Now = time.Now.AddDays(-2);
+        Assert.IsType<BadRequestObjectResult>(await manager.Assign(teaching with { Date = date.AddDays(-1) }));
+        var special = new SpecialClassSession { StaffId = db.TeacherIds[0], SchoolClassId = db.ClassId, AcademicYearId = db.YearId, AcademicTermId = term.Id, SubjectId = db.SubjectRequest().SubjectId, ClassDate = date, StartTime = new(9, 0), EndTime = new(10, 0), Status = SpecialClassStatus.Approved, CreatedByStaffId = db.AdminStaffId };
+        db.Context.SpecialClassSessions.Add(special); await db.Context.SaveChangesAsync();
+        Assert.IsType<ConflictObjectResult>(await manager.Assign(teaching with { SourceKind = "SpecialClass", SourceId = special.Id }));
+        special = await db.Context.SpecialClassSessions.SingleAsync(s => s.Id == special.Id); special.StartTime = new(11, 0); special.EndTime = new(12, 0); await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await manager.Assign(teaching with { SourceKind = "SpecialClass", SourceId = special.Id }));
+        var mine = Assert.IsType<OkObjectResult>(await Controller(db.TeacherUserIds[1]).My());
+        Assert.Equal(3, JsonSerializer.SerializeToElement(mine.Value).GetProperty("assignments").GetArrayLength());
+        Assert.False(await db.Context.Notifications.AnyAsync(n => n.ReferenceType == "LeaveTeacherCoverageSection"));
+        var regularCoverId = await db.Context.LeaveTeacherCoverages.Where(c => c.SourceKind == "Timetable" && !c.IsRevoked).Select(c => c.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await manager.Revoke(regularCoverId));
+        var adminUserId = (await db.Context.Staff.FindAsync(db.AdminStaffId))!.ApplicationUserId!;
+        Assert.IsType<OkObjectResult>(await Controller(adminUserId).Assign(teaching));
+        var assignedId = await db.Context.LeaveTeacherCoverages.Where(c => c.SourceKind == "Timetable" && !c.IsRevoked).Select(c => c.Id).SingleAsync();
+        var alerts = await db.Context.Notifications.Where(n => n.ReferenceId == assignedId && (n.ReferenceType == "LeaveTeacherCoverage" || n.ReferenceType == "LeaveTeacherCoverageSection")).ToListAsync();
+        Assert.Equal(2, alerts.Count);
+        Assert.Contains(alerts, n => n.RecipientStaffId == db.TeacherIds[1]);
+        Assert.Contains(alerts, n => n.RecipientStaffId == head.Id && n.ReferenceType == "LeaveTeacherCoverageSection");
+        Assert.DoesNotContain(alerts, n => n.RecipientStaffId == otherHead.Id);
+        var update = teaching with { ReplacesCoverageId = assignedId, StaffId = db.TeacherIds[0] };
+        Assert.IsType<BadRequestObjectResult>(await Controller(adminUserId).Assign(update));
+        Assert.False((await db.Context.LeaveTeacherCoverages.FindAsync(assignedId))!.IsRevoked);
+        var newUser = await db.CreateUserAsync("new-cover-teacher", "Teacher");
+        var newTeacher = new Staff { StaffNumber = "NEW-COVER", FullName = "New replacement", ApplicationUserId = newUser.Id };
+        db.Context.Staff.Add(newTeacher); await db.Context.SaveChangesAsync();
+        update = update with { StaffId = newTeacher.Id };
+        Assert.IsType<ForbidResult>(await Controller(otherHeadUser.Id).Assign(update));
+        Assert.IsType<OkObjectResult>(await Controller(adminUserId).Assign(update));
+        Assert.IsType<ConflictObjectResult>(await Controller(adminUserId).Assign(update));
+        var updated = await db.Context.LeaveTeacherCoverages.SingleAsync(c => c.ReplacesCoverageId == assignedId);
+        var old = await db.Context.LeaveTeacherCoverages.FindAsync(assignedId);
+        Assert.True(old!.IsRevoked); Assert.Equal(db.AdminStaffId, old.RevokedByStaffId);
+        Assert.Contains(await db.Context.Notifications.Where(n => n.ReferenceId == updated.Id).ToListAsync(), n => n.RecipientStaffId == head.Id && n.ReferenceType == "LeaveTeacherCoverageSection");
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == assignedId && n.RecipientStaffId == db.TeacherIds[1] && n.Title == "Leave cover duty reassigned"));
+        Assert.IsType<ForbidResult>(await Controller(newUser.Id).History());
+        var hiddenHistory = Assert.IsType<OkObjectResult>(await Controller(otherHeadUser.Id).History());
+        Assert.Equal(0, JsonSerializer.SerializeToElement(hiddenHistory.Value).GetProperty("total").GetInt32());
+        var history = Assert.IsType<OkObjectResult>(await manager.History(search: "NEW-COVER", from: date, to: date));
+        Assert.Equal(1, JsonSerializer.SerializeToElement(history.Value).GetProperty("total").GetInt32());
+        Assert.IsType<OkObjectResult>(await Controller(adminUserId).Revoke(updated.Id));
+        var removed = await db.Context.LeaveTeacherCoverages.FindAsync(updated.Id);
+        Assert.Equal(db.AdminStaffId, removed!.RevokedByStaffId);
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == updated.Id && n.RecipientStaffId == head.Id && n.Title == "Section leave cover removed"));
+        var removalHistory = Assert.IsType<OkObjectResult>(await manager.History(search: "NEW-COVER"));
+        Assert.Equal("Removed", JsonSerializer.SerializeToElement(removalHistory.Value).GetProperty("rows")[0].GetProperty("status").GetString());
+    }
+
+    private sealed class LeavePushFailure : SchoolManagement.Application.Notifications.IPushNotificationService
+    {
+        public Task SendToStaffAsync(int staffId, string title, string message, string? referenceType = null, int? referenceId = null) => throw new InvalidOperationException("Simulated push outage");
+        public Task SendToStudentAsync(int studentId, string title, string message, string? referenceType = null, int? referenceId = null) => Task.CompletedTask;
+        public Task SendToParentAsync(int parentGuardianId, string title, string message, string? referenceType = null, int? referenceId = null) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task AllStaffCanRequestLeaveAndReviewNotificationsReachOnlyTheCorrectStaff()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var roleManager = db.Services.GetRequiredService<RoleManager<IdentityRole>>();
+        foreach (var role in new[] { "Principal", "Deputy Principal" }) Assert.True((await roleManager.CreateAsync(new IdentityRole(role))).Succeeded);
+        async Task<Staff> StaffAccount(string name, string role) {
+            var account = await db.CreateUserAsync(name, role);
+            var person = new Staff { StaffNumber = name, FullName = name, ApplicationUserId = account.Id };
+            db.Context.Staff.Add(person); await db.Context.SaveChangesAsync(); return person;
+        }
+        var principal = await StaffAccount("leave-principal", "Principal");
+        var deputy = await StaffAccount("leave-deputy", "Deputy Principal");
+        var head = await StaffAccount("leave-head", "Section Head");
+        var unrelated = await StaffAccount("leave-unrelated", "Section Head");
+        var otherSection = new Section { Name = "Other leave section" };
+        db.Context.Sections.Add(otherSection); await db.Context.SaveChangesAsync();
+        db.Context.SectionHeadAssignments.AddRange(new SectionHeadAssignment { StaffId = head.Id, SectionId = db.SectionId, AcademicYearId = db.YearId }, new SectionHeadAssignment { StaffId = unrelated.Id, SectionId = otherSection.Id, AcademicYearId = db.YearId });
+        db.Context.TeacherAssignments.Add(new TeacherAssignment { StaffId = db.TeacherIds[0], SchoolClassId = db.ClassId, AcademicYearId = db.YearId, SubjectId = db.SubjectRequest().SubjectId });
+        await db.Context.SaveChangesAsync();
+        StaffLeaveController Controller(string userId) => new(db.Context, db.Users, new LeavePushFailure()) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId)], "Test")) } } };
+        var day = DateTime.Today.AddDays(10);
+        SchoolManagement.Application.StaffLeave.DTOs.CreateStaffLeaveRequest Request(DateTime date) => new() { LeaveType = StaffLeaveType.Casual, FromDate = date, ToDate = date.AddDays(1), Reason = "Personal leave" };
+        var teacher = Controller(db.TeacherUserIds[0]);
+        Assert.IsType<OkObjectResult>(await teacher.CreateLeaveRequest(Request(day)));
+        var leaveId = await db.Context.StaffLeaveRequests.Where(l => l.StaffId == db.TeacherIds[0]).Select(l => l.Id).SingleAsync();
+        Assert.Equal(3, await db.Context.Notifications.CountAsync(n => n.Type == NotificationType.LeaveRequested && n.ReferenceId == leaveId));
+        Assert.IsType<BadRequestObjectResult>(await teacher.CreateLeaveRequest(Request(day)));
+        var headPending = Assert.IsType<OkObjectResult>(await Controller(head.ApplicationUserId!).GetPendingLeaveRequests());
+        Assert.Equal(1, JsonSerializer.SerializeToElement(headPending.Value).GetProperty("count").GetInt32());
+        var otherPending = Assert.IsType<OkObjectResult>(await Controller(unrelated.ApplicationUserId!).GetPendingLeaveRequests());
+        Assert.Equal(0, JsonSerializer.SerializeToElement(otherPending.Value).GetProperty("count").GetInt32());
+        var denied = Assert.IsType<ObjectResult>(await Controller(head.ApplicationUserId!).ReviewLeaveRequest(leaveId, new() { Approve = true }));
+        Assert.Equal(403, denied.StatusCode);
+        Assert.IsType<OkObjectResult>(await Controller(db.AdminUserId).ReviewLeaveRequest(leaveId, new() { Approve = true, Remarks = new string('A', 1000) }));
+        var approved = await db.Context.Notifications.Where(n => n.Type == NotificationType.LeaveApproved && n.ReferenceId == leaveId).ToListAsync();
+        Assert.Equal(5, approved.Count);
+        Assert.Equal(5, approved.Select(n => n.RecipientStaffId).Distinct().Count());
+        Assert.Contains(approved, n => n.RecipientStaffId == db.TeacherIds[0]);
+        Assert.Contains(approved, n => n.RecipientStaffId == head.Id);
+        Assert.DoesNotContain(approved, n => n.RecipientStaffId == unrelated.Id);
+        Assert.All(approved, n => Assert.True(n.Message.Length <= 1000));
+        Assert.IsType<ConflictObjectResult>(await Controller(principal.ApplicationUserId!).ReviewLeaveRequest(leaveId, new() { Approve = false }));
+        Assert.Equal(5, await db.Context.Notifications.CountAsync(n => n.Type == NotificationType.LeaveApproved && n.ReferenceId == leaveId));
+        Assert.IsType<OkObjectResult>(await teacher.CreateLeaveRequest(Request(day.AddDays(5))));
+        var rejectionId = await db.Context.StaffLeaveRequests.Where(l => l.StaffId == db.TeacherIds[0] && l.Status == StaffLeaveStatus.Pending).Select(l => l.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await Controller(principal.ApplicationUserId!).ReviewLeaveRequest(rejectionId, new() { Approve = false, Remarks = "Please choose another date" }));
+        var rejected = Assert.Single(await db.Context.Notifications.Where(n => n.Type == NotificationType.LeaveRejected && n.ReferenceId == rejectionId).ToListAsync());
+        Assert.Equal(db.TeacherIds[0], rejected.RecipientStaffId);
+        Assert.IsType<ForbidResult>(await teacher.GetLeaveHistory());
+        var history = Assert.IsType<OkObjectResult>(await Controller(db.AdminUserId).GetLeaveHistory());
+        var historyJson = JsonSerializer.SerializeToElement(history.Value);
+        Assert.Equal(2, historyJson.GetProperty("total").GetInt32());
+        Assert.Equal(1, historyJson.GetProperty("summary").GetProperty("approved").GetInt32());
+        Assert.Equal(1, historyJson.GetProperty("summary").GetProperty("rejected").GetInt32());
+        // History remains available when a teacher's assignment is later deactivated.
+        var historicalAssignment = await db.Context.TeacherAssignments.SingleAsync(a => a.StaffId == db.TeacherIds[0]);
+        historicalAssignment.IsActive = false; await db.Context.SaveChangesAsync();
+        var scopedHistory = Assert.IsType<OkObjectResult>(await Controller(head.ApplicationUserId!).GetLeaveHistory());
+        Assert.Equal(2, JsonSerializer.SerializeToElement(scopedHistory.Value).GetProperty("total").GetInt32());
+        var hiddenHistory = Assert.IsType<OkObjectResult>(await Controller(unrelated.ApplicationUserId!).GetLeaveHistory());
+        Assert.Equal(0, JsonSerializer.SerializeToElement(hiddenHistory.Value).GetProperty("total").GetInt32());
+        var filteredHistory = Assert.IsType<OkObjectResult>(await Controller(principal.ApplicationUserId!).GetLeaveHistory(status: StaffLeaveStatus.Approved, fromDate: day.AddDays(1), toDate: day.AddDays(1)));
+        var filteredJson = JsonSerializer.SerializeToElement(filteredHistory.Value);
+        Assert.Equal(1, filteredJson.GetProperty("total").GetInt32());
+        Assert.Equal(2, filteredJson.GetProperty("requests")[0].GetProperty("calendarDays").GetInt32());
+        Assert.Equal("Admin", filteredJson.GetProperty("requests")[0].GetProperty("reviewedBy").GetString());
+        var historyPage = Assert.IsType<OkObjectResult>(await Controller(db.AdminUserId).GetLeaveHistory(search: "T0", page: 2, pageSize: 1));
+        var pageJson = JsonSerializer.SerializeToElement(historyPage.Value);
+        Assert.Equal(2, pageJson.GetProperty("totalPages").GetInt32());
+        Assert.Equal(1, pageJson.GetProperty("requests").GetArrayLength());
+        Assert.IsType<BadRequestObjectResult>(await Controller(db.AdminUserId).GetLeaveHistory(fromDate: day.AddDays(2), toDate: day));
+        foreach (var userId in new[] { db.AdminUserId, principal.ApplicationUserId!, deputy.ApplicationUserId!, head.ApplicationUserId! })
+        {
+            Assert.IsType<OkObjectResult>(await Controller(userId).CreateLeaveRequest(Request(day.AddDays(20))));
+            var mine = Assert.IsType<OkObjectResult>(await Controller(userId).GetMyLeaveRequests());
+            Assert.Equal(1, JsonSerializer.SerializeToElement(mine.Value).GetProperty("count").GetInt32());
+        }
+        var adminLeave = await db.Context.StaffLeaveRequests.Where(l => l.StaffId == db.AdminStaffId).Select(l => l.Id).SingleAsync();
+        Assert.IsType<BadRequestObjectResult>(await Controller(db.AdminUserId).ReviewLeaveRequest(adminLeave, new() { Approve = true }));
+        Assert.IsType<OkObjectResult>(await Controller(principal.ApplicationUserId!).ReviewLeaveRequest(adminLeave, new() { Approve = true }));
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == adminLeave && n.Type == NotificationType.LeaveApproved && n.RecipientStaffId == db.AdminStaffId));
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == adminLeave && n.Type == NotificationType.LeaveApproved && n.RecipientStaffId == unrelated.Id));
+    }
+
+    [Fact]
+    public async Task PromotionMistakesCanBeUndoneWithoutLosingHistoryOrAffectingOtherStudents()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var alternate = new SchoolClass { Name = "B", GradeId = (await db.Context.SchoolClasses.FindAsync(db.ClassId))!.GradeId };
+        var nextYear = new AcademicYear { Name = "Future repeat year", IsActive = true, StartDate = AnnualPromotionService.SchoolToday.AddYears(1).AddDays(2), EndDate = AnnualPromotionService.SchoolToday.AddYears(2) };
+        var students = new[] { new Student { IndexNumber = "UNDO-01", FullName = "Wrong student", SchoolClassId = db.ClassId }, new Student { IndexNumber = "UNDO-02", FullName = "Other student", SchoolClassId = db.ClassId } };
+        db.Context.AddRange(alternate, nextYear); db.Context.Students.AddRange(students); await db.Context.SaveChangesAsync();
+        db.Context.StudentAcademicEnrollments.AddRange(students.Select(s => new StudentAcademicEnrollment { StudentId = s.Id, AcademicYearId = db.YearId, SchoolClassId = db.ClassId, CreatedByStaffId = db.AdminStaffId }));
+        await db.Context.SaveChangesAsync();
+        var controller = new AnnualPromotionController(db.Context, new AnnualPromotionService(db.Context)) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, db.AdminUserId), new Claim(ClaimTypes.Role, "Admin")], "Test")) } } };
+        Assert.IsType<BadRequestObjectResult>(await controller.SetExceptions(new([students[0].Id], db.YearId, db.ClassId, "No change", "CorrectPlacement")));
+        Assert.Equal(0, await db.Context.StudentPromotionHistories.CountAsync());
+        Assert.IsType<BadRequestObjectResult>(await controller.SetExceptions(new([students[0].Id], db.YearId, db.ClassId, "Wrong year", "RepeatNextYear")));
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[0].Id], db.YearId, alternate.Id, "Mistaken selection", "CorrectPlacement")));
+        var correction = await db.Context.AnnualPromotionChanges.SingleAsync();
+        Assert.Equal(alternate.Id, (await db.Context.Students.FindAsync(students[0].Id))!.SchoolClassId);
+        Assert.IsType<OkObjectResult>(await controller.Undo(correction.Id));
+        Assert.Equal(db.ClassId, (await db.Context.Students.FindAsync(students[0].Id))!.SchoolClassId);
+        Assert.Equal(db.ClassId, (await db.Context.Students.FindAsync(students[1].Id))!.SchoolClassId);
+        Assert.Equal(2, await db.Context.StudentPromotionHistories.CountAsync());
+        Assert.True(await db.Context.StudentPromotionHistories.AnyAsync(h => h.Action == "Undo"));
+        Assert.Equal(0, await db.Context.AnnualPromotionExceptions.CountAsync());
+        Assert.IsType<ConflictObjectResult>(await controller.Undo(correction.Id));
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[1].Id], nextYear.Id, db.ClassId, "Future mistake", "RepeatNextYear")));
+        var pendingId = await db.Context.AnnualPromotionChanges.Where(c => c.StudentId == students[1].Id).Select(c => c.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await controller.Undo(pendingId));
+        Assert.Equal(0, await db.Context.AnnualPromotionExceptions.CountAsync());
+        // The older screenshot's same-class Repeat can be removed without inventing a placement.
+        db.Context.AnnualPromotionExceptions.Add(new AnnualPromotionException { StudentId = students[0].Id, AcademicYearId = nextYear.Id, SchoolClassId = db.ClassId, Reason = "Old pending", ProcessedByStaffId = db.AdminStaffId });
+        await db.Context.SaveChangesAsync();
+        var legacyId = await db.Context.AnnualPromotionExceptions.Select(e => e.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await controller.UndoLegacyException(legacyId));
+        var legacyStudent = new Student { IndexNumber = "UNDO-LEGACY", FullName = "Older same-class repeat", SchoolClassId = db.ClassId };
+        db.Context.Students.Add(legacyStudent); await db.Context.SaveChangesAsync();
+        db.Context.StudentAcademicEnrollments.Add(new StudentAcademicEnrollment { StudentId = legacyStudent.Id, AcademicYearId = db.YearId, SchoolClassId = db.ClassId, CreatedByStaffId = db.AdminStaffId });
+        var legacyException = new AnnualPromotionException { StudentId = legacyStudent.Id, AcademicYearId = db.YearId, SchoolClassId = db.ClassId, Reason = "test", ProcessedByStaffId = db.AdminStaffId };
+        db.Context.AnnualPromotionExceptions.Add(legacyException);
+        db.Context.StudentPromotionHistories.Add(new StudentPromotionHistory { StudentId = legacyStudent.Id, FromAcademicYearId = db.YearId, ToAcademicYearId = db.YearId, FromSchoolClassId = db.ClassId, ToSchoolClassId = db.ClassId, Action = "Repeat", Reason = "test", ProcessedByStaffId = db.AdminStaffId });
+        await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await controller.UndoLegacyException(legacyException.Id));
+        Assert.Equal(db.ClassId, (await db.Context.Students.FindAsync(legacyStudent.Id))!.SchoolClassId);
+        Assert.Equal(2, await db.Context.StudentPromotionHistories.CountAsync(h => h.StudentId == legacyStudent.Id));
+        // A later change must protect the student against an older Undo request.
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[0].Id], db.YearId, alternate.Id, "First correction", "CorrectPlacement")));
+        var olderId = await db.Context.AnnualPromotionChanges.MaxAsync(c => c.Id);
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[0].Id], db.YearId, db.ClassId, "Later correction", "CorrectPlacement")));
+        Assert.IsType<ConflictObjectResult>(await controller.Undo(olderId));
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[1].Id], db.YearId, alternate.Id, "Prepare unchanged student", "CorrectPlacement")));
+        var count = await db.Context.StudentPromotionHistories.CountAsync();
+        Assert.IsType<BadRequestObjectResult>(await controller.SetExceptions(new([students[0].Id, students[1].Id], db.YearId, alternate.Id, "Reject unchanged batch", "CorrectPlacement")));
+        db.Context.ChangeTracker.Clear();
+        Assert.Equal(count, await db.Context.StudentPromotionHistories.CountAsync());
+        Assert.Equal(db.ClassId, (await db.Context.Students.FindAsync(students[0].Id))!.SchoolClassId);
+    }
+
+    [Fact]
+    public async Task AutomaticPromotionHonorsDatesRepeatsGraduationCorrectionsAndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var today = AnnualPromotionService.SchoolToday;
+        var sourceYear = await db.Context.AcademicYears.FindAsync(db.YearId);
+        sourceYear!.StartDate = today.AddYears(-1); sourceYear.EndDate = today.AddDays(-1);
+        var nextYear = new AcademicYear { Name = "Next academic year", StartDate = today.AddDays(1), EndDate = today.AddYears(1), IsActive = true };
+        var finalClass = new SchoolClass { Name = "A", Grade = new Grade { Name = "12", SectionId = db.SectionId } };
+        var unmapped = new SchoolClass { Name = "B", GradeId = (await db.Context.SchoolClasses.FindAsync(db.ClassId))!.GradeId };
+        db.Context.AddRange(nextYear, finalClass, unmapped); await db.Context.SaveChangesAsync();
+        var students = new[] {
+            new Student { IndexNumber = "AUTO-01", FullName = "Promote", SchoolClassId = db.ClassId },
+            new Student { IndexNumber = "AUTO-02", FullName = "Repeat", SchoolClassId = db.ClassId },
+            new Student { IndexNumber = "AUTO-03", FullName = "Graduate", SchoolClassId = finalClass.Id },
+            new Student { IndexNumber = "AUTO-04", FullName = "Missing mapping", SchoolClassId = unmapped.Id }
+        };
+        db.Context.Students.AddRange(students); await db.Context.SaveChangesAsync();
+        db.Context.StudentAcademicEnrollments.AddRange(students.Select(s => new StudentAcademicEnrollment {
+            StudentId = s.Id, SchoolClassId = s.SchoolClassId, AcademicYearId = sourceYear.Id, CreatedByStaffId = db.AdminStaffId, EnrollmentDate = DateOnly.FromDateTime(sourceYear.StartDate)
+        }));
+        db.Context.StudentAttendances.Add(new StudentAttendance { StudentId = students[0].Id, SchoolClassId = db.ClassId, AcademicYearId = sourceYear.Id, AttendanceDate = today.AddDays(-2), Status = AttendanceStatus.Present, MarkedByStaffId = db.AdminStaffId });
+        await db.Context.SaveChangesAsync();
+        var service = new AnnualPromotionService(db.Context);
+        var controller = new AnnualPromotionController(db.Context, service) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, db.AdminUserId), new Claim(ClaimTypes.Role, "Admin")], "Test"))
+        } } };
+        Assert.IsType<BadRequestObjectResult>(await controller.SetMapping(new(db.ClassId, db.ClassId, false, true)));
+        Assert.IsType<OkObjectResult>(await controller.SetMapping(new(db.ClassId, finalClass.Id, false, true)));
+        Assert.IsType<OkObjectResult>(await controller.SetMapping(new(finalClass.Id, null, true, true)));
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[1].Id], nextYear.Id, db.ClassId, "Repeat grade for another year")));
+        await service.RunAsync(today);
+        Assert.Equal(0, await db.Context.StudentPromotionHistories.CountAsync());
+        nextYear = await db.Context.AcademicYears.SingleAsync(y => y.Id == nextYear.Id);
+        nextYear.StartDate = today; await db.Context.SaveChangesAsync();
+        var result = JsonSerializer.Serialize(await service.RunAsync(today));
+        Assert.Contains("No promotion mapping", result);
+        Assert.Equal(3, await db.Context.StudentPromotionHistories.CountAsync());
+        Assert.Equal(finalClass.Id, (await db.Context.StudentAcademicEnrollments.SingleAsync(e => e.StudentId == students[0].Id && e.AcademicYearId == nextYear.Id)).SchoolClassId);
+        Assert.Equal(db.ClassId, (await db.Context.StudentAcademicEnrollments.SingleAsync(e => e.StudentId == students[1].Id && e.AcademicYearId == nextYear.Id)).SchoolClassId);
+        Assert.True((await db.Context.Students.FindAsync(students[2].Id))!.IsGraduated);
+        Assert.Equal(4, await db.Context.StudentAcademicEnrollments.CountAsync(e => e.AcademicYearId == sourceYear.Id));
+        Assert.Equal(1, await db.Context.StudentAttendances.CountAsync());
+        await service.RunAsync(today);
+        Assert.Equal(3, await db.Context.StudentPromotionHistories.CountAsync());
+        // Two independent checks share a transaction-owned SQL lock and cannot duplicate promotion.
+        await using (var otherContext = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(db.Context.Database.GetConnectionString()).Options))
+            await Task.WhenAll(service.RunAsync(today), new AnnualPromotionService(otherContext).RunAsync(today));
+        Assert.Equal(3, await db.Context.StudentPromotionHistories.CountAsync());
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[0].Id], nextYear.Id, db.ClassId, "Move back after review")));
+        Assert.Equal(db.ClassId, (await db.Context.StudentAcademicEnrollments.SingleAsync(e => e.StudentId == students[0].Id && e.AcademicYearId == nextYear.Id)).SchoolClassId);
+        Assert.IsType<OkObjectResult>(await controller.SetExceptions(new([students[2].Id], nextYear.Id, finalClass.Id, "Repeat final grade")));
+        Assert.False((await db.Context.Students.FindAsync(students[2].Id))!.IsGraduated);
+        Assert.Equal(1, await db.Context.StudentAcademicEnrollments.CountAsync(e => e.StudentId == students[2].Id && e.IsCurrent));
+        var count = await db.Context.StudentPromotionHistories.CountAsync();
+        await service.RunAsync(today); Assert.Equal(count, await db.Context.StudentPromotionHistories.CountAsync());
+        Assert.IsType<OkObjectResult>(await controller.Get());
+        var exceptionId = await db.Context.AnnualPromotionExceptions.Where(e => e.StudentId == students[0].Id).Select(e => e.Id).SingleAsync();
+        Assert.IsType<BadRequestObjectResult>(await controller.RemoveException(exceptionId));
+        var repeatChangeId = await db.Context.AnnualPromotionChanges.Where(c => c.StudentId == students[1].Id).Select(c => c.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await controller.Undo(repeatChangeId));
+        Assert.Equal(finalClass.Id, (await db.Context.StudentAcademicEnrollments.SingleAsync(e => e.StudentId == students[1].Id && e.AcademicYearId == nextYear.Id)).SchoolClassId);
+        await service.RunAsync(today);
+        Assert.Equal(finalClass.Id, (await db.Context.Students.FindAsync(students[1].Id))!.SchoolClassId);
+        var completionChangeId = await db.Context.AnnualPromotionChanges.Where(c => c.StudentId == students[2].Id).Select(c => c.Id).SingleAsync();
+        Assert.IsType<OkObjectResult>(await controller.Undo(completionChangeId));
+        Assert.True((await db.Context.Students.FindAsync(students[2].Id))!.IsGraduated);
+    }
+
     private sealed class ReportEnvironment : Microsoft.AspNetCore.Hosting.IWebHostEnvironment
     {
         public string ApplicationName { get; set; } = "ReportsTest";

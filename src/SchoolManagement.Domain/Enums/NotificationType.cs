@@ -13,5 +13,6 @@ public enum NotificationType
     SpecialClassApproved = 9,
     SpecialClassRejected = 10,
     SpecialClassCancelled = 11,
-    SpecialClassRescheduled = 12
+    SpecialClassRescheduled = 12,
+    LeaveRequested = 13
 }

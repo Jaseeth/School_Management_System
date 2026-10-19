@@ -43,7 +43,7 @@ public class AttendanceWindowsController : ControllerBase
         var teacherAccess = await HasTeacherAccessAsync(
             staff.Id,
             academicYearId,
-            schoolClassId);
+            schoolClassId, attendanceDate);
 
         var leadershipAccess = IsSchoolLeader() ||
             await IsAssignedSectionHeadAsync(
@@ -269,7 +269,7 @@ public class AttendanceWindowsController : ControllerBase
     private async Task<bool> HasTeacherAccessAsync(
         int staffId,
         int academicYearId,
-        int schoolClassId)
+        int schoolClassId, DateTime attendanceDate)
     {
         if (await _context.ClassTeacherAssignments
             .AnyAsync(x =>
@@ -281,6 +281,7 @@ public class AttendanceWindowsController : ControllerBase
             return true;
         }
 
+        if (attendanceDate.Date == _windows.SchoolNow.Date && await LeaveCoverageAccess.HasAttendance(_context, staffId, academicYearId, schoolClassId, DateOnly.FromDateTime(attendanceDate))) return true;
         return await _context
             .TemporaryClassTeacherAssignments
             .AnyAsync(x =>

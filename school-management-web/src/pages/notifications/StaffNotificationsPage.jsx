@@ -34,6 +34,10 @@ export default function StaffNotificationsPage() {
         finally { setBusy(false); }
     }
     function destination(item) {
+        if (item.referenceType === "StaffLeaveCancellation") return "/staff-leave?tab=cancellations";
+        if (item.referenceType === "LeaveTeacherCoverageSection") return "/staff-leave?tab=coverage";
+        if (item.referenceType === "LeaveTeacherCoverage") return "/staff-leave?tab=coverDuties";
+        if (item.referenceType === "StaffLeaveRequest") return item.type === "LeaveRequested" ? "/staff-leave?tab=pending" : "/staff-leave";
         if (item.referenceType === "SpecialClassSession") return "/special-classes";
         if (item.referenceType === "SchoolAnnouncement") return "/announcements";
         return null;

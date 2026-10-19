@@ -15,6 +15,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     }
 
     public DbSet<AcademicYear> AcademicYears { get; set; }
+    public DbSet<LeaveTeacherCoverage> LeaveTeacherCoverages => Set<LeaveTeacherCoverage>();
+    public DbSet<StaffLeaveCancellation> StaffLeaveCancellations => Set<StaffLeaveCancellation>();
+    public DbSet<StaffAttendanceRecord> StaffAttendanceRecords => Set<StaffAttendanceRecord>();
+    public DbSet<StaffLeaveCalendar> StaffLeaveCalendars => Set<StaffLeaveCalendar>();
+    public DbSet<StaffLeaveHoliday> StaffLeaveHolidays => Set<StaffLeaveHoliday>();
+    public DbSet<StaffLeaveAllowance> StaffLeaveAllowances => Set<StaffLeaveAllowance>();
+    public DbSet<AnnualPromotionRule> AnnualPromotionRules => Set<AnnualPromotionRule>();
+    public DbSet<AnnualPromotionException> AnnualPromotionExceptions => Set<AnnualPromotionException>();
+    public DbSet<AnnualPromotionChange> AnnualPromotionChanges => Set<AnnualPromotionChange>();
     public DbSet<Section> Sections { get; set; }
     public DbSet<Grade> Grades { get; set; }
     public DbSet<SchoolClass> SchoolClasses { get; set; }
@@ -97,6 +106,68 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<StaffLeaveCalendar>(entity => {
+            entity.HasIndex(c => c.Year).IsUnique(); entity.Property(c => c.CountryCode).HasMaxLength(2); entity.Property(c => c.Region).HasMaxLength(100);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(c => c.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<StaffLeaveHoliday>(entity => {
+            entity.HasIndex(c => c.Date).IsUnique(); entity.Property(c => c.Name).HasMaxLength(200);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(c => c.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<StaffLeaveAllowance>(entity => {
+            entity.HasIndex(c => new { c.Year, c.LeaveType, c.StaffId }).IsUnique().HasFilter("[StaffId] IS NOT NULL");
+            entity.HasIndex(c => new { c.Year, c.LeaveType }).IsUnique().HasFilter("[StaffId] IS NULL");
+            entity.HasOne(c => c.Staff).WithMany().HasForeignKey(c => c.StaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(c => c.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<StaffAttendanceRecord>(entity => {
+            entity.Property(c => c.Status).HasMaxLength(20);
+            entity.Property(c => c.Remarks).HasMaxLength(1000);
+            entity.HasIndex(c => new { c.AttendanceDate, c.StaffId, c.Id });
+            entity.HasOne(c => c.Staff).WithMany().HasForeignKey(c => c.StaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(c => c.RecordedByStaff).WithMany().HasForeignKey(c => c.RecordedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<StaffLeaveCancellation>(entity => {
+            entity.Property(c => c.Reason).HasMaxLength(1000);
+            entity.Property(c => c.Remarks).HasMaxLength(1000);
+            entity.Property(c => c.Status).HasMaxLength(20);
+            entity.HasIndex(c => c.StaffLeaveRequestId).IsUnique().HasFilter("[Status] = 'Pending'");
+            entity.HasOne(c => c.StaffLeaveRequest).WithMany().HasForeignKey(c => c.StaffLeaveRequestId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(c => c.ReviewedByStaff).WithMany().HasForeignKey(c => c.ReviewedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<LeaveTeacherCoverage>(entity => {
+            entity.Property(x => x.SourceKind).HasMaxLength(30);
+            entity.Property(x => x.Duty).HasMaxLength(200);
+            entity.HasIndex(x => new { x.SourceKind, x.SourceId, x.CoverDate }).IsUnique().HasFilter("[IsRevoked] = 0");
+            entity.HasIndex(x => new { x.StaffId, x.CoverDate });
+            entity.HasOne(x => x.StaffLeaveRequest).WithMany().HasForeignKey(x => x.StaffLeaveRequestId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.Staff).WithMany().HasForeignKey(x => x.StaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<AcademicYear>().WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.AssignedByStaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.RevokedByStaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<LeaveTeacherCoverage>().WithMany().HasForeignKey(x => x.ReplacesCoverageId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<AnnualPromotionChange>(entity => {
+            entity.HasIndex(x => new { x.StudentId, x.AcademicYearId, x.Id });
+            entity.HasOne<Student>().WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<AcademicYear>().WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.UndoneByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<AnnualPromotionRule>(entity => {
+            entity.HasIndex(x => x.FromSchoolClassId).IsUnique();
+            entity.HasOne<SchoolClass>().WithMany().HasForeignKey(x => x.FromSchoolClassId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<SchoolClass>().WithMany().HasForeignKey(x => x.ToSchoolClassId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.ConfiguredByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<AnnualPromotionException>(entity => {
+            entity.HasIndex(x => new { x.StudentId, x.AcademicYearId }).IsUnique();
+            entity.Property(x => x.Reason).HasMaxLength(500);
+            entity.HasOne<Student>().WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<AcademicYear>().WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<SchoolClass>().WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.ProcessedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
 
         builder.Entity<Permission>()
             .HasIndex(x => x.Name)

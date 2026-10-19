@@ -1,8 +1,4 @@
 <Solution>
-  <Folder Name="/Frontend/">
-    <File Path="school-management-web/package.json" />
-    <File Path="school-management-web/vite.config.js" />
-  </Folder>
   <Folder Name="/src/">
     <Project Path="src/SchoolManagement.API/SchoolManagement.API.csproj" />
     <Project Path="src/SchoolManagement.Application/SchoolManagement.Application.csproj" />
@@ -13,5 +9,175 @@
     <Project Path="tests/SchoolManagement.E2ETests/SchoolManagement.E2ETests.csproj" />
     <Project Path="tests/SchoolManagement.IntegrationTests/SchoolManagement.IntegrationTests.csproj" />
     <Project Path="tests/SchoolManagement.UnitTests/SchoolManagement.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/Frontend/">
+    <File Path="school-management-web/.gitignore" />
+    <File Path="school-management-web/.oxlintrc.json" />
+    <File Path="school-management-web/index.html" />
+    <File Path="school-management-web/package-lock.json" />
+    <File Path="school-management-web/package.json" />
+    <File Path="school-management-web/README.md" />
+    <File Path="school-management-web/vite.config.js" />
+    <File Path="school-management-web/Web.config" />
+  </Folder>
+  <Folder Name="/Frontend/public/">
+    <File Path="school-management-web/public/favicon.svg" />
+    <File Path="school-management-web/public/icons.svg" />
+  </Folder>
+  <Folder Name="/Frontend/src/">
+    <File Path="school-management-web/src/App.css" />
+    <File Path="school-management-web/src/App.jsx" />
+    <File Path="school-management-web/src/index.css" />
+    <File Path="school-management-web/src/main.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/api/">
+    <File Path="school-management-web/src/api/academicApi.js" />
+    <File Path="school-management-web/src/api/axios.js" />
+    <File Path="school-management-web/src/api/dashboardApi.js" />
+    <File Path="school-management-web/src/api/examsManagementApi.js" />
+    <File Path="school-management-web/src/api/marksReviewApi.js" />
+    <File Path="school-management-web/src/api/parentGuardiansApi.js" />
+    <File Path="school-management-web/src/api/parentManagementApi.js" />
+    <File Path="school-management-web/src/api/parentPortalApi.js" />
+    <File Path="school-management-web/src/api/resultsPublishingApi.js" />
+    <File Path="school-management-web/src/api/sectionHeadAssignmentsApi.js" />
+    <File Path="school-management-web/src/api/staffForgotPasswordApi.js" />
+    <File Path="school-management-web/src/api/staffManagementApi.js" />
+    <File Path="school-management-web/src/api/staffProfileApi.js" />
+    <File Path="school-management-web/src/api/studentAuthApi.js" />
+    <File Path="school-management-web/src/api/studentEnrollmentsApi.js" />
+    <File Path="school-management-web/src/api/studentPortalApi.js" />
+    <File Path="school-management-web/src/api/studentRegistrationApi.js" />
+    <File Path="school-management-web/src/api/studentsApi.js" />
+    <File Path="school-management-web/src/api/teacherAssignmentsManagementApi.js" />
+    <File Path="school-management-web/src/api/teacherMarksApi.js" />
+    <File Path="school-management-web/src/api/timetableManagementApi.js" />
+  </Folder>
+  <Folder Name="/Frontend/src/assets/">
+    <File Path="school-management-web/src/assets/hero.png" />
+    <File Path="school-management-web/src/assets/react.svg" />
+    <File Path="school-management-web/src/assets/vite.svg" />
+  </Folder>
+  <Folder Name="/Frontend/src/components/">
+    <File Path="school-management-web/src/components/MondayAssembly.jsx" />
+    <File Path="school-management-web/src/components/TemporaryAttendanceTeacher.jsx" />
+    <File Path="school-management-web/src/components/TimetableIntervals.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/components/layout/">
+    <File Path="school-management-web/src/components/layout/DashboardLayout.jsx" />
+    <File Path="school-management-web/src/components/layout/StaffAccountMenu.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/context/">
+    <File Path="school-management-web/src/context/AuthContext.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/academic/">
+    <File Path="school-management-web/src/pages/academic/AcademicSetupPage.jsx" />
+    <File Path="school-management-web/src/pages/academic/PromotionPanel.jsx" />
+    <File Path="school-management-web/src/pages/academic/PromotionPage.jsx" />
+    <File Path="school-management-web/src/pages/academic/SchoolCalendarPage.jsx" />
+    <File Path="school-management-web/src/pages/academic/PublicHolidayImport.jsx" />
+    <File Path="school-management-web/src/pages/academic/GovernmentCalendarImport.jsx" />
+    <File Path="school-management-web/src/pages/academic/AcademicSetupPanel.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/announcements/">
+    <File Path="school-management-web/src/pages/announcements/AnnouncementsPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/auth/">
+    <File Path="school-management-web/src/pages/auth/LoginPage.jsx" />
+    <File Path="school-management-web/src/pages/auth/StaffForcedChangePasswordPage.jsx" />
+    <File Path="school-management-web/src/pages/auth/StaffForgotPasswordPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/dashboard/">
+    <File Path="school-management-web/src/pages/dashboard/DashboardPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/exams/">
+    <File Path="school-management-web/src/pages/exams/TermsExamsManagementPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/notifications/">
+    <File Path="school-management-web/src/pages/notifications/StaffNotificationsPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/parents/">
+    <File Path="school-management-web/src/pages/parents/ParentAcademicProfilePage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentAnnouncementsPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentAttendancePage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentChangePasswordPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentDashboardPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentLoginPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentManagementActions.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentNotificationsPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentProfilePage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentResultsPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentsManagementPage.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentStudentLinks.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/public/">
+    <File Path="school-management-web/src/pages/public/PortalLandingPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/reports/">
+    <File Path="school-management-web/src/pages/reports/ReportsPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/results/">
+    <File Path="school-management-web/src/pages/results/ResultsPublishingPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/sectionHeads/">
+    <File Path="school-management-web/src/pages/sectionHeads/SectionHeadAssignmentsPage.jsx" />
+    <File Path="school-management-web/src/pages/sectionHeads/SectionHeadAttendanceApprovalsPage.jsx" />
+    <File Path="school-management-web/src/pages/sectionHeads/SectionHeadMarksReviewPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/specialClasses/">
+    <File Path="school-management-web/src/pages/specialClasses/SpecialClassesPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/staff/">
+    <File Path="school-management-web/src/pages/staff/AddStaffForm.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffManagementPage.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffLeavePage.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffLeavePolicy.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffAttendancePage.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffLeaveCoverage.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffLeaveCancellation.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffLeaveHistory.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffProfilePage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/students/">
+    <File Path="school-management-web/src/pages/students/AddStudentPage.jsx" />
+    <File Path="school-management-web/src/pages/students/AdminResetStudentPasswordPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentAnnouncementsPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentAttendancePage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentChangePasswordPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentDailySchedulePage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentDashboardPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentDetailsPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentEnrollmentHistoryPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentForgotPasswordPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentGuardiansPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentLoginPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentNotificationsPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentProfilePage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentRegistrationPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentResultsPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentsPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentSpecialClassesPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentSubjectsPage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentTimetablePage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/teachers/">
+    <File Path="school-management-web/src/pages/teachers/TeacherAssignmentsManagementPage.jsx" />
+    <File Path="school-management-web/src/pages/teachers/TeacherAttendancePage.jsx" />
+    <File Path="school-management-web/src/pages/teachers/TeacherDailyClassesPage.jsx" />
+    <File Path="school-management-web/src/pages/teachers/TeacherMarksPage.jsx" />
+    <File Path="school-management-web/src/pages/teachers/TeacherTimetablePage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/timetable/">
+    <File Path="school-management-web/src/pages/timetable/TimetableManagementPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/routes/">
+    <File Path="school-management-web/src/routes/AppRoutes.jsx" />
+    <File Path="school-management-web/src/routes/ParentProtectedRoute.jsx" />
+    <File Path="school-management-web/src/routes/ProtectedRoute.jsx" />
+    <File Path="school-management-web/src/routes/StudentProtectedRoute.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/src/services/">
+    <File Path="school-management-web/src/services/authService.js" />
+    <File Path="school-management-web/src/services/portalSession.js" />
   </Folder>
 </Solution>

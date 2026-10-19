@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 import { dashboardApi } from "../../api/dashboardApi";
 import { useAuth } from "../../context/AuthContext";
+import StaffLeaveCoverage from "../staff/StaffLeaveCoverage";
 
 function atTime(date, time) {
     const [hours, minutes] = String(time || "00:00")
@@ -355,6 +356,7 @@ export default function TeacherDailyClassesPage() {
                     </section>
                 </>
             )}
+            <StaffLeaveCoverage compact />
         </div>
     );
 }

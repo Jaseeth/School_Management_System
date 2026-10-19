@@ -67,6 +67,12 @@ const menuItems = [
         roles: ["Admin", "Principal", "Deputy Principal"],
     },
     {
+        title: "Student Promotion",
+        path: "/promotion",
+        icon: GraduationCap,
+        roles: ["Admin", "Principal", "Deputy Principal"],
+    },
+    {
         title: "Teacher Assignments",
         path: "/teacher-assignments",
         icon: Users,
@@ -140,6 +146,25 @@ const menuItems = [
         title: "Special Classes",
         path: "/special-classes",
         icon: CalendarDays,
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
+    },
+    {
+        title: "Staff Leave",
+        path: "/staff-leave",
+        icon: CalendarDays,
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
+    },
+    {
+        title: "Staff Attendance",
+        path: "/staff-attendance",
+        icon: ClipboardCheck,
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head"],
+    },
+    {
+        title: "Staff Leave Allowance", path: "/staff-leave-allowance", icon: CalendarDays, roles: ["Admin"],
+    },
+    {
+        title: "School Calendar", path: "/school-calendar", icon: CalendarDays,
         roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
     },
     {

@@ -25,6 +25,16 @@ public class StudentPortalController : ControllerBase
         _userManager = userManager;
     }
 
+    [HttpGet("school-calendar")]
+    public async Task<IActionResult> GetSchoolCalendar(int year)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+        if (!await _context.Students.AsNoTracking().AnyAsync(s => s.ApplicationUserId == userId && s.IsActive)) return Forbid();
+        if (year < 1900 || year > 2100) return BadRequest();
+        return Ok(await SchoolManagement.API.Services.SchoolCalendarService.Read(_context, year, false));
+    }
+
     [HttpGet("profile")]
     public async Task<IActionResult> GetMyProfile()
     {

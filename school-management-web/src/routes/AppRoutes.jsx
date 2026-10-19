@@ -1,4 +1,9 @@
-﻿import {
+import PromotionPage from "../pages/academic/PromotionPage";
+import StaffLeavePage from "../pages/staff/StaffLeavePage";
+import StaffAttendancePage from "../pages/staff/StaffAttendancePage";
+import StaffLeavePolicy from "../pages/staff/StaffLeavePolicy";
+import SchoolCalendarPage from "../pages/academic/SchoolCalendarPage";
+import {
     Navigate,
     Route,
     Routes,
@@ -138,6 +143,12 @@ export default function AppRoutes() {
                 <Route path="/staff/my-profile" element={<StaffProfilePage />} />
                 <Route path="/staff" element={<StaffManagementPage />} />
                 <Route path="/academic-setup" element={<AcademicSetupPage />} />
+                <Route path="/promotion" element={<PromotionPage />} />
+                <Route path="/staff-leave" element={<StaffLeavePage />} />
+                <Route path="/staff-attendance" element={<StaffAttendancePage />} />
+                <Route path="/staff-leave-allowance" element={<StaffLeavePolicy manage />} />
+                <Route path="/school-calendar" element={<SchoolCalendarPage />} />
+
                 <Route path="/teacher-assignments" element={<TeacherAssignmentsManagementPage />} />
                 <Route path="/timetable" element={<TimetableManagementPage />} />
 
@@ -216,6 +227,8 @@ export default function AppRoutes() {
                     />
                 }
             />
+
+            <Route path="/student/school-calendar" element={<StudentProtectedRoute><div className="mx-auto max-w-7xl px-5 py-10"><a href="/student/dashboard" className="mb-6 inline-block text-sm text-blue-600">Back to Dashboard</a><SchoolCalendarPage student /></div></StudentProtectedRoute>} />
 
             <Route
                 path="/student/dashboard"
