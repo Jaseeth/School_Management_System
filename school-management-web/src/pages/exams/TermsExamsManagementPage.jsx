@@ -12,7 +12,7 @@ const primaryClass =
 const inputClass =
     "mt-2 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50";
 
-export default function TermsExamsManagementPage() {
+export default function TermsExamsManagementPage({ onExamChanged }) {
     const { user } = useAuth();
 
     const allowed = ["Admin", "Principal", "Deputy Principal"].some(
@@ -35,6 +35,7 @@ export default function TermsExamsManagementPage() {
     const [examsError, setExamsError] = useState("");
     const [examsRefresh, setExamsRefresh] = useState(0);
 
+    const [editExamId, setEditExamId] = useState(null);
     const [mode, setMode] = useState(null);
     const [saving, setSaving] = useState(false);
     const busyRef = useRef(false);
@@ -50,6 +51,7 @@ export default function TermsExamsManagementPage() {
     const [examForm, setExamForm] = useState({
         name: "",
         examDate: "",
+        examEndDate: "",
         maximumMarks: "100",
     });
 
@@ -198,9 +200,11 @@ export default function TermsExamsManagementPage() {
     }
 
     function openExamForm() {
+        setEditExamId(null);
         setExamForm({
             name: "",
             examDate: "",
+        examEndDate: "",
             maximumMarks: "100",
         });
         setMode("exam");
@@ -262,8 +266,8 @@ export default function TermsExamsManagementPage() {
 
         const maximumMarks = Number(examForm.maximumMarks);
 
-        if (!selectedTerm || !examForm.name.trim() || !examForm.examDate) {
-            setError("Select a term and enter the exam name and date.");
+        if (!selectedTerm || !examForm.name.trim() || !examForm.examDate || !examForm.examEndDate) {
+            setError("Select a term and record the government exam name, start date and end date.");
             return;
         }
 
@@ -280,9 +284,9 @@ export default function TermsExamsManagementPage() {
 
         if (
             (start && examForm.examDate < start) ||
-            (end && examForm.examDate > end)
+            (end && examForm.examEndDate > end) || examForm.examEndDate < examForm.examDate
         ) {
-            setError("Exam date must be within the selected term dates.");
+            setError("Government exam dates must be in order and within the selected term.");
             return;
         }
 
@@ -290,10 +294,11 @@ export default function TermsExamsManagementPage() {
         setSaving(true);
 
         try {
-            const response = await examsManagementApi.createExam({
+            const response = editExamId ? await examsManagementApi.updateGovernmentDates(editExamId, { from: examForm.examDate, through: examForm.examEndDate }) : await examsManagementApi.createExam({
                 academicTermId: Number(termId),
                 name: examForm.name.trim(),
                 examDate: examForm.examDate,
+                examEndDate: examForm.examEndDate,
                 maximumMarks,
             });
 
@@ -302,6 +307,7 @@ export default function TermsExamsManagementPage() {
                 response.data?.message || "Exam created successfully."
             );
             setExamsRefresh((value) => value + 1);
+            onExamChanged?.();
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
@@ -313,7 +319,7 @@ export default function TermsExamsManagementPage() {
     if (!allowed) {
         return (
             <p role="alert" className="p-6 text-sm text-red-700">
-                You do not have access to Terms & Exams Management.
+                You do not have access to government exam setup.
             </p>
         );
     }
@@ -321,10 +327,10 @@ export default function TermsExamsManagementPage() {
     return (
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             <h1 className="text-2xl font-bold text-slate-950">
-                Terms & Exams
+                Government exam periods
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-                Manage academic terms and examinations.
+                Record the government-announced exam period for each term. Exam papers are supplied by the government; this setup only records their dates.
             </p>
 
             {success && (
@@ -399,7 +405,7 @@ export default function TermsExamsManagementPage() {
                         onClick={openExamForm}
                         className={primaryClass}
                     >
-                        Create Exam
+                        Register government exam period
                     </button>
 
                     <button
@@ -423,7 +429,7 @@ export default function TermsExamsManagementPage() {
             {mode && (
                 <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h2 className="text-lg font-bold text-slate-950">
-                        {mode === "term" ? "Create Term" : "Create Exam"}
+                        {mode === "term" ? "Create Term" : editExamId ? "Update government exam dates" : "Register government exam period"}
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
                         {selectedYear?.name}
@@ -476,7 +482,8 @@ export default function TermsExamsManagementPage() {
                             ) : (
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <Field
-                                        label="Exam Name"
+                                        label="Government exam name"
+                                        disabled={Boolean(editExamId)}
                                         required
                                         value={examForm.name}
                                         onChange={(event) =>
@@ -487,7 +494,7 @@ export default function TermsExamsManagementPage() {
                                         }
                                     />
                                     <Field
-                                        label="Exam Date"
+                                        label="Government exam starts"
                                         type="date"
                                         required
                                         min={dateInputValue(
@@ -504,8 +511,10 @@ export default function TermsExamsManagementPage() {
                                             }))
                                         }
                                     />
+                                    <Field label="Government exam ends" type="date" required min={examForm.examDate || dateInputValue(selectedTerm?.startDate)} max={dateInputValue(selectedTerm?.endDate)} value={examForm.examEndDate} onChange={event => setExamForm(current => ({ ...current, examEndDate: event.target.value }))} />
                                     <Field
                                         label="Maximum Marks"
+                                        disabled={Boolean(editExamId)}
                                         type="number"
                                         step="0.01"
                                         min="0.01"
@@ -535,7 +544,7 @@ export default function TermsExamsManagementPage() {
                                     ? "Creating..."
                                     : mode === "term"
                                         ? "Create Term"
-                                        : "Create Exam"}
+                                        : editExamId ? "Save government dates" : "Register exam period"}
                             </button>
                             <button
                                 type="button"
@@ -602,7 +611,7 @@ export default function TermsExamsManagementPage() {
             {termId && (
                 <section className="mt-6">
                     <h2 className="text-lg font-bold text-slate-950">
-                        Exams · {selectedTerm?.name}
+                        Government exam periods · {selectedTerm?.name}
                     </h2>
 
                     <ErrorMessage message={examsError} />
@@ -625,11 +634,12 @@ export default function TermsExamsManagementPage() {
                                             {exam.name}
                                         </h3>
                                         <p className="mt-2 text-sm text-slate-500">
-                                            {formatDate(exam.examDate)}
+                                            {formatDate(exam.examDate)} – {formatDate(exam.examEndDate || exam.examDate)}
                                         </p>
                                         <p className="mt-3 text-sm text-slate-700">
                                             Maximum marks: {exam.maximumMarks}
                                         </p>
+                                        <button disabled={saving} type="button" className="mt-3 text-sm font-semibold text-blue-700" onClick={() => { setEditExamId(exam.id); setExamForm({ name: exam.name, examDate: dateInputValue(exam.examDate), examEndDate: dateInputValue(exam.examEndDate || exam.examDate), maximumMarks: String(exam.maximumMarks) }); setMode("exam"); setError(""); setSuccess(""); }}>Update government dates</button>
                                     </article>
                                 ))}
                             </div>

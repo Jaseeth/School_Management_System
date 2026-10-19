@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using SchoolManagement.API.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Students.DTOs;
 using SchoolManagement.Domain.Entities;
@@ -19,10 +21,13 @@ public class StudentsController : ControllerBase
         _context = context;
     }
 
+    [HasPermission("Students.Create")]
+    [Authorize(Roles = "Admin,Principal,Deputy Principal")]
     [HttpPost]
     public async Task<IActionResult> CreateStudent(
     CreateStudentRequest request)
     {
+        if (!StudentAccessScope.Leader(User)) return Forbid();
         var classExists =
             await _context.SchoolClasses
                 .AnyAsync(x =>
@@ -120,7 +125,7 @@ public class StudentsController : ControllerBase
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x =>
                     x.ApplicationUserId ==
-                    userId);
+                    userId && x.IsActive);
 
         if (staff == null)
         {
@@ -269,7 +274,7 @@ public class StudentsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetStudents()
     {
-        var students = await _context.Students
+        var students = await StudentAccessScope.Students(_context, User)
             .Include(x => x.SchoolClass)
             .ThenInclude(x => x.Grade)
             .Select(x => new
@@ -324,7 +329,7 @@ public class StudentsController : ControllerBase
         }
 
         var query =
-            _context.StudentAcademicEnrollments
+            StudentAccessScope.Enrollments(_context, User)
                 .AsNoTracking()
                 .Where(x =>
                     x.IsCurrent &&
@@ -467,22 +472,10 @@ public class StudentsController : ControllerBase
     public async Task<IActionResult>
         GetStudentManagementSummary()
     {
-        var totalStudents =
-            await _context.Students
-                .AsNoTracking()
-                .CountAsync();
-
-        var activeStudents =
-            await _context.Students
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.IsActive);
-
-        var graduatedStudents =
-            await _context.Students
-                .AsNoTracking()
-                .CountAsync(x =>
-                    x.IsGraduated);
+        var visible = StudentAccessScope.Students(_context, User).AsNoTracking();
+        var totalStudents = await visible.CountAsync();
+        var activeStudents = await visible.CountAsync(s => s.IsActive);
+        var graduatedStudents = await visible.CountAsync(s => s.IsGraduated);
 
         var academicYear =
             await _context.AcademicYears
@@ -524,8 +517,9 @@ public class StudentsController : ControllerBase
     public async Task<IActionResult> GetStudentDetails(
         int id)
     {
+        var permittedEnrollments = StudentAccessScope.Enrollments(_context, User);
         var student =
-            await _context.Students
+            await StudentAccessScope.Students(_context, User)
                 .AsNoTracking()
                 .Where(x =>
                     x.Id == id)
@@ -563,7 +557,7 @@ public class StudentsController : ControllerBase
         // ========================================================
 
         var currentEnrollment =
-            await _context.StudentAcademicEnrollments
+            await permittedEnrollments
                 .AsNoTracking()
                 .Where(x =>
                     x.StudentId == id &&
@@ -619,7 +613,7 @@ public class StudentsController : ControllerBase
         // ========================================================
 
         var enrollmentHistory =
-            await _context.StudentAcademicEnrollments
+            await permittedEnrollments
                 .AsNoTracking()
                 .Where(x =>
                     x.StudentId == id)
@@ -666,7 +660,7 @@ public class StudentsController : ControllerBase
                 .AsNoTracking()
                 .Where(x =>
                     x.StudentId == id &&
-                    x.IsActive);
+                    x.IsActive && permittedEnrollments.Any(e => e.StudentId == id && e.AcademicYearId == x.AcademicYearId));
 
         if (currentEnrollment != null)
         {

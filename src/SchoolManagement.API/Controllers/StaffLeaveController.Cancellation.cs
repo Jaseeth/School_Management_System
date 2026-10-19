@@ -82,7 +82,7 @@ public partial class StaffLeaveController
         var start = from ?? end.AddMonths(-6);
         if (start > end || end == DateOnly.MaxValue || page < 1 || pageSize < 1 || pageSize > 100 || status != null && status != "Pending" && status != "Approved" && status != "Rejected")
             return BadRequest(new { message = "Choose a valid requested-date range, status and page size (1–100)." });
-        var zone = TimeZoneInfo.FindSystemTimeZoneById("Arab Standard Time");
+        var zone = SchoolManagement.API.Services.SchoolClock.Zone;
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(start.ToDateTime(TimeOnly.MinValue), zone);
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(end.AddDays(1).ToDateTime(TimeOnly.MinValue), zone);
         var scoped = _context.StaffLeaveCancellations.AsNoTracking().Where(c => global || c.StaffLeaveRequest.StaffId == actor.Id || scopedLeaveIds.Contains(c.StaffLeaveRequestId));

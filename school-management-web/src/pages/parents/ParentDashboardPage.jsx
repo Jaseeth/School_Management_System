@@ -1,4 +1,5 @@
-﻿import {
+import { disableBrowserPush } from "../../services/browserPush";
+import {
     Award,
     Bell,
     BookOpen,
@@ -43,7 +44,8 @@ export default function ParentDashboardPage() {
         };
     }, []);
 
-    function logout() {
+    async function logout() {
+        await disableBrowserPush("parent").catch(() => {});
         localStorage.removeItem("parentAccessToken");
         localStorage.removeItem("parentUser");
         navigate("/parent/login", { replace: true });
@@ -102,6 +104,7 @@ export default function ParentDashboardPage() {
                         <Bell className="h-4 w-4" />
                         Notifications
                     </Link>
+                    <Link to="/parent/school-calendar" className="inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">School Calendar</Link>
                     <Link to="/parent/announcements" className="inline-flex min-h-11 items-center rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Announcements</Link>
 
                     <Link
@@ -207,6 +210,7 @@ export default function ParentDashboardPage() {
                                                 <Award className="h-4 w-4 shrink-0" />
                                                 Results
                                             </Link>
+                                            <Link to={`/parent/children/${entry.student.id}/schedule`} className="col-span-2 rounded-xl border border-blue-200 bg-white p-3 text-center text-sm font-semibold text-blue-700">Timetable &amp; Special Classes</Link>
                                         </div>
                                     </article>
                                 ))}

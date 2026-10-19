@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -2153,6 +2153,7 @@ public class ParentGuardiansController : ControllerBase
 
         if (existingToken != null)
         {
+            existingToken.IsBrowser = false;
             existingToken.ParentGuardianId =
                 parent.Id;
 
@@ -2439,6 +2440,17 @@ public class ParentGuardiansController : ControllerBase
 
             notification.ReadAt
         });
+    }
+
+    [HttpGet("my/school-calendar")]
+    [Authorize(Roles = "Parent")]
+    public async Task<IActionResult> GetSchoolCalendar(int year)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+        if (!await _context.ParentGuardians.AsNoTracking().AnyAsync(p => p.ApplicationUserId == userId && p.IsActive)) return Forbid();
+        if (year < 1900 || year > 2100) return BadRequest();
+        return Ok(await SchoolManagement.API.Services.SchoolCalendarService.Read(_context, year, false));
     }
 
     [HttpPut("my/profile")]

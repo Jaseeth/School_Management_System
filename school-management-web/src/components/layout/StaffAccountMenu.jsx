@@ -31,9 +31,9 @@ export default function StaffAccountMenu() {
         };
     }, [open]);
 
-    const signOut = () => {
+    const signOut = async () => {
         setOpen(false);
-        logout();
+        await logout();
         navigate("/login", { replace: true });
     };
 

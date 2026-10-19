@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Students.Import;
@@ -74,6 +74,22 @@ public class StudentImportController : ControllerBase
     // Reads and validates Excel.
     // NOTHING is saved to database.
     // ============================================================
+
+    [HttpGet("template")]
+    public IActionResult Template()
+    {
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        var sheet = workbook.AddWorksheet("Student Import");
+        var headers = SchoolManagement.Infrastructure.Students.Import.StudentImportExcelReader.TemplateHeaders;
+        for (var i = 0; i < headers.Count; i++) { sheet.Cell(1, i + 1).Value = headers[i]; sheet.Column(i + 1).Width = 24; }
+        sheet.Row(1).Style.Font.Bold = true; sheet.SheetView.FreezeRows(1);
+        var help = workbook.AddWorksheet("Instructions");
+        help.Cell(1, 1).Value = "Keep the Student Import sheet and column headings unchanged. Use existing academic year, section, grade, class and subject names. Preview before confirming.";
+        help.Cell(2, 1).Value = "Use YYYY-MM-DD for dates. Separate subjects with commas. Leave optional parent fields blank when unused. Never include passwords.";
+        help.Column(1).Width = 100; help.CellsUsed().Style.Alignment.WrapText = true;
+        using var buffer = new MemoryStream(); workbook.SaveAs(buffer);
+        return File(buffer.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Student_Import_Template.xlsx");
+    }
 
     [HttpPost("preview")]
     [RequestSizeLimit(MaxFileSize)]

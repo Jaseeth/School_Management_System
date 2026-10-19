@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Exams.DTOs;
 using SchoolManagement.Domain.Entities;
@@ -210,6 +210,10 @@ public class ExamsController : ControllerBase
             });
         }
 
+        var through = request.ExamEndDate ?? request.ExamDate;
+        if (through.Date < request.ExamDate.Date || through.Date > term.EndDate.Date)
+            return BadRequest(new { message = "The government exam end date must be on or after its start date and within the academic term." });
+
         var name = request.Name.Trim();
 
         var duplicateExists =
@@ -232,7 +236,8 @@ public class ExamsController : ControllerBase
         {
             Name = name,
             AcademicTermId = request.AcademicTermId,
-            ExamDate = request.ExamDate,
+            ExamDate = request.ExamDate.Date,
+            ExamEndDate = through.Date,
             MaximumMarks = request.MaximumMarks,
             IsActive = true
         };
@@ -243,11 +248,12 @@ public class ExamsController : ControllerBase
 
         return Ok(new
         {
-            message = "Exam created successfully.",
+            message = "Government exam period registered successfully.",
             exam.Id,
             exam.Name,
             exam.AcademicTermId,
             exam.ExamDate,
+            exam.ExamEndDate,
             exam.MaximumMarks
         });
     }
@@ -272,10 +278,36 @@ public class ExamsController : ControllerBase
                     x.Id,
                     x.Name,
                     x.ExamDate,
+                    x.ExamEndDate,
                     x.MaximumMarks
                 })
                 .ToListAsync();
 
         return Ok(exams);
     }
+    public record GovernmentExamDates(DateTime From, DateTime Through);
+
+    [HasPermission("Exams.Manage")]
+    [HttpPut("{id:int}/government-dates")]
+    public async Task<IActionResult> SetGovernmentDates(int id, GovernmentExamDates request)
+    {
+        if (request.From == default || request.Through.Date < request.From.Date)
+            return BadRequest(new { message = "Enter the government exam start and end dates in order." });
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync<IActionResult>(async () => {
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await _context.Database.ExecuteSqlRawAsync("DECLARE @r int; EXEC @r = sp_getapplock @Resource = 'AssessmentSchedule', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000; IF @r < 0 THROW 51000, 'Assessment schedule is busy. Retry shortly.', 1;");
+            var exam = await _context.Exams.Include(e => e.AcademicTerm).SingleOrDefaultAsync(e => e.Id == id && e.IsActive);
+            if (exam == null) return NotFound();
+            if (request.From.Date < exam.AcademicTerm.StartDate.Date || request.Through.Date > exam.AcademicTerm.EndDate.Date)
+                return BadRequest(new { message = "Government exam dates must be within the academic term." });
+            var from = DateOnly.FromDateTime(request.From); var through = DateOnly.FromDateTime(request.Through);
+            if (await _context.AssessmentSchedules.AnyAsync(a => a.ExamId == id && !a.IsCancelled && (a.Date < from || a.Date > through)))
+                return Conflict(new { message = "Some timetable entries fall outside these dates. Update or cancel those entries first." });
+            exam.ExamDate = request.From.Date; exam.ExamEndDate = request.Through.Date;
+            await _context.SaveChangesAsync(); await transaction.CommitAsync();
+            return Ok(new { message = "Government exam dates saved. Subject timetable entries are managed separately." });
+        });
+    }
+
 }

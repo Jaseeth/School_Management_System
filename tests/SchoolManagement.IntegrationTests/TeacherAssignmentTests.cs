@@ -21,8 +21,159 @@ using SchoolManagement.Infrastructure.Persistence;
 
 namespace SchoolManagement.IntegrationTests;
 
-public class TeacherAssignmentTests
+public partial class TeacherAssignmentTests
 {
+    [Fact]
+    public async Task AssessmentsRespectAssignmentsNotifyBothDirectionsAndProtectOfficialExams()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var roles = db.Services.GetRequiredService<RoleManager<IdentityRole>>();
+        foreach (var role in new[] { "Student", "Parent" }) Assert.True((await roles.CreateAsync(new IdentityRole(role))).Succeeded);
+        var headUser = await db.CreateUserAsync("assessment-head", "Section Head");
+        var head = new Staff { StaffNumber = "AH1", FullName = "Assessment head", ApplicationUserId = headUser.Id };
+        var studentUser = await db.CreateUserAsync("assessment-student", "Student");
+        var parentUser = await db.CreateUserAsync("assessment-parent", "Parent");
+        var student = new Student { IndexNumber = "AS1", FullName = "Subject student", SchoolClassId = db.ClassId, ApplicationUserId = studentUser.Id };
+        var otherStudent = new Student { IndexNumber = "AS2", FullName = "Different subject student", SchoolClassId = db.ClassId };
+        var parent = new ParentGuardian { ParentNumber = "AP1", FullName = "Assessment parent", ApplicationUserId = parentUser.Id };
+        var otherClass = new SchoolClass { Name = "Outside", Grade = new Grade { Name = "10", Section = new Section { Name = "Other section" } } };
+        var otherSubject = new Subject { Name = "Other subject" };
+        db.Context.AddRange(head, student, otherStudent, parent, otherClass, otherSubject);
+        await db.Context.SaveChangesAsync();
+        var subjectId = db.SubjectRequest().SubjectId;
+        db.Context.TeacherAssignments.AddRange(new TeacherAssignment { AcademicYearId = db.YearId, SchoolClassId = db.ClassId, SubjectId = subjectId, StaffId = db.TeacherIds[0] }, new TeacherAssignment { AcademicYearId = db.YearId, SchoolClassId = db.ClassId, SubjectId = otherSubject.Id, StaffId = db.TeacherIds[1] });
+        db.Context.ClassTeacherAssignments.Add(new() { AcademicYearId = db.YearId, SchoolClassId = db.ClassId, StaffId = db.TeacherIds[1], AssignedByStaffId = db.AdminStaffId });
+        db.Context.SectionHeadAssignments.Add(new() { AcademicYearId = db.YearId, SectionId = db.SectionId, StaffId = head.Id });
+        foreach (var st in new[] { student, otherStudent }) db.Context.StudentAcademicEnrollments.Add(new() { AcademicYearId = db.YearId, SchoolClassId = db.ClassId, StudentId = st.Id, CreatedByStaffId = db.AdminStaffId, EnrollmentDate = DateOnly.FromDateTime(DateTime.Today) });
+        db.Context.StudentSubjectEnrollments.Add(new() { StudentId = student.Id, AcademicYearId = db.YearId, SubjectId = subjectId, EnrolledByStaffId = db.AdminStaffId });
+        foreach (var st in new[] { student, otherStudent }) db.Context.StudentParentGuardians.Add(new() { StudentId = st.Id, ParentGuardianId = parent.Id, Relationship = "Guardian" });
+        var academicYear = await db.Context.AcademicYears.SingleAsync(y => y.Id == db.YearId);
+        var day = DateOnly.FromDateTime(academicYear.StartDate).AddDays(1);
+        var term = new AcademicTerm { AcademicYearId = db.YearId, Name = "Term", StartDate = academicYear.StartDate, EndDate = academicYear.EndDate };
+        var exam = new Exam { Name = "Official", AcademicTerm = term, ExamDate = day.ToDateTime(TimeOnly.MinValue), ExamEndDate = day.AddDays(3).ToDateTime(TimeOnly.MinValue), MaximumMarks = 100 };
+        db.Context.Exams.Add(exam); await db.Context.SaveChangesAsync();
+        AssessmentsController Controller(string uid, string role) => new(db.Context, new LeavePushFailure()) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, uid), new Claim(ClaimTypes.Role, role)], "Test")) } } };
+        var teacher = Controller(db.TeacherUserIds[0], "Teacher"); var classTeacher = Controller(db.TeacherUserIds[1], "Teacher");
+        var headController = Controller(headUser.Id, "Section Head"); var admin = Controller(db.AdminUserId, "Admin");
+        var request = new AssessmentsController.ScheduleRequest(false, db.YearId, db.ClassId, subjectId, null, "Unit test", "Bring a pen", "Room A", day, new(9, 0), new(10, 0), 20);
+        Assert.IsType<ForbidResult>(await teacher.Create(request with { SchoolClassId = otherClass.Id }));
+        Assert.IsType<ForbidResult>(await teacher.Create(request with { SubjectId = otherSubject.Id }));
+        Assert.IsType<ForbidResult>(await teacher.Create(request with { SubjectId = null }));
+        Assert.IsType<ForbidResult>(await headController.Create(request with { SchoolClassId = otherClass.Id }));
+        Assert.IsType<ForbidResult>(await headController.Create(request with { IsOfficial = true, ExamId = exam.Id }));
+        Assert.IsType<ForbidResult>(await teacher.Create(request with { IsOfficial = true, ExamId = exam.Id }));
+        var created = Assert.IsType<OkObjectResult>(await teacher.Create(request));
+        var id = JsonSerializer.SerializeToElement(created.Value).GetProperty("Id").GetInt32();
+        Assert.Equal(1, await db.Context.Notifications.CountAsync(n => n.ReferenceId == id && n.ReferenceType == "AssessmentSchedule" && n.RecipientStaffId == head.Id));
+        Assert.Equal(1, await db.Context.Notifications.CountAsync(n => n.ReferenceId == id && n.ReferenceType == "AssessmentSchedule" && n.RecipientStaffId == db.TeacherIds[1]));
+        Assert.False(await db.Context.Notifications.AnyAsync(n => n.ReferenceType == "AssessmentSchedule" && n.RecipientStaffId == db.TeacherIds[0]));
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == id && n.RecipientStudentId == student.Id));
+        Assert.False(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == id && n.RecipientStudentId == otherStudent.Id));
+        Assert.Equal(1, await db.Context.Notifications.CountAsync(n => n.ReferenceId == id && n.RecipientParentGuardianId == parent.Id));
+        Assert.IsType<ForbidResult>(await classTeacher.Update(id, request with { Revision = 1 })); // Class access does not grant ownership of another teacher's test.
+        Assert.IsType<ConflictObjectResult>(await admin.Create(request with { IsOfficial = true, ExamId = exam.Id })); // Shared clash protection across both kinds.
+        var notificationCount = await db.Context.Notifications.CountAsync();
+        Assert.IsType<OkObjectResult>(await headController.Update(id, request with { Title = "Head updated test", Revision = 1 }));
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == id && n.Title.Contains("updated") && n.RecipientStaffId == db.TeacherIds[0]));
+        notificationCount = await db.Context.Notifications.CountAsync();
+        Assert.IsType<ConflictObjectResult>(await teacher.Update(id, request with { Revision = 1 }));
+        Assert.Equal(notificationCount, await db.Context.Notifications.CountAsync());
+        Assert.IsType<ForbidResult>(await classTeacher.Cancel(id, new(2, "Not my test")));
+        Assert.IsType<OkObjectResult>(await headController.Cancel(id, new(2, "Postponed")));
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.ReferenceId == id && n.RecipientStaffId == db.TeacherIds[0] && n.Title.Contains("cancelled")));
+        var headCreated = Assert.IsType<OkObjectResult>(await headController.Create(request with { Title = "Section test", SubjectId = null }));
+        var headId = JsonSerializer.SerializeToElement(headCreated.Value).GetProperty("Id").GetInt32();
+        Assert.Equal(1, await db.Context.Notifications.CountAsync(n => n.ReferenceId == headId && n.ReferenceType == "AssessmentSchedule" && n.RecipientStaffId == db.TeacherIds[0]));
+        Assert.Equal(1, await db.Context.Notifications.CountAsync(n => n.ReferenceId == headId && n.ReferenceType == "AssessmentSchedule" && n.RecipientParentGuardianId == parent.Id)); // One parent linked to two students receives one alert.
+        Assert.IsType<OkObjectResult>(await classTeacher.Create(request with { Title = "Class test", SubjectId = null, StartTime = new(10, 0), EndTime = new(11, 0) })); // Back-to-back is valid.
+        var official = Assert.IsType<OkObjectResult>(await admin.Create(request with { IsOfficial = true, ExamId = exam.Id, StartTime = new(11, 0), EndTime = new(12, 0), MaximumMarks = 20 }));
+        var officialId = JsonSerializer.SerializeToElement(official.Value).GetProperty("Id").GetInt32();
+        Assert.Equal(100, (await db.Context.AssessmentSchedules.SingleAsync(e => e.Id == officialId)).MaximumMarks);
+        Assert.Equal(1, await db.Context.Exams.CountAsync()); Assert.Equal(0, await db.Context.StudentMarks.CountAsync());
+        var government = new ExamsController(db.Context);
+        Assert.IsType<BadRequestObjectResult>(await government.CreateExam(new() { Name = "Invalid government dates", AcademicTermId = term.Id, ExamDate = day.ToDateTime(TimeOnly.MinValue), ExamEndDate = day.AddDays(-1).ToDateTime(TimeOnly.MinValue), MaximumMarks = 100 }));
+        Assert.IsType<OkObjectResult>(await government.SetGovernmentDates(exam.Id, new(day.ToDateTime(TimeOnly.MinValue), day.AddDays(1).ToDateTime(TimeOnly.MinValue))));
+        Assert.IsType<BadRequestObjectResult>(await admin.Create(request with { IsOfficial = true, ExamId = exam.Id, Date = day.AddDays(2) })); // Inside the term, but outside the announced government exam period.
+        Assert.IsType<OkObjectResult>(await admin.Create(request with { IsOfficial = true, ExamId = exam.Id, Date = day.AddDays(1) }));
+        Assert.IsType<ConflictObjectResult>(await government.SetGovernmentDates(exam.Id, new(day.ToDateTime(TimeOnly.MinValue), day.ToDateTime(TimeOnly.MinValue)))); // Cannot orphan an existing timetable entry.
+        Assert.Equal(day.AddDays(1).ToDateTime(TimeOnly.MinValue), (await db.Context.Exams.AsNoTracking().SingleAsync(e => e.Id == exam.Id)).ExamEndDate);
+        Assert.Equal(0, await db.Context.StudentMarks.CountAsync());
+
+        var options = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(await teacher.Options(db.YearId)).Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Single(options.GetProperty("classes").EnumerateArray()); Assert.False(options.GetProperty("classes")[0].GetProperty("wholeClass").GetBoolean());
+        Assert.Single(options.GetProperty("classes")[0].GetProperty("subjects").EnumerateArray()); Assert.Empty(options.GetProperty("exams").EnumerateArray());
+        var parentList = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(await Controller(parentUser.Id, "Parent").List(day.Year)).Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.False(parentList.GetProperty("schedules")[0].GetProperty("canEdit").GetBoolean());
+        Assert.DoesNotContain("studentIds", parentList.GetRawText());
+        Assert.IsType<ForbidResult>(await Controller(studentUser.Id, "Student").Create(request));
+    }
+
+    [Fact]
+    public async Task SchoolEventsScopeRecipientsNotifyChangesAndRecalculateClosures()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var roles = db.Services.GetRequiredService<RoleManager<IdentityRole>>();
+        foreach (var role in new[] { "Student", "Parent" }) Assert.True((await roles.CreateAsync(new IdentityRole(role))).Succeeded);
+        var studentUser = await db.CreateUserAsync("event-student", "Student");
+        var parentUser = await db.CreateUserAsync("event-parent", "Parent");
+        var otherParentUser = await db.CreateUserAsync("other-parent", "Parent");
+        var student = new Student { IndexNumber = "EVENT1", FullName = "Event student", SchoolClassId = db.ClassId, ApplicationUserId = studentUser.Id };
+        var parent = new ParentGuardian { ParentNumber = "EVENTP1", FullName = "Parent", ApplicationUserId = parentUser.Id };
+        var otherParent = new ParentGuardian { ParentNumber = "EVENTP2", FullName = "Other parent", ApplicationUserId = otherParentUser.Id };
+        db.Context.AddRange(student, parent, otherParent);
+        db.Context.ClassTeacherAssignments.Add(new() { AcademicYearId = db.YearId, SchoolClassId = db.ClassId, StaffId = db.TeacherIds[0], AssignedByStaffId = db.AdminStaffId });
+        await db.Context.SaveChangesAsync();
+        db.Context.StudentAcademicEnrollments.Add(new() { StudentId = student.Id, AcademicYearId = db.YearId, SchoolClassId = db.ClassId, CreatedByStaffId = db.AdminStaffId, EnrollmentDate = new(2026, 1, 1) });
+        db.Context.StudentParentGuardians.Add(new() { StudentId = student.Id, ParentGuardianId = parent.Id, Relationship = "Guardian" });
+        await db.Context.SaveChangesAsync();
+        SchoolEventsController Controller(string uid, string role) => new(db.Context, new LeavePushFailure()) {
+            ControllerContext = new() { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, uid), new Claim(ClaimTypes.Role, role)], "Test")) } }
+        };
+        var admin = Controller(db.AdminUserId, "Admin"); var teacher = Controller(db.TeacherUserIds[0], "Teacher");
+        var day = new DateOnly(2026, 10, 19);
+        var request = new SchoolEventsController.EventRequest("Class meeting", "Bring your questions", "Hall", day, day, new(9, 0), new(10, 0), "Class", db.ClassId, true, true, true, false);
+        Assert.IsType<ForbidResult>(await teacher.Create(request));
+        Assert.IsType<ForbidResult>(await teacher.Options());
+        Assert.IsType<BadRequestObjectResult>(await admin.Create(request with { IsHoliday = true }));
+        Assert.IsType<BadRequestObjectResult>(await admin.Create(request with { EndTime = new(8, 0) }));
+        var created = Assert.IsType<OkObjectResult>(await admin.Create(request));
+        var id = JsonSerializer.SerializeToElement(created.Value).GetProperty("Id").GetInt32();
+        Assert.Equal(3, await db.Context.Notifications.CountAsync(n => n.ReferenceType == "SchoolEvent" && n.ReferenceId == id));
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.RecipientParentGuardianId == parent.Id));
+        Assert.False(await db.Context.Notifications.AnyAsync(n => n.RecipientParentGuardianId == otherParent.Id));
+        JsonElement Read(IActionResult result) => JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(result).Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Single(Read(await Controller(studentUser.Id, "Student").List(2026)).GetProperty("events").EnumerateArray());
+        Assert.Single(Read(await Controller(parentUser.Id, "Parent").List(2026)).GetProperty("events").EnumerateArray());
+        Assert.Empty(Read(await Controller(otherParentUser.Id, "Parent").List(2026)).GetProperty("events").EnumerateArray());
+        Assert.Empty(Read(await Controller(db.TeacherUserIds[1], "Teacher").List(2026)).GetProperty("events").EnumerateArray());
+        Assert.DoesNotContain("studentIds", Read(await Controller(studentUser.Id, "Student").List(2026)).GetRawText());
+        Assert.Equal(1, await new StaffLeaveBalanceService(db.Context).WorkingDays(day.ToDateTime(TimeOnly.MinValue), day.ToDateTime(TimeOnly.MinValue)));
+        Assert.IsType<OkObjectResult>(await admin.Update(id, request with { IncludeParents = false, Revision = 1 }));
+        Assert.Empty(Read(await Controller(parentUser.Id, "Parent").List(2026)).GetProperty("events").EnumerateArray());
+        Assert.True(await db.Context.Notifications.AnyAsync(n => n.RecipientParentGuardianId == parent.Id && n.Message.Contains("no longer applies")));
+        var count = await db.Context.Notifications.CountAsync();
+        Assert.IsType<ConflictObjectResult>(await admin.Update(id, request with { Revision = 1 }));
+        Assert.Equal(count, await db.Context.Notifications.CountAsync());
+        Assert.IsType<ForbidResult>(await teacher.Cancel(id, new(2, "No permission")));
+        Assert.IsType<OkObjectResult>(await admin.Cancel(id, new(2, "Meeting postponed")));
+        Assert.True(Read(await teacher.List(2026)).GetProperty("events")[0].GetProperty("isCancelled").GetBoolean());
+        Assert.IsType<ConflictObjectResult>(await admin.Update(id, request with { Revision = 3 }));
+        var closure = request with { Title = "School celebration holiday", Audience = "School", AudienceId = null, IsHoliday = true };
+        var closed = Assert.IsType<OkObjectResult>(await admin.Create(closure));
+        var closureId = JsonSerializer.SerializeToElement(closed.Value).GetProperty("Id").GetInt32();
+        Assert.Equal(0, await new StaffLeaveBalanceService(db.Context).WorkingDays(day.ToDateTime(TimeOnly.MinValue), day.ToDateTime(TimeOnly.MinValue)));
+        var calendar = JsonSerializer.SerializeToElement(await SchoolCalendarService.Read(db.Context, 2026, false));
+        Assert.False(calendar.GetProperty("days").EnumerateArray().Single(d => d.GetProperty("date").GetString() == "2026-10-19").GetProperty("schoolDay").GetBoolean());
+        // Updating the event moves the closure, rather than leaving an orphan holiday behind.
+        Assert.IsType<OkObjectResult>(await admin.Update(closureId, closure with { FromDate = day.AddDays(1), ThroughDate = day.AddDays(1), Revision = 1 }));
+        Assert.Equal(1, await new StaffLeaveBalanceService(db.Context).WorkingDays(day.ToDateTime(TimeOnly.MinValue), day.ToDateTime(TimeOnly.MinValue)));
+        db.Context.StaffLeaveHolidays.Add(new() { Date = day.AddDays(1), Name = "Independent public holiday", UpdatedByStaffId = db.AdminStaffId });
+        await db.Context.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await admin.Cancel(closureId, new(2, "Celebration cancelled")));
+        Assert.Equal(0, await new StaffLeaveBalanceService(db.Context).WorkingDays(day.AddDays(1).ToDateTime(TimeOnly.MinValue), day.AddDays(1).ToDateTime(TimeOnly.MinValue)));
+        Assert.True(await db.Context.StaffLeaveHolidays.AnyAsync(h => h.Name == "Independent public holiday" && h.IsActive));
+    }
+
     [Fact]
     public void GovernmentCalendarReaderValidatesCsvAndExcelWithoutEvaluatingFormulas()
     {

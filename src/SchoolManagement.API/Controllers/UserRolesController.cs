@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Identity;
+using SchoolManagement.Infrastructure.Persistence;
+using SchoolManagement.Application.Auditing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Application.Users.DTOs;
 using SchoolManagement.Infrastructure.Identity;
@@ -10,13 +13,16 @@ namespace SchoolManagement.API.Controllers;
 [Route("api/users")]
 public class UserRolesController : ControllerBase
 {
+    private readonly ApplicationDbContext _context;
+    private readonly IAuditLogService _audit;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
 
     public UserRolesController(
         UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole> roleManager)
+        RoleManager<IdentityRole> roleManager, ApplicationDbContext context, IAuditLogService audit)
     {
+        _context = context; _audit = audit;
         _userManager = userManager;
         _roleManager = roleManager;
     }
@@ -55,69 +61,10 @@ public class UserRolesController : ControllerBase
         string userId,
         AssignUserRoleRequest request)
     {
-        var user = await _userManager.FindByIdAsync(userId);
-
-        if (user == null)
-        {
-            return NotFound(new
-            {
-                message = "User not found."
-            });
-        }
-
-        var role = await _roleManager.FindByIdAsync(
-            request.RoleId);
-
-        if (role == null || string.IsNullOrWhiteSpace(role.Name))
-        {
-            return BadRequest(new
-            {
-                message = "Invalid role."
-            });
-        }
-
-        // Remove current roles
-        var currentRoles =
-            await _userManager.GetRolesAsync(user);
-
-        if (currentRoles.Count > 0)
-        {
-            var removeResult =
-                await _userManager.RemoveFromRolesAsync(
-                    user,
-                    currentRoles);
-
-            if (!removeResult.Succeeded)
-            {
-                return BadRequest(new
-                {
-                    message = "Unable to remove current roles.",
-                    errors = removeResult.Errors
-                        .Select(x => x.Description)
-                });
-            }
-        }
-
-        // Assign new role
-        var addResult =
-            await _userManager.AddToRoleAsync(
-                user,
-                role.Name);
-
-        if (!addResult.Succeeded)
-        {
-            return BadRequest(new
-            {
-                message = "Unable to assign role.",
-                errors = addResult.Errors
-                    .Select(x => x.Description)
-            });
-        }
-
-        return Ok(new
-        {
-            message = "User role updated successfully.",
-            role = role.Name
-        });
+        var staff = await _context.Staff.AsNoTracking().SingleOrDefaultAsync(s => s.ApplicationUserId == userId);
+        var role = await _roleManager.FindByIdAsync(request.RoleId);
+        if (staff == null || string.IsNullOrEmpty(role?.Name)) return BadRequest(new { message = "Select a valid staff account and role." });
+        var manager = new StaffController(_context, _userManager, _roleManager, _audit) { ControllerContext = ControllerContext };
+        return await manager.EditStaff(staff.Id, new(staff.FullName, staff.Designation, role.Name));
     }
 }

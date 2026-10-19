@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +14,7 @@ namespace SchoolManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class StaffController : ControllerBase
+public partial class StaffController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -292,6 +292,9 @@ public class StaffController : ControllerBase
                 message = "Select a staff role. Student and Parent accounts must use their own account workflows."
             });
         }
+
+        if (!User.IsInRole("Admin") && role.Name is "Admin" or "Principal" or "Deputy Principal")
+            return Forbid();
 
         var user = new ApplicationUser
         {

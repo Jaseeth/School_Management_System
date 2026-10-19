@@ -66,8 +66,8 @@ export default function StaffForcedChangePasswordPage() {
         }
     }
 
-    function signOut() {
-        logout();
+    async function signOut() {
+        await logout();
         navigate("/login", { replace: true });
     }
 

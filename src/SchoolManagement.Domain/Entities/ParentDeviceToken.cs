@@ -1,4 +1,4 @@
-﻿namespace SchoolManagement.Domain.Entities;
+namespace SchoolManagement.Domain.Entities;
 
 public class ParentDeviceToken
 {
@@ -9,6 +9,8 @@ public class ParentDeviceToken
     public ParentGuardian ParentGuardian { get; set; } = null!;
 
     public string Token { get; set; } = string.Empty;
+
+    public bool IsBrowser { get; set; }
 
     public bool IsActive { get; set; } = true;
 

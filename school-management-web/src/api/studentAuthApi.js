@@ -8,7 +8,6 @@ export const studentAuthApi = {
             data
         );
 
-        return api.post("/Auth/student-login", data);
     },
 
     changePassword(data) {

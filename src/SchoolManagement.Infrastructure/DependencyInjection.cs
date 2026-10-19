@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SchoolManagement.Application.Auditing;
 using SchoolManagement.Application.Notifications;
@@ -23,9 +23,9 @@ public static class DependencyInjection
             configuration.GetSection("Firebase"));
 
         // Firebase push notification service
-        services.AddScoped<
-            IPushNotificationService,
-            FirebasePushNotificationService>();
+        services.AddScoped<FirebasePushNotificationService>();
+        services.AddScoped<IPushNotificationService>(provider => provider.GetRequiredService<FirebasePushNotificationService>());
+        services.AddScoped<IBrowserPushSender>(provider => provider.GetRequiredService<FirebasePushNotificationService>());
 
         services.AddHttpContextAccessor();
 

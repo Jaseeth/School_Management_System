@@ -7,8 +7,8 @@ namespace SchoolManagement.API.Services;
 
 public class AnnualPromotionService(ApplicationDbContext db)
 {
-    // The school calendar uses Saudi local dates regardless of the server's timezone.
-    public static DateTime SchoolToday => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Arab Standard Time").Date;
+    // All school-day boundaries use the configured school timezone.
+    public static DateTime SchoolToday => SchoolClock.Today;
 
     public Task<object> RunAsync(DateTime today, CancellationToken cancellationToken = default) => db.Database.CreateExecutionStrategy().ExecuteAsync(() => RunCoreAsync(today, cancellationToken));
 

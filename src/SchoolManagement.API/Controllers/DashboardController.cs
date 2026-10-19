@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Dashboard.DTOs;
@@ -37,7 +37,7 @@ public class DashboardController : ControllerBase
     {
         var today =
             DateOnly.FromDateTime(
-                DateTime.Now);
+                SchoolManagement.API.Services.SchoolClock.Now);
 
 
         // ========================================================
@@ -290,7 +290,7 @@ public class DashboardController : ControllerBase
 
         var today =
             DateOnly.FromDateTime(
-                DateTime.Now);
+                SchoolManagement.API.Services.SchoolClock.Now);
 
 
         // ========================================================
@@ -544,9 +544,7 @@ public class DashboardController : ControllerBase
             });
         }
 
-        var schoolNow = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
-            DateTime.UtcNow,
-            "Asia/Colombo");
+        var schoolNow = SchoolManagement.API.Services.SchoolClock.Now;
 
         var todayDate = schoolNow.Date;
         var today = DateOnly.FromDateTime(todayDate);
@@ -816,7 +814,7 @@ public class DashboardController : ControllerBase
 
         var today =
             DateOnly.FromDateTime(
-                DateTime.Now);
+                SchoolManagement.API.Services.SchoolClock.Now);
 
         var schoolDay =
             (SchoolDay)(int)today.DayOfWeek;
@@ -1055,7 +1053,7 @@ public class DashboardController : ControllerBase
     {
         var today =
             DateOnly.FromDateTime(
-                DateTime.Now);
+                SchoolManagement.API.Services.SchoolClock.Now);
 
 
         // ========================================================

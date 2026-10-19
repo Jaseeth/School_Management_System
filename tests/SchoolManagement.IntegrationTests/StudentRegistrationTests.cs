@@ -131,8 +131,9 @@ public class StudentRegistrationTests
 
         private DatabaseScope()
         {
+            var sqlServer = Environment.GetEnvironmentVariable("SCHOOL_TEST_SQL_SERVER") ?? @"(localdb)\MSSQLLocalDB";
             Context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer($"Server=(localdb)\\MSSQLLocalDB;Database={_databaseName};Integrated Security=True;TrustServerCertificate=True",
+                .UseSqlServer($"Server={sqlServer};Database={_databaseName};Integrated Security=True;TrustServerCertificate=True",
                     options => options.EnableRetryOnFailure()).Options);
         }
 

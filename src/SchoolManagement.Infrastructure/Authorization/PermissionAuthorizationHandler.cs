@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Infrastructure.Persistence;
@@ -27,6 +27,11 @@ public class PermissionAuthorizationHandler
         {
             return;
         }
+
+        var uid = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!await _context.Users.AnyAsync(u => u.Id == uid && u.IsActive)) return;
+        var liveRoles = await (from ur in _context.UserRoles join r in _context.Roles on ur.RoleId equals r.Id where ur.UserId == uid select r.Name).ToListAsync();
+        if (!context.User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToHashSet().SetEquals(liveRoles)) return;
 
         var roleNames = context.User
             .Claims

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -114,6 +114,16 @@ public class AuthController : ControllerBase
         });
     }
 
+
+    [Authorize]
+    [HttpPost("refresh")]
+    public async Task<IActionResult> RefreshSession()
+    {
+        var user = await _userManager.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+        if (user == null || !user.IsActive) return Unauthorized();
+        var token = await _jwtTokenService.GenerateTokenAsync(user);
+        return Ok(new { token = token.Token, expiresAt = token.ExpiresAt });
+    }
 
     // ============================================================
     // STUDENT LOGIN
@@ -389,10 +399,12 @@ public class AuthController : ControllerBase
                 user.MustChangePassword
             });
 
+        var renewed = await _jwtTokenService.GenerateTokenAsync(user);
         return Ok(new
         {
             message =
                 "Password changed successfully.",
+            token = renewed.Token, expiresAt = renewed.ExpiresAt,
 
             mustChangePassword =
                 false

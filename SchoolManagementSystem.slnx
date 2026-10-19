@@ -23,6 +23,8 @@
   <Folder Name="/Frontend/public/">
     <File Path="school-management-web/public/favicon.svg" />
     <File Path="school-management-web/public/icons.svg" />
+    <File Path="school-management-web/public/school-push-store.js" />
+    <File Path="school-management-web/public/school-push-sw.js" />
   </Folder>
   <Folder Name="/Frontend/src/">
     <File Path="school-management-web/src/App.css" />
@@ -62,6 +64,10 @@
     <File Path="school-management-web/src/components/MondayAssembly.jsx" />
     <File Path="school-management-web/src/components/TemporaryAttendanceTeacher.jsx" />
     <File Path="school-management-web/src/components/TimetableIntervals.jsx" />
+    <File Path="school-management-web/src/components/NotificationInbox.jsx" />
+    <File Path="school-management-web/src/components/SessionNotice.jsx" />
+    <File Path="school-management-web/src/components/BrowserPushLifecycle.jsx" />
+    <File Path="school-management-web/src/components/BrowserPushSettings.jsx" />
   </Folder>
   <Folder Name="/Frontend/src/components/layout/">
     <File Path="school-management-web/src/components/layout/DashboardLayout.jsx" />
@@ -75,6 +81,7 @@
     <File Path="school-management-web/src/pages/academic/PromotionPanel.jsx" />
     <File Path="school-management-web/src/pages/academic/PromotionPage.jsx" />
     <File Path="school-management-web/src/pages/academic/SchoolCalendarPage.jsx" />
+    <File Path="school-management-web/src/pages/academic/SchoolEvents.jsx" />
     <File Path="school-management-web/src/pages/academic/PublicHolidayImport.jsx" />
     <File Path="school-management-web/src/pages/academic/GovernmentCalendarImport.jsx" />
     <File Path="school-management-web/src/pages/academic/AcademicSetupPanel.jsx" />
@@ -92,6 +99,7 @@
   </Folder>
   <Folder Name="/Frontend/src/pages/exams/">
     <File Path="school-management-web/src/pages/exams/TermsExamsManagementPage.jsx" />
+    <File Path="school-management-web/src/pages/exams/ExamsTestsPage.jsx" />
   </Folder>
   <Folder Name="/Frontend/src/pages/notifications/">
     <File Path="school-management-web/src/pages/notifications/StaffNotificationsPage.jsx" />
@@ -109,6 +117,7 @@
     <File Path="school-management-web/src/pages/parents/ParentResultsPage.jsx" />
     <File Path="school-management-web/src/pages/parents/ParentsManagementPage.jsx" />
     <File Path="school-management-web/src/pages/parents/ParentStudentLinks.jsx" />
+    <File Path="school-management-web/src/pages/parents/ParentSchedulePage.jsx" />
   </Folder>
   <Folder Name="/Frontend/src/pages/public/">
     <File Path="school-management-web/src/pages/public/PortalLandingPage.jsx" />
@@ -137,6 +146,7 @@
     <File Path="school-management-web/src/pages/staff/StaffLeaveCancellation.jsx" />
     <File Path="school-management-web/src/pages/staff/StaffLeaveHistory.jsx" />
     <File Path="school-management-web/src/pages/staff/StaffProfilePage.jsx" />
+    <File Path="school-management-web/src/pages/staff/StaffActions.jsx" />
   </Folder>
   <Folder Name="/Frontend/src/pages/students/">
     <File Path="school-management-web/src/pages/students/AddStudentPage.jsx" />
@@ -159,6 +169,7 @@
     <File Path="school-management-web/src/pages/students/StudentSpecialClassesPage.jsx" />
     <File Path="school-management-web/src/pages/students/StudentSubjectsPage.jsx" />
     <File Path="school-management-web/src/pages/students/StudentTimetablePage.jsx" />
+    <File Path="school-management-web/src/pages/students/StudentTransfer.jsx" />
   </Folder>
   <Folder Name="/Frontend/src/pages/teachers/">
     <File Path="school-management-web/src/pages/teachers/TeacherAssignmentsManagementPage.jsx" />
@@ -179,5 +190,13 @@
   <Folder Name="/Frontend/src/services/">
     <File Path="school-management-web/src/services/authService.js" />
     <File Path="school-management-web/src/services/portalSession.js" />
+    <File Path="school-management-web/src/services/browserPush.js" />
+  </Folder>
+  <Folder Name="/Frontend/src/pages/management/">
+    <File Path="school-management-web/src/pages/management/AttendanceOverviewPage.jsx" />
+    <File Path="school-management-web/src/pages/management/AuditLogsPage.jsx" />
+  </Folder>
+  <Folder Name="/Frontend/tests/">
+    <File Path="school-management-web/tests/browserPush.test.js" />
   </Folder>
 </Solution>

@@ -1,3 +1,4 @@
+import { useAuth } from "../../context/AuthContext";
 import { useEffect, useRef, useState } from "react";
 import { staffManagementApi, staffErrorMessage } from "../../api/staffManagementApi";
 
@@ -6,6 +7,8 @@ const inputClass = "mt-2 w-full rounded-xl border border-slate-200 bg-white px-4
 const buttonClass = "cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function AddStaffForm({ onCreated, onCancel }) {
+    const { user } = useAuth();
+    const admin = user?.roles?.includes("Admin");
     const [form, setForm] = useState({ ...emptyForm });
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -33,7 +36,7 @@ export default function AddStaffForm({ onCreated, onCancel }) {
                     setRolesError("Unexpected role response. Try loading roles again.");
                     return;
                 }
-                setRoles(response.data.filter((role) => role.name && !["student", "parent"].includes(role.name.toLowerCase())));
+                setRoles(response.data.filter((role) => role.name && !["student", "parent"].includes(role.name.toLowerCase()) && (admin || !["Admin", "Principal", "Deputy Principal"].includes(role.name))));
             } catch (err) {
                 if (active) setRolesError(staffErrorMessage(err, "Unable to load staff roles. Check that the API is running."));
             } finally {
@@ -42,7 +45,7 @@ export default function AddStaffForm({ onCreated, onCancel }) {
         }
         loadRoles();
         return () => { active = false; };
-    }, [reload]);
+    }, [reload, admin]);
 
     function change(event) {
         setForm((current) => ({ ...current, [event.target.name]: event.target.value }));

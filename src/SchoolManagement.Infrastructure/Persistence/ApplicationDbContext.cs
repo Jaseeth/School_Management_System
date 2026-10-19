@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Domain.Entities;
@@ -14,6 +14,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
     }
 
+    public DbSet<AssessmentSchedule> AssessmentSchedules => Set<AssessmentSchedule>();
+    public DbSet<SchoolEvent> SchoolEvents => Set<SchoolEvent>();
     public DbSet<AcademicYear> AcademicYears { get; set; }
     public DbSet<LeaveTeacherCoverage> LeaveTeacherCoverages => Set<LeaveTeacherCoverage>();
     public DbSet<StaffLeaveCancellation> StaffLeaveCancellations => Set<StaffLeaveCancellation>();
@@ -106,6 +108,32 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<AssessmentSchedule>(entity => {
+            entity.Property(e => e.Title).HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(4000);
+            entity.Property(e => e.Location).HasMaxLength(300);
+            entity.Property(e => e.CancellationReason).HasMaxLength(1000);
+            entity.Property(e => e.MaximumMarks).HasPrecision(10, 2);
+            entity.Property(e => e.Revision).IsConcurrencyToken();
+            entity.HasIndex(e => new { e.SchoolClassId, e.Date, e.IsCancelled });
+            entity.HasOne<AcademicYear>().WithMany().HasForeignKey(e => e.AcademicYearId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<SchoolClass>().WithMany().HasForeignKey(e => e.SchoolClassId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Subject>().WithMany().HasForeignKey(e => e.SubjectId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Exam>().WithMany().HasForeignKey(e => e.ExamId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(e => e.CreatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(e => e.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<SchoolEvent>(entity => {
+            entity.Property(e => e.Title).HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(4000);
+            entity.Property(e => e.Location).HasMaxLength(300);
+            entity.Property(e => e.Audience).HasMaxLength(20);
+            entity.Property(e => e.CancellationReason).HasMaxLength(1000);
+            entity.Property(e => e.Revision).IsConcurrencyToken();
+            entity.HasIndex(e => new { e.FromDate, e.ThroughDate });
+            entity.HasOne<Staff>().WithMany().HasForeignKey(e => e.CreatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(e => e.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
         builder.Entity<StaffLeaveCalendar>(entity => {
             entity.HasIndex(c => c.Year).IsUnique(); entity.Property(c => c.CountryCode).HasMaxLength(2); entity.Property(c => c.Region).HasMaxLength(100);
             entity.HasOne<Staff>().WithMany().HasForeignKey(c => c.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);

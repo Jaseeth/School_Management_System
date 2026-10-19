@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Students.Export;
 using SchoolManagement.Application.Students.Export.DTOs;
@@ -80,6 +80,8 @@ public class StudentExportService :
                     x.Student.IsActive ==
                     filter.IsActive.Value);
         }
+
+        if (!string.IsNullOrWhiteSpace(filter.Search)) { var search = filter.Search.Trim(); query = query.Where(e => e.Student.IndexNumber.Contains(search) || e.Student.FullName.Contains(search)); }
 
         var enrollments =
             await query

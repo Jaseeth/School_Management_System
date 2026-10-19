@@ -286,11 +286,8 @@ builder.Services.AddCors(options =>
             }
             else
             {
-                policy
-                    .WithOrigins(
-                        "https://your-school-domain.com")
-                    .AllowAnyHeader()
-                    .AllowAnyMethod();
+                var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
+                if (origins.Length > 0) policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
             }
         });
 });
@@ -602,6 +599,8 @@ builder.Services.AddRequestTimeouts(options =>
 // Build App
 // =====================================
 
+SchoolManagement.API.Services.SchoolClock.Configure(builder.Configuration);
+
 var app =
     builder.Build();
 
@@ -615,6 +614,11 @@ app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
+    // Read-only development diagnostics: field names/provider types only, never credentials or values.
+    app.MapGet("/api/browser-push/readiness", (IConfiguration configuration, HttpContext context) => {
+        context.Response.Headers.CacheControl = "no-store";
+        return Results.Ok(SchoolManagement.API.Services.BrowserPushReadiness.Describe(configuration));
+    }).AllowAnonymous();
     app.UseSwagger();
     app.UseSwaggerUI();
 

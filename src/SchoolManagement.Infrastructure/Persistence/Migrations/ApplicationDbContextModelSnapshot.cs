@@ -333,6 +333,109 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("AnnualPromotionRules");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AssessmentSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<int?>("ExamId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOfficial")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<decimal>("MaximumMarks")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.PrimitiveCollection<string>("ParentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.PrimitiveCollection<string>("StaffIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.PrimitiveCollection<string>("StudentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("CreatedByStaffId");
+
+                    b.HasIndex("ExamId");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("UpdatedByStaffId");
+
+                    b.HasIndex("SchoolClassId", "Date", "IsCancelled");
+
+                    b.ToTable("AssessmentSchedules");
+                });
+
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeItem", b =>
                 {
                     b.Property<int>("Id")
@@ -642,6 +745,9 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("ExamDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("ExamEndDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -933,6 +1039,9 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsBrowser")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("LastUsedAt")
                         .HasColumnType("datetime2");
 
@@ -1156,6 +1265,107 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("GradeId");
 
                     b.ToTable("SchoolClasses");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.SchoolEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("AudienceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<TimeOnly?>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IncludeParents")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IncludeStaff")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IncludeStudents")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsHoliday")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.PrimitiveCollection<string>("ParentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.PrimitiveCollection<string>("StaffIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<TimeOnly?>("StartTime")
+                        .HasColumnType("time");
+
+                    b.PrimitiveCollection<string>("StudentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("ThroughDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByStaffId");
+
+                    b.HasIndex("UpdatedByStaffId");
+
+                    b.HasIndex("FromDate", "ThroughDate");
+
+                    b.ToTable("SchoolEvents");
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.Section", b =>
@@ -2651,6 +2861,43 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.AssessmentSchedule", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Exam", null)
+                        .WithMany()
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Domain.Entities.SchoolClass", null)
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Subject", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SchoolManagement.Domain.Entities.AttendanceChangeItem", b =>
                 {
                     b.HasOne("SchoolManagement.Domain.Entities.AttendanceChangeRequest", "Request")
@@ -2955,6 +3202,21 @@ namespace SchoolManagement.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Grade");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Domain.Entities.SchoolEvent", b =>
+                {
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Domain.Entities.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SchoolManagement.Domain.Entities.SectionHeadAssignment", b =>

@@ -1,11 +1,11 @@
-﻿import {
+import { useAuth } from "../../context/AuthContext";
+import StudentTransfer from "./StudentTransfer";
+import {
     CalendarDays,
-    Download,
     FileSpreadsheet,
     GraduationCap,
     Plus,
     Search,
-    Upload,
     UserCheck,
     UserRoundCheck,
 } from "lucide-react";
@@ -20,6 +20,8 @@ import { academicApi } from "../../api/academicApi";
 import { useNavigate } from "react-router-dom";
 
 export default function StudentsPage() {
+    const { user } = useAuth();
+    const canManage = ["Admin", "Principal", "Deputy Principal"].some(r => user?.roles?.includes(r));
 
     // ============================================================
     // STUDENT DATA
@@ -634,23 +636,7 @@ export default function StudentsPage() {
 
                 </div>
 
-                <div className="flex flex-wrap gap-3">
-
-                    <button
-                        type="button"
-                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                    >
-                        <Upload className="h-4 w-4" />
-                        Import Students
-                    </button>
-
-                    <button
-                        type="button"
-                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export Students
-                    </button>
+                {canManage && <div className="flex flex-wrap gap-3">
 
                     <button
                         type="button"
@@ -665,9 +651,11 @@ export default function StudentsPage() {
                         Add Student
                     </button>
 
-                </div>
+                </div>}
 
             </div>
+
+            {canManage && <div className="mt-5"><StudentTransfer filters={{ search: search.trim() || undefined, isActive: status === "active" ? true : status === "inactive" ? false : undefined, academicYearId: academicYearId || undefined, sectionId: sectionId || undefined, gradeId: gradeId || undefined, schoolClassId: schoolClassId || undefined }} onChanged={async () => { await loadSummary(); await loadStudents(); }} /></div>}
 
             {/* ====================================================
                 SUMMARY CARDS

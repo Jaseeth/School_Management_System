@@ -1,4 +1,4 @@
-﻿namespace SchoolManagement.Domain.Entities;
+namespace SchoolManagement.Domain.Entities;
 
 public class Exam
 {
@@ -11,6 +11,8 @@ public class Exam
     public AcademicTerm AcademicTerm { get; set; } = null!;
 
     public DateTime ExamDate { get; set; }
+
+    public DateTime? ExamEndDate { get; set; }
 
     public decimal MaximumMarks { get; set; }
 

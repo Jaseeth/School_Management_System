@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SchoolManagement.Domain.Entities;
@@ -313,13 +313,13 @@ public class DevelopmentDataSeeder
             _configuration[
                 "DevelopmentUsers:TeacherPassword"];
 
-        if (string.IsNullOrWhiteSpace(adminPassword))
+        if (string.IsNullOrWhiteSpace(adminPassword) && await _userManager.FindByEmailAsync("admin@school.com") == null)
         {
             throw new InvalidOperationException(
                 "Development Admin password is not configured.");
         }
 
-        if (string.IsNullOrWhiteSpace(teacherPassword))
+        if (string.IsNullOrWhiteSpace(teacherPassword) && await _userManager.FindByEmailAsync("teacher1@school.com") == null)
         {
             throw new InvalidOperationException(
                 "Development Teacher password is not configured.");
@@ -331,7 +331,7 @@ public class DevelopmentDataSeeder
             email: "admin@school.com",
             designation: "Administrator",
             roleName: "Admin",
-            password: adminPassword);
+            password: adminPassword!);
 
         await CreateDevelopmentStaffAsync(
             staffNumber: "T001",
@@ -339,7 +339,7 @@ public class DevelopmentDataSeeder
             email: "teacher1@school.com",
             designation: "Test Teacher",
             roleName: "Teacher",
-            password: teacherPassword);
+            password: teacherPassword!);
     }
 
     private async Task CreateDevelopmentStaffAsync(
@@ -382,7 +382,7 @@ public class DevelopmentDataSeeder
                     $"Unable to create development user {email}. {errors}");
             }
         }
-        else
+        else if (!string.IsNullOrWhiteSpace(password))
         {
             // Development only:
             // Make sure the existing account uses
@@ -558,5 +558,6 @@ public class DevelopmentDataSeeder
         }
 
         await _context.SaveChangesAsync();
+        await SchoolManagement.Infrastructure.Authorization.RoleAccessBaseline.Apply(_context);
     }
 }

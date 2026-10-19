@@ -1,3 +1,4 @@
+import { disableBrowserPush } from "./browserPush";
 import api from "../api/axios";
 import { getPortalToken } from "./portalSession";
 
@@ -34,7 +35,8 @@ export const authService = {
         return data;
     },
 
-    logout() {
+    async logout() {
+        await disableBrowserPush("staff").catch(() => {});
         localStorage.removeItem(ACCESS_TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
         window.dispatchEvent(new Event("auth-session-changed"));

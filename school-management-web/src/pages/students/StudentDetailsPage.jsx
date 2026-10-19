@@ -192,7 +192,7 @@ export default function StudentDetailsPage() {
                             </button>
                         )}
 
-                        <button
+                        {hasRole("Admin") && <button
                             type="button"
                             onClick={handleGenerateRegistrationCode}
                             disabled={generatingCode}
@@ -202,7 +202,7 @@ export default function StudentDetailsPage() {
                             {generatingCode
                                 ? "Generating..."
                                 : "Generate Registration Code"}
-                        </button>
+                        </button>}
                     </div>
                 </div>
             </div>

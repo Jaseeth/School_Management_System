@@ -1,4 +1,4 @@
-﻿using FirebaseAdmin;
+using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +10,7 @@ using SchoolManagement.Infrastructure.Persistence;
 namespace SchoolManagement.Infrastructure.Notifications;
 
 public class FirebasePushNotificationService
-    : IPushNotificationService
+    : IPushNotificationService, IBrowserPushSender
 {
     private readonly ApplicationDbContext _context;
     private readonly FirebaseSettings _settings;
@@ -60,6 +60,11 @@ public class FirebasePushNotificationService
         string? referenceType = null,
         int? referenceId = null)
     {
+        var recipientUserId = await _context.Staff
+            .Where(s => s.Id == staffId && s.IsActive && _context.Users.Any(u => u.Id == s.ApplicationUserId && u.IsActive))
+            .Select(s => s.ApplicationUserId).FirstOrDefaultAsync();
+        if (recipientUserId == null) return;
+
         var deviceTokens =
             await _context.StaffDeviceTokens
                 .Where(x =>
@@ -80,7 +85,7 @@ public class FirebasePushNotificationService
                     title,
                     message,
                     referenceType,
-                    referenceId);
+                    referenceId, deviceToken.Platform == SchoolManagement.Domain.Enums.DevicePlatform.Web ? "staff" : null, recipientUserId);
 
             if (result.ShouldDeactivateToken)
             {
@@ -110,6 +115,11 @@ public class FirebasePushNotificationService
         string? referenceType = null,
         int? referenceId = null)
     {
+        var recipientUserId = await _context.Students
+            .Where(s => s.Id == studentId && s.IsActive && _context.Users.Any(u => u.Id == s.ApplicationUserId && u.IsActive))
+            .Select(s => s.ApplicationUserId).FirstOrDefaultAsync();
+        if (recipientUserId == null) return;
+
         var deviceTokens =
             await _context.StudentDeviceTokens
                 .Where(x =>
@@ -130,7 +140,7 @@ public class FirebasePushNotificationService
                     title,
                     message,
                     referenceType,
-                    referenceId);
+                    referenceId, deviceToken.Platform == SchoolManagement.Domain.Enums.DevicePlatform.Web ? "student" : null, recipientUserId);
 
             if (result.ShouldDeactivateToken)
             {
@@ -159,6 +169,11 @@ public class FirebasePushNotificationService
         string? referenceType = null,
         int? referenceId = null)
     {
+        var recipientUserId = await _context.ParentGuardians
+            .Where(s => s.Id == parentGuardianId && s.IsActive && _context.Users.Any(u => u.Id == s.ApplicationUserId && u.IsActive))
+            .Select(s => s.ApplicationUserId).FirstOrDefaultAsync();
+        if (recipientUserId == null) return;
+
         var deviceTokens =
             await _context.ParentDeviceTokens
                 .Where(x =>
@@ -180,7 +195,7 @@ public class FirebasePushNotificationService
                     title,
                     message,
                     referenceType,
-                    referenceId);
+                    referenceId, deviceToken.IsBrowser ? "parent" : null, recipientUserId);
 
             if (result.ShouldDeactivateToken)
             {
@@ -201,6 +216,9 @@ public class FirebasePushNotificationService
     }
 
 
+    public async Task<bool> SendBrowserTestAsync(string token, string portal, string recipientUserId)
+        => (await SendFirebaseMessageAsync(token, "School Management", "Browser alert test", null, null, portal, recipientUserId)).Success;
+
     // ============================================================
     // COMMON FIREBASE SEND METHOD
     // ============================================================
@@ -211,7 +229,7 @@ public class FirebasePushNotificationService
             string title,
             string message,
             string? referenceType,
-            int? referenceId)
+            int? referenceId, string? browserPortal = null, string? recipientUserId = null)
     {
         try
         {
@@ -222,7 +240,7 @@ public class FirebasePushNotificationService
                     Token =
                         token,
 
-                    Notification =
+                    Notification = browserPortal != null ? null :
                         new FirebaseAdmin.Messaging.Notification
                         {
                             Title =
@@ -247,6 +265,10 @@ public class FirebasePushNotificationService
                             }
                         }
                 };
+
+            if (browserPortal != null) {
+                firebaseMessage = BrowserPushMessage.Create(token, browserPortal, recipientUserId ?? "");
+            }
 
             await FirebaseMessaging
                 .DefaultInstance

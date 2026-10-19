@@ -1,10 +1,12 @@
+import ParentSchedulePage from "../pages/parents/ParentSchedulePage";
+import AttendanceOverviewPage from "../pages/management/AttendanceOverviewPage";
+import AuditLogsPage from "../pages/management/AuditLogsPage";
 import PromotionPage from "../pages/academic/PromotionPage";
 import StaffLeavePage from "../pages/staff/StaffLeavePage";
 import StaffAttendancePage from "../pages/staff/StaffAttendancePage";
 import StaffLeavePolicy from "../pages/staff/StaffLeavePolicy";
 import SchoolCalendarPage from "../pages/academic/SchoolCalendarPage";
 import {
-    Navigate,
     Route,
     Routes,
 } from "react-router-dom";
@@ -73,7 +75,7 @@ import SpecialClassesPage from "../pages/specialClasses/SpecialClassesPage";
 import StaffNotificationsPage from "../pages/notifications/StaffNotificationsPage";
 import ReportsPage from "../pages/reports/ReportsPage";
 
-import TermsExamsManagementPage from "../pages/exams/TermsExamsManagementPage";
+import ExamsTestsPage from "../pages/exams/ExamsTestsPage";
 import AcademicSetupPage from "../pages/academic/AcademicSetupPage";
 import TeacherAssignmentsManagementPage from "../pages/teachers/TeacherAssignmentsManagementPage";
 import TimetableManagementPage from "../pages/timetable/TimetableManagementPage";
@@ -147,6 +149,8 @@ export default function AppRoutes() {
                 <Route path="/staff-leave" element={<StaffLeavePage />} />
                 <Route path="/staff-attendance" element={<StaffAttendancePage />} />
                 <Route path="/staff-leave-allowance" element={<StaffLeavePolicy manage />} />
+                <Route path="/attendance" element={<AttendanceOverviewPage />} />
+                <Route path="/audit-logs" element={<AuditLogsPage />} />
                 <Route path="/school-calendar" element={<SchoolCalendarPage />} />
 
                 <Route path="/teacher-assignments" element={<TeacherAssignmentsManagementPage />} />
@@ -203,7 +207,7 @@ export default function AppRoutes() {
 
                 <Route
                     path="/exams"
-                    element={<TermsExamsManagementPage />}
+                    element={<ExamsTestsPage />}
                 />
 
                 {/*
@@ -221,10 +225,7 @@ export default function AppRoutes() {
             <Route
                 path="*"
                 element={
-                    <Navigate
-                        to="/dashboard"
-                        replace
-                    />
+                    <div className="mx-auto max-w-xl p-10"><h1 className="text-2xl font-bold">Page not found</h1><p className="mt-3">This page is unavailable. Use your portal navigation to continue.</p><a className="mt-4 inline-block text-blue-700" href="/">Go to portal selection</a></div>
                 }
             />
 
@@ -351,6 +352,9 @@ export default function AppRoutes() {
                 path="/student/forgot-password"
                 element={<StudentForgotPasswordPage />}
             />
+
+            <Route path="/parent/children/:studentId/schedule" element={<ParentProtectedRoute><ParentSchedulePage /></ParentProtectedRoute>} />
+            <Route path="/parent/school-calendar" element={<ParentProtectedRoute><div className="mx-auto max-w-7xl px-5 py-10"><a href="/parent/dashboard" className="mb-6 inline-block text-sm text-blue-600">Back to My Children</a><SchoolCalendarPage parent /></div></ParentProtectedRoute>} />
 
             <Route path="/parent/login" element={<ParentLoginPage />} />
             <Route path="/parent/announcements" element={<ParentProtectedRoute><ParentAnnouncementsPage /></ParentProtectedRoute>} />

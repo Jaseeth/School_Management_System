@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { authService } from "../services/authService";
 
 const AuthContext = createContext(null);
@@ -37,8 +37,8 @@ export function AuthProvider({ children }) {
         return result;
     };
 
-    const logout = () => {
-        authService.logout();
+    const logout = async () => {
+        await authService.logout();
         setUser(null);
     };
 

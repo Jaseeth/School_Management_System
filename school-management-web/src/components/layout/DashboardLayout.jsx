@@ -1,4 +1,4 @@
-﻿import {
+import {
     Bell,
     BookOpen,
     CalendarDays,
@@ -38,7 +38,7 @@ const menuItems = [
     },
     {
         title: "Children",
-        path: "/parent/children",
+        path: "/parent/dashboard",
         icon: GraduationCap,
         roles: ["Parent"],
     },
@@ -205,10 +205,10 @@ const menuItems = [
     },
 
     {
-        title: "Terms & Exams",
+        title: "Exams & Tests",
         path: "/exams",
         icon: FileText,
-        roles: ["Admin", "Principal", "Deputy Principal"],
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
     },
 ];
 
@@ -248,8 +248,10 @@ export default function DashboardLayout() {
         setTooltip(null);
     }, [collapsed]);
 
+    const customStaff = !["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher", "Student", "Parent"].some(role => user?.roles?.includes(role));
     const allowedMenuItems = menuItems.filter(
         (item) =>
+            (customStaff && ["/dashboard", "/staff-leave", "/school-calendar", "/notifications"].includes(item.path)) ||
             !item.roles ||
             item.roles.some((role) => user?.roles?.includes(role))
     );
@@ -258,8 +260,8 @@ export default function DashboardLayout() {
     const firstLetter =
         user?.fullName?.charAt(0)?.toUpperCase() || "U";
 
-    function handleLogout() {
-        logout();
+    async function handleLogout() {
+        await logout();
         navigate("/login", { replace: true });
     }
 

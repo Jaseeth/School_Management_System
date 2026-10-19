@@ -1,3 +1,4 @@
+import StaffActions from "./StaffActions";
 import { useEffect, useState } from "react";
 import { Plus, RefreshCw, Search, Users } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -101,6 +102,7 @@ export default function StaffManagementPage() {
                                     <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words font-semibold text-slate-950">{person.fullName}</h3><p className="mt-1 break-all text-sm text-slate-500">{person.staffNumber}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${isActive(person) ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}>{isActive(person) ? "Active" : "Inactive"}</span></div>
                                     <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-500">Email</dt><dd className="mt-1 break-all text-slate-800">{person.email || "—"}</dd></div><div><dt className="text-slate-500">Designation</dt><dd className="mt-1 break-words text-slate-800">{person.designation || "—"}</dd></div><div><dt className="text-slate-500">Roles</dt><dd className="mt-1 break-words text-slate-800">{person.roles?.join(", ") || "—"}</dd></div></dl>
                                     <p className={`mt-4 rounded-lg px-3 py-2 text-xs font-medium ${person.mustChangePassword ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600"}`}>{person.mustChangePassword ? "Password change required at next sign-in" : "Password change completed"}</p>
+                                    <StaffActions person={person} admin={user?.roles?.includes("Admin")} self={person.email?.toLowerCase() === user?.email?.toLowerCase()} onSaved={() => setReload(v => v + 1)} />
                                 </article>
                             ))}
                         </div>

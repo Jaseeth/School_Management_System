@@ -13,6 +13,9 @@ public class StaffLeaveBalanceService(ApplicationDbContext db)
         var calendars = await db.StaffLeaveCalendars.AsNoTracking().Where(c => c.Year >= from.Year && c.Year <= to.Year).ToDictionaryAsync(c => c.Year);
         var start = DateOnly.FromDateTime(from); var end = DateOnly.FromDateTime(to);
         var holidays = (await db.StaffLeaveHolidays.AsNoTracking().Where(h => h.IsActive && h.Date >= start && h.Date <= end).Select(h => h.Date).ToListAsync()).ToHashSet();
+        var holidayEvents = await db.SchoolEvents.AsNoTracking().Where(e => !e.IsCancelled && e.IsHoliday && e.FromDate <= end && e.ThroughDate >= start).Select(e => new { e.FromDate, e.ThroughDate }).ToListAsync();
+        foreach (var e in holidayEvents)
+            for (var day = e.FromDate < start ? start : e.FromDate; day <= e.ThroughDate && day <= end; day = day.AddDays(1)) holidays.Add(day);
         var days = 0;
         for (var day = start; day <= end; day = day.AddDays(1))
         {

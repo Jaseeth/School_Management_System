@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using ClosedXML.Excel;
 using SchoolManagement.Application.Students.Import;
 using SchoolManagement.Application.Students.Import.DTOs;
@@ -39,6 +39,8 @@ public class StudentImportExcelReader :
         "Parent2Emergency"
     ];
 
+    public static IReadOnlyList<string> TemplateHeaders => RequiredHeaders;
+
     public Task<IReadOnlyList<StudentImportRowDto>> ReadAsync(
         Stream stream,
         CancellationToken cancellationToken = default)
@@ -49,6 +51,10 @@ public class StudentImportExcelReader :
                 nameof(stream));
         }
 
+        using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true)) {
+            if (archive.Entries.Count > 2000 || archive.Entries.Sum(e => e.Length) > 50L * 1024 * 1024) throw new InvalidOperationException("Excel file expands beyond the permitted size. Use a smaller workbook.");
+        }
+        stream.Position = 0;
         using var workbook =
             new XLWorkbook(stream);
 
@@ -89,6 +95,8 @@ public class StudentImportExcelReader :
         var lastRowNumber =
             lastRowUsed.RowNumber();
 
+        if (lastRowNumber > 2001) throw new InvalidOperationException("A maximum of 2000 student rows is allowed. Remove unused formatted rows if necessary.");
+        if (worksheet.CellsUsed().Any(c => c.HasFormula)) throw new InvalidOperationException("Use plain values in the student import sheet, without formulas.");
         // Row 1 contains column headers.
         for (var rowNumber = 2;
              rowNumber <= lastRowNumber;

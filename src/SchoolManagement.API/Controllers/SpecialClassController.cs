@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -115,7 +115,7 @@ public class SpecialClassController : ControllerBase
         }
 
         if (request.ClassDate <
-            DateOnly.FromDateTime(DateTime.Today))
+            DateOnly.FromDateTime(SchoolManagement.API.Services.SchoolClock.Today))
         {
             return BadRequest(new
             {
@@ -456,7 +456,7 @@ public class SpecialClassController : ControllerBase
         }
 
         if (request.ClassDate <
-            DateOnly.FromDateTime(DateTime.Today))
+            DateOnly.FromDateTime(SchoolManagement.API.Services.SchoolClock.Today))
         {
             return BadRequest(new
             {
@@ -1034,7 +1034,7 @@ public class SpecialClassController : ControllerBase
     {
         var today =
             DateOnly.FromDateTime(
-                DateTime.Today);
+                SchoolManagement.API.Services.SchoolClock.Today);
 
         var query =
             _context.SpecialClassSessions
@@ -1669,7 +1669,7 @@ public class SpecialClassController : ControllerBase
 
         if (request.ClassDate <
             DateOnly.FromDateTime(
-                DateTime.Today))
+                SchoolManagement.API.Services.SchoolClock.Today))
         {
             return BadRequest(new
             {

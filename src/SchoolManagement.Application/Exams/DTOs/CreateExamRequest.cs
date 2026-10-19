@@ -1,4 +1,4 @@
-﻿namespace SchoolManagement.Application.Exams.DTOs;
+namespace SchoolManagement.Application.Exams.DTOs;
 
 public class CreateExamRequest
 {
@@ -7,6 +7,8 @@ public class CreateExamRequest
     public int AcademicTermId { get; set; }
 
     public DateTime ExamDate { get; set; }
+
+    public DateTime? ExamEndDate { get; set; }
 
     public decimal MaximumMarks { get; set; }
 }

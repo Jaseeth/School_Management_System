@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
 
@@ -18,7 +18,7 @@ public sealed class AttendanceWindowService
         _clock = clock ?? TimeProvider.System;
 
         _schoolZone = TimeZoneInfo.FindSystemTimeZoneById(
-            configuration["Attendance:SchoolTimeZoneId"]
+            configuration["School:TimeZoneId"] ?? configuration["Attendance:SchoolTimeZoneId"]
             ?? "Asia/Colombo");
     }
 

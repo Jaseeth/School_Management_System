@@ -13,6 +13,10 @@ export const examsManagementApi = {
         return api.get(`/exams/${termId}`);
     },
 
+    updateGovernmentDates(id, payload) {
+        return api.put(`/exams/${id}/government-dates`, payload);
+    },
+
     createExam(payload) {
         return api.post("/exams", payload);
     },

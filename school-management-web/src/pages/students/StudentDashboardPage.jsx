@@ -1,3 +1,4 @@
+import { disableBrowserPush } from "../../services/browserPush";
 import {
     Award,
     BookOpen,
@@ -49,7 +50,8 @@ export default function StudentDashboardPage() {
 
 
     const handleLogout =
-        () => {
+        async () => {
+            await disableBrowserPush("student").catch(() => {});
 
             localStorage.removeItem(
                 "studentAccessToken"

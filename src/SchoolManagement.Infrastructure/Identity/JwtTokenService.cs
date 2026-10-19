@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -39,6 +39,8 @@ public class JwtTokenService
                 ClaimTypes.Email,
                 user.Email ?? string.Empty)
         };
+
+        claims.Add(new Claim("session_stamp", await _userManager.GetSecurityStampAsync(user) ?? ""));
 
         foreach (var role in roles)
         {

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 using SchoolManagement.Infrastructure.Identity;
 
@@ -24,27 +24,22 @@ public class ForcePasswordChangeMiddleware
             return;
         }
 
-        // Allow the password-change endpoint
         var path = context.Request.Path.Value?.ToLowerInvariant();
 
-        if (path == "/api/auth/change-password")
-        {
-            await _next(context);
-            return;
-        }
+        if (path is "/api/auth/login" or "/api/auth/student-login" || path?.StartsWith("/api/auth/staff-forgot-password/") == true || path?.StartsWith("/api/student-registration/") == true) { await _next(context); return; }
 
         var userId = context.User.FindFirstValue(
             ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(userId))
         {
-            await _next(context);
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
 
         var user = await userManager.FindByIdAsync(userId);
 
-        if (user == null)
+        if (user == null || !user.IsActive)
         {
             context.Response.StatusCode =
                 StatusCodes.Status401Unauthorized;
@@ -52,6 +47,15 @@ public class ForcePasswordChangeMiddleware
             return;
         }
 
+        var tokenStamp = context.User.FindFirstValue("session_stamp");
+        var currentRoles = await userManager.GetRolesAsync(user);
+        var tokenRoles = context.User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToHashSet(StringComparer.Ordinal);
+        if (tokenStamp == null || tokenStamp != await userManager.GetSecurityStampAsync(user) || !tokenRoles.SetEquals(currentRoles)) {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { message = "Your account access changed. Sign in again to continue." });
+            return;
+        }
+        if (path == "/api/auth/change-password") { await _next(context); return; }
         if (user.MustChangePassword)
         {
             context.Response.StatusCode =
