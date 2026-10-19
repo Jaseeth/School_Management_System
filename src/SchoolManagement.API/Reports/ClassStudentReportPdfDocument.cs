@@ -1,3 +1,4 @@
+using SchoolManagement.Domain.Entities;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -9,13 +10,15 @@ public class ClassStudentReportPdfDocument : IDocument
 {
     private readonly ClassStudentReportDto _report;
     private readonly string _logoPath;
+    private readonly SchoolProfile? _school;
 
     public ClassStudentReportPdfDocument(
         ClassStudentReportDto report,
-        string logoPath)
+        string logoPath, SchoolProfile? school = null)
     {
         _report = report;
         _logoPath = logoPath;
+        _school = school;
     }
 
     public DocumentMetadata GetMetadata()
@@ -68,7 +71,8 @@ public class ClassStudentReportPdfDocument : IDocument
                 .Height(30)
                 .Element(logoContainer =>
                 {
-                    if (!string.IsNullOrWhiteSpace(
+                    if (!string.IsNullOrEmpty(_school?.LogoDataUrl)) { logoContainer.Image(Convert.FromBase64String(_school.LogoDataUrl.Split(',')[1])).FitArea(); }
+                    else if (!string.IsNullOrWhiteSpace(
                             _logoPath) &&
                         File.Exists(_logoPath))
                     {
@@ -87,7 +91,7 @@ public class ClassStudentReportPdfDocument : IDocument
             column.Item()
                 .PaddingTop(5)
                 .AlignCenter()
-                .Text("AL MANAR NATIONAL SCHOOL")
+                .Text(_school?.Name ?? "School Management")
                 .FontSize(18)
                 .Bold();
 

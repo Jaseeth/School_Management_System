@@ -200,7 +200,7 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         var document =
             new StudentAcademicProfilePdfDocument(
                 report,
-                logoPath);
+                logoPath, await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1));
 
         var pdfBytes =
             document.GeneratePdf();
@@ -1011,7 +1011,7 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         var document =
             new ClassStudentReportPdfDocument(
                 report,
-                logoPath);
+                logoPath, await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1));
 
         var pdfBytes =
             document.GeneratePdf();
@@ -1522,7 +1522,7 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         var document =
             new ClassAttendanceReportPdfDocument(
                 report,
-                logoPath);
+                logoPath, await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1));
 
         var pdfBytes =
             document.GeneratePdf();
@@ -1883,7 +1883,7 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         var document =
             new StudentResultReportPdfDocument(
                 report,
-                logoPath);
+                logoPath, await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1));
 
         var pdfBytes =
             document.GeneratePdf();
@@ -2448,7 +2448,7 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         var document =
             new ClassResultReportPdfDocument(
                 report,
-                logoPath);
+                logoPath, await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1));
 
         var pdfBytes =
             document.GeneratePdf();

@@ -36,6 +36,8 @@ export default function ProtectedRoute({ children }) {
     const leaders = ["Admin", "Principal", "Deputy Principal"];
     const path = location.pathname;
     let allowed = null;
+    if (path === "/backups") allowed = ["Admin"];
+    if (path === "/school-settings") allowed = leaders;
     if (path === "/students/add" || ["/staff", "/parents", "/academic-setup", "/teacher-assignments", "/timetable", "/promotion", "/audit-logs"].includes(path)) allowed = leaders;
     if (path === "/attendance" || path === "/reports" || path === "/staff-attendance") allowed = [...leaders, "Section Head"];
     if (path === "/section-head-assignments" || path === "/staff-leave-allowance" || path.endsWith("/reset-password")) allowed = ["Admin"];

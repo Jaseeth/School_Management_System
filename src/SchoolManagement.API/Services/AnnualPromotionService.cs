@@ -75,7 +75,7 @@ public class AnnualPromotionService(ApplicationDbContext db)
     public const string LockSql = "DECLARE @result int; EXEC @result = sp_getapplock @Resource = 'AnnualStudentPromotion', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000; IF @result < 0 THROW 51000, 'Could not acquire promotion lock.', 1;";
 }
 
-public class AnnualPromotionWorker(IServiceScopeFactory scopes, ILogger<AnnualPromotionWorker> logger) : BackgroundService
+public class AnnualPromotionWorker(IServiceScopeFactory scopes, ILogger<AnnualPromotionWorker> logger, DatabaseBackupService backups) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -85,6 +85,7 @@ public class AnnualPromotionWorker(IServiceScopeFactory scopes, ILogger<AnnualPr
         {
             try
             {
+                if (backups.IsRestoring) continue;
                 using var scope = scopes.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<AnnualPromotionService>().RunAsync(AnnualPromotionService.SchoolToday, stoppingToken);
             }

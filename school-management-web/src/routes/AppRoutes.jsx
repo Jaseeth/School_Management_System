@@ -1,3 +1,4 @@
+import SchoolSettingsPage from "../pages/management/SchoolSettingsPage";
 import ParentSchedulePage from "../pages/parents/ParentSchedulePage";
 import AttendanceOverviewPage from "../pages/management/AttendanceOverviewPage";
 import AuditLogsPage from "../pages/management/AuditLogsPage";
@@ -7,6 +8,7 @@ import StaffAttendancePage from "../pages/staff/StaffAttendancePage";
 import StaffLeavePolicy from "../pages/staff/StaffLeavePolicy";
 import SchoolCalendarPage from "../pages/academic/SchoolCalendarPage";
 import {
+    Navigate,
     Route,
     Routes,
 } from "react-router-dom";
@@ -152,6 +154,8 @@ export default function AppRoutes() {
                 <Route path="/attendance" element={<AttendanceOverviewPage />} />
                 <Route path="/audit-logs" element={<AuditLogsPage />} />
                 <Route path="/school-calendar" element={<SchoolCalendarPage />} />
+                <Route path="/school-settings" element={<SchoolSettingsPage />} />
+                <Route path="/backups" element={<Navigate to="/school-settings?tab=backups" replace />} />
 
                 <Route path="/teacher-assignments" element={<TeacherAssignmentsManagementPage />} />
                 <Route path="/timetable" element={<TimetableManagementPage />} />

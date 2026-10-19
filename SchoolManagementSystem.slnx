@@ -193,6 +193,8 @@
     <File Path="school-management-web/src/services/browserPush.js" />
   </Folder>
   <Folder Name="/Frontend/src/pages/management/">
+    <File Path="school-management-web/src/pages/management/BackupsPage.jsx" />
+    <File Path="school-management-web/src/pages/management/SchoolSettingsPage.jsx" />
     <File Path="school-management-web/src/pages/management/AttendanceOverviewPage.jsx" />
     <File Path="school-management-web/src/pages/management/AuditLogsPage.jsx" />
   </Folder>

@@ -533,6 +533,8 @@ builder.Services
 
 builder.Services.AddScoped<
     SchoolManagement.API.Services.AttendanceWindowService>();
+builder.Services.AddSingleton<SchoolManagement.API.Services.DatabaseBackupService>();
+builder.Services.AddHostedService<SchoolManagement.API.Services.DatabaseBackupWorker>();
 
 
 builder.Services.AddHsts(options =>
@@ -633,6 +635,17 @@ if (app.Environment.IsDevelopment())
     await seeder.SeedAsync();
 }
 
+using (var settingsScope = app.Services.CreateScope())
+{
+    var profile = await settingsScope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
+        .SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1);
+    if (profile != null)
+    {
+        SchoolManagement.API.Services.SchoolClock.SetZone(TimeZoneInfo.FindSystemTimeZoneById(profile.TimeZoneId));
+        builder.Configuration["School:TimeZoneId"] = profile.TimeZoneId;
+    }
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
@@ -654,6 +667,16 @@ app.UseHttpsRedirection();
 app.UseResponseCompression();
 
 app.UseRequestTimeouts();
+app.Use(async (context, next) => {
+    if (context.RequestServices.GetRequiredService<SchoolManagement.API.Services.DatabaseBackupService>().IsRestoring
+        && !context.Request.Path.StartsWithSegments("/api/backups")) {
+        context.Response.StatusCode = 503;
+        context.Response.Headers.RetryAfter = "30";
+        await context.Response.WriteAsJsonAsync(new { message = "The school database is being restored. Please try again shortly." });
+        return;
+    }
+    await next();
+});
 
 // =====================================
 // Security Headers

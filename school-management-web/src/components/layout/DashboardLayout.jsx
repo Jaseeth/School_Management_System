@@ -25,6 +25,7 @@ import StaffAccountMenu from "./StaffAccountMenu";
 import api from "../../api/axios";
 
 const menuItems = [
+    { title: "School Settings", path: "/school-settings", icon: School, roles: ["Admin", "Principal", "Deputy Principal"] },
     {
         title: "Dashboard",
         path: "/dashboard",
@@ -213,6 +214,13 @@ const menuItems = [
 ];
 
 export default function DashboardLayout() {
+    const [schoolProfile, setSchoolProfile] = useState(null);
+    useEffect(() => {
+        let active = true;
+        const load = () => api.get("/school-settings").then(r => { if (active) setSchoolProfile(r.data); }).catch(() => {});
+        load(); window.addEventListener("school-settings-changed", load);
+        return () => { active = false; window.removeEventListener("school-settings-changed", load); };
+    }, []);
     const navigate = useNavigate();
     const { user, logout } = useAuth();
     const [unreadCount, setUnreadCount] = useState(0);
@@ -377,7 +385,7 @@ export default function DashboardLayout() {
                 <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/[0.08] px-5">
                     <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 shadow-md shadow-blue-950/30">
-                            <School className="h-6 w-6 text-white" />
+                            {schoolProfile?.logoDataUrl ? <img src={schoolProfile.logoDataUrl} alt="School logo" className="h-8 w-8 object-contain" /> : <School className="h-6 w-6 text-white" />}
                         </div>
 
                         <div
@@ -385,7 +393,7 @@ export default function DashboardLayout() {
                                 }`}
                         >
                             <p className="truncate text-sm font-semibold text-white">
-                                School Management
+                                {schoolProfile?.name || "School Management"}
                             </p>
                             <p className="truncate text-xs text-slate-400">
                                 Education System
@@ -521,7 +529,7 @@ export default function DashboardLayout() {
 
                         <div>
                             <h1 className="text-lg font-semibold text-slate-950">
-                                School Management
+                                {schoolProfile?.name || "School Management"}
                             </h1>
                             <p className="hidden text-sm text-slate-500 sm:block">
                                 Manage your school from one place
