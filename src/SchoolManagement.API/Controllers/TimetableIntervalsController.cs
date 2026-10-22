@@ -65,8 +65,9 @@ public class TimetableIntervalsController(ApplicationDbContext context, UserMana
         if (!roles.Any(x => x is "Admin" or "Principal" or "Deputy Principal")) return Forbid();
         if (!Enum.IsDefined(request.Day) || request.EndTime <= request.StartTime)
             return BadRequest(new { message = "Select a weekday and an end time later than the start time." });
-        if (request.Day == SchoolDay.Monday && request.StartTime < new TimeOnly(8, 15))
-            return BadRequest(new { message = "Monday Assembly is reserved until 08:15. Intervals must start after Assembly." });
+        var assemblyEnd = await context.SchoolProfiles.Select(x => (TimeOnly?)x.MondayAssemblyEnd).FirstOrDefaultAsync() ?? new TimeOnly(8, 15);
+        if (request.Day == SchoolDay.Monday && request.StartTime < assemblyEnd)
+            return BadRequest(new { message = $"Monday Assembly is reserved until {assemblyEnd:HH:mm}. Intervals must start after Assembly." });
         var strategy = context.Database.CreateExecutionStrategy();
         var attempt = 0;
         return await strategy.ExecuteAsync<IActionResult>(async () =>

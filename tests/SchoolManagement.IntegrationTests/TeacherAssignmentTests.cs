@@ -306,7 +306,10 @@ public partial class TeacherAssignmentTests
         Assert.IsType<OkObjectResult>(await admin.SaveHoliday(new(new DateOnly(2026, 1, 7), "Updated holiday name")));
         Assert.Equal(2, await db.Context.StaffLeaveHolidays.CountAsync());
         Assert.IsType<OkObjectResult>(await admin.SaveAllowance(new(2026, null, 40)));
-        Assert.IsType<OkObjectResult>(await admin.SaveAllowance(new(2026, db.TeacherIds[0], 8)));
+        Assert.IsType<BadRequestObjectResult>(await admin.SaveAllowance(new(2026, db.TeacherIds[0], 8)));
+        // Pre-existing individual base totals are preserved; new additions require approval.
+        db.Context.StaffLeaveAllowances.Add(new StaffLeaveAllowance { Year = 2026, StaffId = db.TeacherIds[0], Days = 8, LeaveType = 0, UpdatedByStaffId = db.AdminStaffId });
+        await db.Context.SaveChangesAsync();
         var service = new StaffLeaveBalanceService(db.Context);
         Assert.Equal(5, await service.WorkingDays(new(2026, 1, 5), new(2026, 1, 12)));
         StaffLeaveRequest Leave(StaffLeaveStatus status, DateTime from, DateTime to) => new() { StaffId = db.TeacherIds[0], LeaveType = StaffLeaveType.Sick, FromDate = from, ToDate = to, Status = status, Reason = "Count check" };
@@ -958,6 +961,13 @@ public partial class TeacherAssignmentTests
             new Claim(ClaimTypes.NameIdentifier, userId)], "Test")) } } };
         var date = DateOnly.FromDateTime(DateTime.Today.AddDays(7));
         while (date.DayOfWeek != DayOfWeek.Saturday) date = date.AddDays(1);
+        var creationOptions = await Controller(actorUserId).CreationOptions();
+        if (creatorRole == "Teacher") Assert.IsType<ForbidResult>(creationOptions);
+        else
+        {
+            var options = System.Text.Json.JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(creationOptions).Value);
+            Assert.Single(options.GetProperty("assignments").EnumerateArray());
+        }
         if (creatorRole == "Teacher")
         {
             Assert.IsType<OkObjectResult>(await Controller(actorUserId).Request(new() { AcademicYearId = db.YearId, SchoolClassId = db.ClassId,
@@ -1792,6 +1802,8 @@ public partial class TeacherAssignmentTests
                 await db.Context.SaveChangesAsync();
                 db.ClassId = schoolClass.Id; db.SectionId = schoolClass.Grade.SectionId; db.YearId = year.Id;
                 db._subjectId = subject.Id; db.AdminStaffId = admin.Id;
+                foreach (var teacher in await db.Context.Staff.Where(s => db.TeacherIds.Contains(s.Id)).ToListAsync()) { teacher.CanTeach = true; teacher.TeachingSubjects.Add(new StaffTeachingSubject { SubjectId = subject.Id }); }
+                await db.Context.SaveChangesAsync();
                 return db;
             }
             catch { await db.DisposeAsync(); throw; }

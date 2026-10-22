@@ -654,7 +654,7 @@ export default function TermsExamsManagementPage({ onExamChanged }) {
 function Field({ label, ...props }) {
     return (
         <label className="block text-sm font-semibold text-slate-700">
-            {label}
+            {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
             <input {...props} className={inputClass} />
         </label>
     );

@@ -1,96 +1,102 @@
-import SchoolSettingsPage from "../pages/management/SchoolSettingsPage";
-import ParentSchedulePage from "../pages/parents/ParentSchedulePage";
-import AttendanceOverviewPage from "../pages/management/AttendanceOverviewPage";
-import AuditLogsPage from "../pages/management/AuditLogsPage";
-import PromotionPage from "../pages/academic/PromotionPage";
-import StaffLeavePage from "../pages/staff/StaffLeavePage";
-import StaffAttendancePage from "../pages/staff/StaffAttendancePage";
-import StaffLeavePolicy from "../pages/staff/StaffLeavePolicy";
-import SchoolCalendarPage from "../pages/academic/SchoolCalendarPage";
+import { ArrowLeft } from "lucide-react";
+import { lazy, Suspense } from "react";
+const SchoolSettingsPage = lazy(() => import("../pages/management/SchoolSettingsPage"));
+const ParentSchedulePage = lazy(() => import("../pages/parents/ParentSchedulePage"));
+const AttendanceOverviewPage = lazy(() => import("../pages/management/AttendanceOverviewPage"));
+const AuditLogsPage = lazy(() => import("../pages/management/AuditLogsPage"));
+const PromotionPage = lazy(() => import("../pages/academic/PromotionPage"));
+const StaffLeavePage = lazy(() => import("../pages/staff/StaffLeavePage"));
+const StudentLeadershipPage = lazy(() => import("../pages/students/StudentLeadershipPage"));
+const StaffAttendancePage = lazy(() => import("../pages/staff/StaffAttendancePage"));
+const StaffLeavePolicy = lazy(() => import("../pages/staff/StaffLeavePolicy"));
+const SchoolCalendarPage = lazy(() => import("../pages/academic/SchoolCalendarPage"));
 import {
     Navigate,
+    Link,
     Route,
     Routes,
 } from "react-router-dom";
 
-import LoginPage from "../pages/auth/LoginPage";
-import StudentRegistrationPage from "../pages/students/StudentRegistrationPage";
+const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
+const StudentRegistrationPage = lazy(() => import("../pages/students/StudentRegistrationPage"));
 
-import DashboardPage from "../pages/dashboard/DashboardPage";
-import StudentsPage from "../pages/students/StudentsPage";
-import StudentDetailsPage from "../pages/students/StudentDetailsPage";
-import AddStudentPage from "../pages/students/AddStudentPage";
+const DashboardPage = lazy(() => import("../pages/dashboard/DashboardPage"));
+const StudentsPage = lazy(() => import("../pages/students/StudentsPage"));
+const StudentDetailsPage = lazy(() => import("../pages/students/StudentDetailsPage"));
+const AddStudentPage = lazy(() => import("../pages/students/AddStudentPage"));
 
 import ProtectedRoute from "./ProtectedRoute";
 import DashboardLayout from "../components/layout/DashboardLayout";
 
-import StudentLoginPage from "../pages/students/StudentLoginPage";
-import StudentDashboardPage from "../pages/students/StudentDashboardPage";
+const StudentLoginPage = lazy(() => import("../pages/students/StudentLoginPage"));
+const StudentDashboardPage = lazy(() => import("../pages/students/StudentDashboardPage"));
 import StudentProtectedRoute from "./StudentProtectedRoute";
 
-import StudentProfilePage from "../pages/students/StudentProfilePage";
-import StudentSubjectsPage from "../pages/students/StudentSubjectsPage";
-import StudentAttendancePage from "../pages/students/StudentAttendancePage";
-import StudentResultsPage from "../pages/students/StudentResultsPage";
-import StudentTimetablePage from "../pages/students/StudentTimetablePage";
-import StudentAnnouncementsPage from "../pages/students/StudentAnnouncementsPage";
-import StudentNotificationsPage from "../pages/students/StudentNotificationsPage";
-import StudentSpecialClassesPage from "../pages/students/StudentSpecialClassesPage";
-import StudentDailySchedulePage from "../pages/students/StudentDailySchedulePage";
-import StudentEnrollmentHistoryPage from "../pages/students/StudentEnrollmentHistoryPage";
-import StudentGuardiansPage from "../pages/students/StudentGuardiansPage";
-import StudentChangePasswordPage from "../pages/students/StudentChangePasswordPage";
-import StudentForgotPasswordPage from "../pages/students/StudentForgotPasswordPage";
-import AdminResetStudentPasswordPage from "../pages/students/AdminResetStudentPasswordPage";
+const StudentProfilePage = lazy(() => import("../pages/students/StudentProfilePage"));
+const StudentSubjectsPage = lazy(() => import("../pages/students/StudentSubjectsPage"));
+const StudentAttendancePage = lazy(() => import("../pages/students/StudentAttendancePage"));
+const StudentResultsPage = lazy(() => import("../pages/students/StudentResultsPage"));
+const StudentTimetablePage = lazy(() => import("../pages/students/StudentTimetablePage"));
+const StudentAnnouncementsPage = lazy(() => import("../pages/students/StudentAnnouncementsPage"));
+const StudentNotificationsPage = lazy(() => import("../pages/students/StudentNotificationsPage"));
+const StudentSpecialClassesPage = lazy(() => import("../pages/students/StudentSpecialClassesPage"));
+const StudentDailySchedulePage = lazy(() => import("../pages/students/StudentDailySchedulePage"));
+const StudentEnrollmentHistoryPage = lazy(() => import("../pages/students/StudentEnrollmentHistoryPage"));
+const StudentGuardiansPage = lazy(() => import("../pages/students/StudentGuardiansPage"));
+const StudentChangePasswordPage = lazy(() => import("../pages/students/StudentChangePasswordPage"));
+const StudentForgotPasswordPage = lazy(() => import("../pages/students/StudentForgotPasswordPage"));
+const AdminResetStudentPasswordPage = lazy(() => import("../pages/students/AdminResetStudentPasswordPage"));
 
-import ParentLoginPage from "../pages/parents/ParentLoginPage";
-import ParentDashboardPage from "../pages/parents/ParentDashboardPage";
+const ParentLoginPage = lazy(() => import("../pages/parents/ParentLoginPage"));
+const ParentForgotPasswordPage = lazy(() => import("../pages/parents/ParentForgotPasswordPage"));
+const ParentDashboardPage = lazy(() => import("../pages/parents/ParentDashboardPage"));
 import ParentProtectedRoute from "./ParentProtectedRoute";
-import ParentAttendancePage from "../pages/parents/ParentAttendancePage";
-import ParentResultsPage from "../pages/parents/ParentResultsPage";
-import ParentAcademicProfilePage from "../pages/parents/ParentAcademicProfilePage";
-import ParentNotificationsPage from "../pages/parents/ParentNotificationsPage";
-import ParentChangePasswordPage from "../pages/parents/ParentChangePasswordPage";
-import ParentProfilePage from "../pages/parents/ParentProfilePage";
-import ParentsManagementPage from "../pages/parents/ParentsManagementPage";
+const ParentAttendancePage = lazy(() => import("../pages/parents/ParentAttendancePage"));
+const ParentResultsPage = lazy(() => import("../pages/parents/ParentResultsPage"));
+const ParentAcademicProfilePage = lazy(() => import("../pages/parents/ParentAcademicProfilePage"));
+const ParentNotificationsPage = lazy(() => import("../pages/parents/ParentNotificationsPage"));
+const ParentChangePasswordPage = lazy(() => import("../pages/parents/ParentChangePasswordPage"));
+const ParentProfilePage = lazy(() => import("../pages/parents/ParentProfilePage"));
+const ParentsManagementPage = lazy(() => import("../pages/parents/ParentsManagementPage"));
 
-import StaffProfilePage from "../pages/staff/StaffProfilePage";
-import StaffManagementPage from "../pages/staff/StaffManagementPage";
-import StaffForgotPasswordPage from "../pages/auth/StaffForgotPasswordPage";
-import StaffForcedChangePasswordPage from "../pages/auth/StaffForcedChangePasswordPage";
+const StaffProfilePage = lazy(() => import("../pages/staff/StaffProfilePage"));
+const StaffManagementPage = lazy(() => import("../pages/staff/StaffManagementPage"));
+const StaffForgotPasswordPage = lazy(() => import("../pages/auth/StaffForgotPasswordPage"));
+const StaffForcedChangePasswordPage = lazy(() => import("../pages/auth/StaffForcedChangePasswordPage"));
 
-import PortalLandingPage from "../pages/public/PortalLandingPage";
+const PortalLandingPage = lazy(() => import("../pages/public/PortalLandingPage"));
 
-import TeacherTimetablePage from "../pages/teachers/TeacherTimetablePage";
-import TeacherDailyClassesPage from "../pages/teachers/TeacherDailyClassesPage";
-import TeacherAttendancePage from "../pages/teachers/TeacherAttendancePage";
-import TeacherMarksPage from "../pages/teachers/TeacherMarksPage";
+const TeacherTimetablePage = lazy(() => import("../pages/teachers/TeacherTimetablePage"));
+const TeacherDailyClassesPage = lazy(() => import("../pages/teachers/TeacherDailyClassesPage"));
+const TeacherAttendancePage = lazy(() => import("../pages/teachers/TeacherAttendancePage"));
+const TeacherMarksPage = lazy(() => import("../pages/teachers/TeacherMarksPage"));
 
-import SectionHeadAttendanceApprovalsPage from "../pages/sectionHeads/SectionHeadAttendanceApprovalsPage";
-import SectionHeadMarksReviewPage from "../pages/sectionHeads/SectionHeadMarksReviewPage";
-import SectionHeadAssignmentsPage from "../pages/sectionHeads/SectionHeadAssignmentsPage";
+const SectionHeadAttendanceApprovalsPage = lazy(() => import("../pages/sectionHeads/SectionHeadAttendanceApprovalsPage"));
+const SectionHeadMarksReviewPage = lazy(() => import("../pages/sectionHeads/SectionHeadMarksReviewPage"));
+const SectionHeadAssignmentsPage = lazy(() => import("../pages/sectionHeads/SectionHeadAssignmentsPage"));
 
-import ResultsPublishingPage from "../pages/results/ResultsPublishingPage";
-import AnnouncementsPage from "../pages/announcements/AnnouncementsPage";
-import ParentAnnouncementsPage from "../pages/parents/ParentAnnouncementsPage";
-import SpecialClassesPage from "../pages/specialClasses/SpecialClassesPage";
-import StaffNotificationsPage from "../pages/notifications/StaffNotificationsPage";
-import ReportsPage from "../pages/reports/ReportsPage";
+const ResultsPublishingPage = lazy(() => import("../pages/results/ResultsPublishingPage"));
+const AnnouncementsPage = lazy(() => import("../pages/announcements/AnnouncementsPage"));
+const ParentAnnouncementsPage = lazy(() => import("../pages/parents/ParentAnnouncementsPage"));
+const SpecialClassesPage = lazy(() => import("../pages/specialClasses/SpecialClassesPage"));
+const StaffNotificationsPage = lazy(() => import("../pages/notifications/StaffNotificationsPage"));
+const ReportsPage = lazy(() => import("../pages/reports/ReportsPage"));
 
-import ExamsTestsPage from "../pages/exams/ExamsTestsPage";
-import AcademicSetupPage from "../pages/academic/AcademicSetupPage";
-import TeacherAssignmentsManagementPage from "../pages/teachers/TeacherAssignmentsManagementPage";
-import TimetableManagementPage from "../pages/timetable/TimetableManagementPage";
+const ExamsTestsPage = lazy(() => import("../pages/exams/ExamsTestsPage"));
+const AcademicSetupPage = lazy(() => import("../pages/academic/AcademicSetupPage"));
+const TeacherAssignmentsManagementPage = lazy(() => import("../pages/teachers/TeacherAssignmentsManagementPage"));
+const TimetableManagementPage = lazy(() => import("../pages/timetable/TimetableManagementPage"));
 
 export default function AppRoutes() {
     return (
-        <Routes>
+        <Suspense fallback={<div role="status" className="p-8 text-sm text-slate-600">Loading page…</div>}><Routes>
 
             {/* ================================================
                 PUBLIC ROUTES
             ================================================ */}
 
             <Route path="/" element={<PortalLandingPage />} />
+            <Route path="/parent/forgot-password" element={<ParentForgotPasswordPage />} />
 
             <Route
                 path="/login"
@@ -149,6 +155,7 @@ export default function AppRoutes() {
                 <Route path="/academic-setup" element={<AcademicSetupPage />} />
                 <Route path="/promotion" element={<PromotionPage />} />
                 <Route path="/staff-leave" element={<StaffLeavePage />} />
+                <Route path="/student-leadership" element={<StudentLeadershipPage />} />
                 <Route path="/staff-attendance" element={<StaffAttendancePage />} />
                 <Route path="/staff-leave-allowance" element={<StaffLeavePolicy manage />} />
                 <Route path="/attendance" element={<AttendanceOverviewPage />} />
@@ -189,6 +196,7 @@ export default function AppRoutes() {
                     path="/section-head/marks-review"
                     element={<SectionHeadMarksReviewPage />}
                 />
+                <Route path="/marks-review" element={<SectionHeadMarksReviewPage />} />
 
                 <Route
                     path="/section-head-assignments"
@@ -233,7 +241,7 @@ export default function AppRoutes() {
                 }
             />
 
-            <Route path="/student/school-calendar" element={<StudentProtectedRoute><div className="mx-auto max-w-7xl px-5 py-10"><a href="/student/dashboard" className="mb-6 inline-block text-sm text-blue-600">Back to Dashboard</a><SchoolCalendarPage student /></div></StudentProtectedRoute>} />
+            <Route path="/student/school-calendar" element={<StudentProtectedRoute><div className="mx-auto max-w-7xl px-5 py-10"><Link to="/student/dashboard" className="portal-back-button mb-6"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to Dashboard</Link><SchoolCalendarPage student /></div></StudentProtectedRoute>} />
 
             <Route
                 path="/student/dashboard"
@@ -358,7 +366,7 @@ export default function AppRoutes() {
             />
 
             <Route path="/parent/children/:studentId/schedule" element={<ParentProtectedRoute><ParentSchedulePage /></ParentProtectedRoute>} />
-            <Route path="/parent/school-calendar" element={<ParentProtectedRoute><div className="mx-auto max-w-7xl px-5 py-10"><a href="/parent/dashboard" className="mb-6 inline-block text-sm text-blue-600">Back to My Children</a><SchoolCalendarPage parent /></div></ParentProtectedRoute>} />
+            <Route path="/parent/school-calendar" element={<ParentProtectedRoute><div className="mx-auto max-w-7xl px-5 py-10"><Link to="/parent/dashboard" className="portal-back-button mb-6"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to My Children</Link><SchoolCalendarPage parent /></div></ParentProtectedRoute>} />
 
             <Route path="/parent/login" element={<ParentLoginPage />} />
             <Route path="/parent/announcements" element={<ParentProtectedRoute><ParentAnnouncementsPage /></ParentProtectedRoute>} />
@@ -440,6 +448,6 @@ export default function AppRoutes() {
                 element={<StaffForgotPasswordPage />}
             />
 
-        </Routes>
+        </Routes></Suspense>
     );
 }

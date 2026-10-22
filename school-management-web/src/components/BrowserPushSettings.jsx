@@ -49,7 +49,7 @@ export default function BrowserPushSettings({ portal }) {
         <p className="text-sm text-slate-600">Receive alerts when you are away from this page. Alerts open your notifications; private school details stay inside the portal.</p>
         {!supported ? <p className="text-sm text-slate-500">This browser cannot receive alerts here. Use a supported browser on HTTPS or localhost. In-app notifications still work.</p>
             : !settings ? <p className="text-sm text-slate-500">Checking browser alert settings…</p>
-            : !settings.configured ? <p className="text-sm text-amber-800">Browser alerts are not configured for this school yet. Your administrator needs to connect Firebase web messaging.</p>
+            : !settings.configured ? <p className="text-sm text-amber-800">Browser alerts are not available for this school yet. You can still view all school notifications here.</p>
             : <>{Notification.permission === "denied" && <p className="text-sm text-slate-600">Notifications are blocked in your browser’s site settings. Allow them there, then try again.</p>}<button disabled={busy} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={change}>{busy ? "Enabling notifications…" : "Enable notifications"}</button></>}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </section>;

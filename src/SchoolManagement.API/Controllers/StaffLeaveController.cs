@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SchoolManagement.API.Services;
 using SchoolManagement.Application.StaffLeave.DTOs;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Domain.Enums;
@@ -20,6 +21,9 @@ public partial class StaffLeaveController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IPushNotificationService _pushNotificationService;
+
+    private Task<HashSet<string>> EffectiveRolesAsync(ApplicationUser user) =>
+        EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
     public StaffLeaveController(
     ApplicationDbContext context,
@@ -156,7 +160,7 @@ public partial class StaffLeaveController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveRolesAsync(user);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -260,12 +264,12 @@ public partial class StaffLeaveController : ControllerBase
 
     [HttpGet("history")]
     public async Task<IActionResult> GetLeaveHistory(string? search = null, StaffLeaveStatus? status = null,
-        DateTime? fromDate = null, DateTime? toDate = null, int page = 1, int pageSize = 25)
+        DateTime? fromDate = null, DateTime? toDate = null, int page = 1, int pageSize = 25, bool excludeOwn = false)
     {
         var staff = await GetCurrentStaffAsync();
         if (staff == null) return Forbid();
         var user = await _userManager.FindByIdAsync(staff.ApplicationUserId!);
-        var roles = await _userManager.GetRolesAsync(user!);
+        var roles = await EffectiveRolesAsync(user!);
         var wholeSchool = roles.Any(role => role == "Admin" || role == "Principal" || role == "Deputy Principal");
         if (!wholeSchool && !roles.Contains("Section Head")) return Forbid();
         if (status.HasValue && !Enum.IsDefined(status.Value)) return BadRequest(new { message = "Invalid leave status." });
@@ -275,6 +279,7 @@ public partial class StaffLeaveController : ControllerBase
         if (page < 1 || pageSize < 1 || pageSize > 100) return BadRequest(new { message = "Choose a valid page and page size (1–100)." });
         var query = _context.StaffLeaveRequests.AsNoTracking();
         if (!wholeSchool) query = SectionScope(query, staff.Id, true);
+        if (excludeOwn) query = query.Where(x => x.StaffId != staff.Id);
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); query = query.Where(l => l.Staff.FullName.Contains(term) || l.Staff.StaffNumber.Contains(term)); }
         if (status.HasValue) query = query.Where(l => l.Status == status);
         if (fromDate.HasValue) query = query.Where(l => l.ToDate >= fromDate.Value.Date);
@@ -314,7 +319,7 @@ public partial class StaffLeaveController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var user = userId == null ? null : await _userManager.FindByIdAsync(userId);
         if (user == null || !user.IsActive) return Unauthorized();
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles = await EffectiveRolesAsync(user);
         if (!roles.Any(role => role == "Admin" || role == "Principal" || role == "Deputy Principal"))
             return StatusCode(403, new { message = "Only Admin, Principal or Deputy Principal can approve or reject staff leave." });
         if (request.Remarks?.Length > 1000) return BadRequest(new { message = "Review remarks must be 1,000 characters or fewer." });
@@ -378,7 +383,7 @@ public partial class StaffLeaveController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveRolesAsync(user);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -714,7 +719,7 @@ public partial class StaffLeaveController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveRolesAsync(user);
 
         var isWholeSchool =
             roles.Contains("Admin") ||

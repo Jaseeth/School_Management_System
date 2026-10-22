@@ -1,5 +1,6 @@
 import { useAuth } from "../../context/AuthContext";
 import StudentTransfer from "./StudentTransfer";
+import { RegistrationDraftList } from "../../components/RegistrationDrafts";
 import {
     CalendarDays,
     FileSpreadsheet,
@@ -655,6 +656,7 @@ export default function StudentsPage() {
 
             </div>
 
+            {canManage && <div className="mt-5"><RegistrationDraftList kind="student" onResume={id => navigate(`/students/add?draft=${id}`)} /></div>}
             {canManage && <div className="mt-5"><StudentTransfer filters={{ search: search.trim() || undefined, isActive: status === "active" ? true : status === "inactive" ? false : undefined, academicYearId: academicYearId || undefined, sectionId: sectionId || undefined, gradeId: gradeId || undefined, schoolClassId: schoolClassId || undefined }} onChanged={async () => { await loadSummary(); await loadStudents(); }} /></div>}
 
             {/* ====================================================

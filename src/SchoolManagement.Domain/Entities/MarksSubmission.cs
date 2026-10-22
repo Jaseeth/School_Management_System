@@ -4,6 +4,8 @@ namespace SchoolManagement.Domain.Entities;
 
 public class MarksSubmission
 {
+    [System.ComponentModel.DataAnnotations.Timestamp]
+    public byte[] Version { get; set; } = [];
     public int Id { get; set; }
 
     public int ExamId { get; set; }

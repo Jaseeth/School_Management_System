@@ -2,6 +2,7 @@
 
 public class CreateSchoolAnnouncementRequest
 {
+    public bool IsSos { get; set; }
     public List<int> StudentIds { get; set; } = [];
     public List<int> StaffIds { get; set; } = [];
     public List<int> ParentIds { get; set; } = [];

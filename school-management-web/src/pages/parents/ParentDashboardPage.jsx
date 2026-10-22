@@ -1,21 +1,16 @@
-import { disableBrowserPush } from "../../services/browserPush";
 import {
     Award,
     Bell,
     BookOpen,
     CalendarDays,
-    GraduationCap,
     LockKeyhole,
-    LogOut,
     UsersRound,
-    UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { parentPortalApi } from "../../api/parentPortalApi";
 
 export default function ParentDashboardPage() {
-    const navigate = useNavigate();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -44,41 +39,11 @@ export default function ParentDashboardPage() {
         };
     }, []);
 
-    async function logout() {
-        await disableBrowserPush("parent").catch(() => {});
-        localStorage.removeItem("parentAccessToken");
-        localStorage.removeItem("parentUser");
-        navigate("/parent/login", { replace: true });
-    }
+
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white">
-                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
-                            <GraduationCap className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <p className="font-bold text-slate-950">
-                                School Management
-                            </p>
-                            <p className="text-xs text-slate-500">
-                                Parent Portal
-                            </p>
-                        </div>
-                    </div>
 
-                    <button
-                        type="button"
-                        onClick={logout}
-                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                        <LogOut className="h-4 w-4" />
-                        Log Out
-                    </button>
-                </div>
-            </header>
 
             <main className="mx-auto max-w-6xl px-5 py-9">
                 <p className="text-sm font-semibold text-blue-600">
@@ -113,14 +78,6 @@ export default function ParentDashboardPage() {
                     >
                         <LockKeyhole className="h-4 w-4" />
                         Change Password
-                    </Link>
-
-                    <Link
-                        to="/parent/profile"
-                        className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-                    >
-                        <UserRound className="h-4 w-4" />
-                        My Profile
                     </Link>
                 </nav>
 

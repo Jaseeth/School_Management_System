@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <ProjectReference Include="../../src/SchoolManagement.API/SchoolManagement.API.csproj" />
   </ItemGroup>
 
 </Project>

@@ -43,6 +43,7 @@ export default function ParentStudentLinks({
         if (mode !== "link" || !query) return;
 
         let active = true;
+        const controller = new AbortController();
 
         async function searchStudents() {
             setLoading(true);
@@ -55,7 +56,7 @@ export default function ParentStudentLinks({
                     page: query.page,
                     pageSize: 10,
                     isActive: true,
-                });
+                }, { signal: controller.signal });
 
                 if (!active) return;
 
@@ -74,10 +75,12 @@ export default function ParentStudentLinks({
             }
         }
 
-        searchStudents();
+        const timer = setTimeout(searchStudents, 300);
 
         return () => {
             active = false;
+            clearTimeout(timer);
+            controller.abort();
         };
     }, [mode, query]);
 
@@ -245,9 +248,17 @@ export default function ParentStudentLinks({
                             placeholder="Student index number or name"
                             value={searchInput}
                             disabled={saving}
-                            onChange={(event) =>
-                                setSearchInput(event.target.value)
-                            }
+                            maxLength={200}
+                            onChange={(event) => {
+                                const value = event.target.value;
+                                setSearchInput(value);
+                                setSelectedStudent(null);
+                                setStudents([]);
+                                setSearchError("");
+                                setTotalPages(1);
+                                setLoading(Boolean(value.trim()));
+                                setQuery(value.trim() ? { search: value.trim(), page: 1 } : null);
+                            }}
                             className={`${inputClass} min-w-0 flex-1`}
                         />
 
@@ -259,6 +270,7 @@ export default function ParentStudentLinks({
                             Search
                         </button>
                     </form>
+                    <p className="mt-2 text-sm text-slate-500">Matches update as you type. Enter all or part of a student’s index number or name.</p>
 
                     {loading && (
                         <p role="status" className="mt-3 text-sm text-slate-500">
@@ -332,7 +344,7 @@ export default function ParentStudentLinks({
                             <div className="mt-4 flex flex-wrap items-center gap-3">
                                 <button
                                     type="button"
-                                    disabled={saving || query.page <= 1}
+                                    disabled={loading || saving || query.page <= 1}
                                     onClick={() => {
                                         setSelectedStudent(null);
                                         setQuery((current) => ({
@@ -352,7 +364,7 @@ export default function ParentStudentLinks({
                                 <button
                                     type="button"
                                     disabled={
-                                        saving || query.page >= totalPages
+                                        loading || saving || query.page >= totalPages
                                     }
                                     onClick={() => {
                                         setSelectedStudent(null);
@@ -395,7 +407,7 @@ export default function ParentStudentLinks({
                     <fieldset disabled={saving} className="mt-4">
                         <label className="block text-sm font-semibold text-slate-700">
                             Relationship
-                            <input
+                            <span className="required-marker" aria-hidden="true"> *</span><input
                                 value={form.relationship}
                                 required
                                 placeholder="Father, Mother, Guardian..."
@@ -541,7 +553,7 @@ function Checkbox({ label, ...props }) {
                 {...props}
                 className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600 disabled:cursor-not-allowed"
             />
-            {label}
+            {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
         </label>
     );
 }

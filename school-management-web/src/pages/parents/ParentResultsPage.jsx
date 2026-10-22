@@ -1,10 +1,12 @@
-﻿import { ArrowLeft, Award, GraduationCap } from "lucide-react";
+import { ArrowLeft, Award } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { parentPortalApi } from "../../api/parentPortalApi";
 
 export default function ParentResultsPage() {
     const { studentId } = useParams();
+    const location = useLocation();
+    const fromAcademicProfile = location.state?.fromAcademicProfile === true;
 
     const [profile, setProfile] = useState(null);
     const [yearId, setYearId] = useState("");
@@ -151,30 +153,15 @@ export default function ParentResultsPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white">
-                <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
-                        <GraduationCap className="h-6 w-6" />
-                    </span>
 
-                    <div>
-                        <p className="font-bold text-slate-950">
-                            School Management
-                        </p>
-                        <p className="text-xs text-slate-500">
-                            Parent Portal
-                        </p>
-                    </div>
-                </div>
-            </header>
 
             <main className="mx-auto max-w-6xl px-5 py-9">
                 <Link
-                    to="/parent/dashboard"
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700"
+                    to={fromAcademicProfile ? `/parent/children/${studentId}/academic-profile` : "/parent/dashboard"}
+                    className="portal-back-button"
                 >
                     <ArrowLeft className="h-4 w-4" />
-                    Back to My Children
+                    {fromAcademicProfile ? "Back to Academic Profile" : "Back to My Children"}
                 </Link>
 
                 <div className="mt-7 flex items-center gap-3 text-blue-600">

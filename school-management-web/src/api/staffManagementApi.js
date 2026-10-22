@@ -3,6 +3,7 @@ import api from "./axios";
 export const staffManagementApi = {
     getStaff() { return api.get("/Staff"); },
     getRoles() { return api.get("/Roles"); },
+    getTeachingSubjects(config) { return api.get("/Staff/teaching-subjects", config); },
     createStaff(data) { return api.post("/Staff", data); },
 };
 

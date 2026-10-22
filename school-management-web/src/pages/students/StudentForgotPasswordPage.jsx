@@ -166,7 +166,7 @@ export default function StudentForgotPasswordPage() {
             <main className="mx-auto w-full max-w-md px-5 py-10">
                 <Link
                     to="/student/login"
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
+                    className="portal-back-button"
                 >
                     <ArrowLeft className="h-4 w-4" /> Back to Student Login
                 </Link>
@@ -284,7 +284,7 @@ function Field({ label, ...props }) {
     return (
         <label className="block text-sm font-semibold text-slate-700">
             {label}
-            <input
+            <span className="required-marker" aria-hidden="true"> *</span><input
                 required
                 {...props}
                 className="mt-2 block w-full rounded-xl border border-slate-200 px-4 py-3 font-normal text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"

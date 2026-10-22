@@ -22,7 +22,7 @@ export default function StaffLeaveHistory({ sectionScoped, refreshVersion }) {
             setLoading(true); setError("");
             if (invalidDates) { setLoading(false); return; }
             try {
-                const response = await api.get("/staff-leave/history", { params: { ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)), page, pageSize: 25 }, signal: controller.signal });
+                const response = await api.get("/staff-leave/history", { params: { ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)), page, pageSize: 25, excludeOwn: true }, signal: controller.signal });
                 if (!controller.signal.aborted) setResult(response.data);
             } catch (err) { if (!controller.signal.aborted) setError(err.response?.data?.message || "Unable to load leave history."); }
             finally { if (!controller.signal.aborted) setLoading(false); }

@@ -138,7 +138,7 @@ export default function StudentLoginPage() {
                                 htmlFor="student-index"
                                 className="mb-2 block text-sm font-semibold text-slate-700"
                             >
-                                Index Number
+                                Index Number<span className="required-marker" aria-hidden="true"> *</span>
                             </label>
                             <div className="relative">
                                 <UserRound className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -160,7 +160,7 @@ export default function StudentLoginPage() {
                                 htmlFor="student-password"
                                 className="mb-2 mt-5 block text-sm font-semibold text-slate-700"
                             >
-                                Password
+                                Password<span className="required-marker" aria-hidden="true"> *</span>
                             </label>
                             <div className="relative">
                                 <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

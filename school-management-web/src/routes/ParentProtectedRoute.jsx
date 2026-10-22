@@ -1,3 +1,4 @@
+import PortalHeader from "../components/layout/PortalHeader";
 import { getPortalToken } from "../services/portalSession";
 import { Navigate } from "react-router-dom";
 
@@ -10,7 +11,7 @@ export default function ParentProtectedRoute({ children }) {
         );
 
         if (token && parent?.roles?.includes("Parent")) {
-            return children;
+            return <div className="min-h-screen bg-slate-50"><PortalHeader portal="parent" />{children}</div>;
         }
     } catch {
         localStorage.removeItem("parentUser");

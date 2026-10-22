@@ -59,7 +59,7 @@ const menuItems = [
         title: "Section Head Assignments",
         path: "/section-head-assignments",
         icon: ShieldCheck,
-        roles: ["Admin"],
+        roles: ["Admin", "Principal"],
     },
     {
         title: "Academic Setup",
@@ -156,13 +156,17 @@ const menuItems = [
         roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
     },
     {
+        title: "Student Leadership", path: "/student-leadership", icon: Users,
+        roles: ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"],
+    },
+    {
         title: "Staff Attendance",
         path: "/staff-attendance",
         icon: ClipboardCheck,
         roles: ["Admin", "Principal", "Deputy Principal", "Section Head"],
     },
     {
-        title: "Staff Leave Allowance", path: "/staff-leave-allowance", icon: CalendarDays, roles: ["Admin"],
+        title: "Staff Leave Allowance", path: "/staff-leave-allowance", icon: CalendarDays, roles: ["Admin", "Principal"],
     },
     {
         title: "School Calendar", path: "/school-calendar", icon: CalendarDays,
@@ -194,9 +198,9 @@ const menuItems = [
     },
     {
         title: "Marks Review",
-        path: "/section-head/marks-review",
+        path: "/marks-review",
         icon: ClipboardCheck,
-        roles: ["Section Head"],
+        roles: ["Section Head", "Teacher"],
     },
     {
         title: "Results Publishing",
@@ -222,7 +226,7 @@ export default function DashboardLayout() {
         return () => { active = false; window.removeEventListener("school-settings-changed", load); };
     }, []);
     const navigate = useNavigate();
-    const { user, logout } = useAuth();
+    const { user, logout, activeWorkspaceRole, setActiveWorkspace, workspaceOptions } = useAuth();
     const [unreadCount, setUnreadCount] = useState(0);
     useEffect(() => {
         let active = true;
@@ -257,14 +261,16 @@ export default function DashboardLayout() {
     }, [collapsed]);
 
     const customStaff = !["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher", "Student", "Parent"].some(role => user?.roles?.includes(role));
+    const canSwitchWorkspace = workspaceOptions.length > 1;
+    const visibleRoles = user?.roles || [];
     const allowedMenuItems = menuItems.filter(
         (item) =>
             (customStaff && ["/dashboard", "/staff-leave", "/school-calendar", "/notifications"].includes(item.path)) ||
             !item.roles ||
-            item.roles.some((role) => user?.roles?.includes(role))
+            item.roles.some((role) => visibleRoles.includes(role))
     );
 
-    const primaryRole = user?.roles?.[0] ?? "";
+    const primaryRole = visibleRoles[0] ?? "";
     const firstLetter =
         user?.fullName?.charAt(0)?.toUpperCase() || "U";
 
@@ -538,6 +544,11 @@ export default function DashboardLayout() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {canSwitchWorkspace && <label className="flex items-center gap-1 text-xs text-slate-600 sm:gap-2 sm:text-sm"><span className="hidden md:inline">Workspace</span>
+                            <select aria-label="Switch workspace" value={activeWorkspaceRole} onChange={(event) => { setActiveWorkspace(event.target.value); navigate("/dashboard"); }} className="max-w-44 cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-800 sm:max-w-64 sm:px-3 sm:text-sm">
+                                {workspaceOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                        </label>}
                         <button
                             type="button"
                             aria-label="Notifications"

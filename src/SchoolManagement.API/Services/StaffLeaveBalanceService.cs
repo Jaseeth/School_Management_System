@@ -6,7 +6,11 @@ namespace SchoolManagement.API.Services;
 
 public class StaffLeaveBalanceService(ApplicationDbContext db)
 {
-    public record YearBalance(int Year, int LeaveType, string TypeName, int? Allowance, int Used, int Pending, int? Remaining, bool CalendarConfigured);
+    public record YearBalance(int Year, int LeaveType, string TypeName, int? Allowance, int Used, int Pending, int? Remaining, bool CalendarConfigured)
+    {
+        public int? BaseAllowance { get; init; }
+        public int ExtraDays { get; init; }
+    }
     public async Task<int> WorkingDays(DateTime from, DateTime to)
     {
         if (to.Date < from.Date) return 0;
@@ -52,7 +56,11 @@ public class StaffLeaveBalanceService(ApplicationDbContext db)
         var allowance = await db.StaffLeaveAllowances.AsNoTracking().Where(a => a.Year == year && a.LeaveType == 0 && (a.StaffId == null || a.StaffId == staffId))
             .OrderByDescending(a => a.StaffId.HasValue).Select(a => (int?)a.Days).FirstOrDefaultAsync();
         var used = rows.Sum(r => r.Used);
-        return new(year, 0, "All leave types", allowance, used, rows.Sum(r => r.Pending), allowance - used, rows.All(r => r.CalendarConfigured));
+        var extraDays = await db.StaffExtraLeaveAllowances.AsNoTracking().Where(x => x.StaffId == staffId && x.Year == year && x.Status == StaffLeaveStatus.Approved)
+            .SumAsync(x => (int?)(x.ApprovedDays ?? x.ExtraDays)) ?? 0;
+        var total = allowance + extraDays;
+        return new(year, 0, "All leave types", total, used, rows.Sum(r => r.Pending), total - used, rows.All(r => r.CalendarConfigured))
+            { BaseAllowance = allowance, ExtraDays = extraDays };
     }
 
     public async Task<object> Preview(int staffId, StaffLeaveType type, DateTime from, DateTime to, int? excludeLeaveId = null)
@@ -64,7 +72,7 @@ public class StaffLeaveBalanceService(ApplicationDbContext db)
             var end = to < new DateTime(year, 12, 31) ? to : new DateTime(year, 12, 31);
             var count = await WorkingDays(start, end); total += count;
             var balance = await Total(staffId, year, excludeLeaveId);
-            rows.Add(new { year, workingDays = count, balance.Allowance, balance.Used, balance.Pending, balance.Remaining,
+            rows.Add(new { year, workingDays = count, balance.Allowance, balance.BaseAllowance, balance.ExtraDays, balance.Used, balance.Pending, balance.Remaining,
                 exceedsBalance = balance.Remaining.HasValue && count > balance.Remaining.Value,
                 balance.CalendarConfigured });
         }

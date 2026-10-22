@@ -1,1 +1,22 @@
 @import "tailwindcss";
+
+@layer components {
+    .required-marker {
+        color: #dc2626;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .portal-back-button {
+        @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50;
+    }
+}
+
+/* Make interactive controls recognisable on devices with a mouse. */
+button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"]),
+select:not(:disabled), summary, input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled), input[type="file"]:not(:disabled) {
+    cursor: pointer;
+}
+button:disabled, input:disabled, select:disabled, [aria-disabled="true"] {
+    cursor: not-allowed;
+}

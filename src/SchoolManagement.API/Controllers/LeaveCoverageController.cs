@@ -24,7 +24,7 @@ public class LeaveCoverageController(ApplicationDbContext db, UserManager<Applic
         var user = id == null ? null : await users.FindByIdAsync(id);
         if (user == null || !user.IsActive) return (null, false, false);
         var staff = await db.Staff.SingleOrDefaultAsync(s => s.ApplicationUserId == id && s.IsActive);
-        var roles = await users.GetRolesAsync(user);
+        var roles = await EffectiveStaffRoles.GetAsync(users, user, User);
         var global = roles.Any(r => r == "Admin" || r == "Principal" || r == "Deputy Principal");
         return (staff, global, global || roles.Contains("Section Head"));
     }

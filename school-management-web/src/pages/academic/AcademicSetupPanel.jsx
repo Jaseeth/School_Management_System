@@ -242,15 +242,15 @@ export default function AcademicSetupPanel({ type, saving, setSaving }) {
                 {scoped && hasScope && <p className="mt-2 text-sm text-slate-500">{selectedSection.name}{selectedGrade ? ` / ${selectedGrade.name}` : ""}</p>}
                 <fieldset disabled={disabled} className="mt-4 grid min-w-0 gap-5 lg:grid-cols-3">
                     <label className="text-sm font-medium text-slate-700">Name
-                        <input required maxLength={100} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className={inputClass}
+                        <span className="required-marker" aria-hidden="true"> *</span><input required maxLength={100} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className={inputClass}
                             placeholder={type === "years" ? "2026/2027" : type === "grades" ? "Grade 11" : type === "classes" ? "A" : type === "subjects" ? "Mathematics" : "Secondary"} />
                     </label>
                     {type === "years" && <>
                         <label className="text-sm font-medium text-slate-700">Start date
-                            <input required type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} className={inputClass} />
+                            <span className="required-marker" aria-hidden="true"> *</span><input required type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} className={inputClass} />
                         </label>
                         <label className="text-sm font-medium text-slate-700">End date
-                            <input required type="date" min={form.startDate || undefined} value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} className={inputClass} />
+                            <span className="required-marker" aria-hidden="true"> *</span><input required type="date" min={form.startDate || undefined} value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} className={inputClass} />
                         </label>
                     </>}
                 </fieldset>

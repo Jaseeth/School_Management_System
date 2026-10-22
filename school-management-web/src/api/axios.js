@@ -3,7 +3,7 @@ import axios from "axios";
 const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || "/api", headers: { "Content-Type": "application/json" } });
 const refreshing = new Map();
 const portalFor = () => window.location.pathname.startsWith("/student/") ? "student" : window.location.pathname.startsWith("/parent/") ? "parent" : "staff";
-const publicAuth = url => /\/auth\/(login|student-login|staff-forgot-password)/i.test(url || "") || /\/student-registration\//i.test(url || "");
+const publicAuth = url => /\/auth\/(login|student-login|staff-forgot-password|parent-forgot-password)/i.test(url || "") || /\/student-registration\//i.test(url || "");
 function saveSession(portal, oldToken, data) {
     if (getPortalToken(portal) !== oldToken || !data.token) return;
     localStorage.setItem(`${portal}AccessToken`, data.token);

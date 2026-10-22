@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SchoolManagement.API.Services;
 using SchoolManagement.Application.Notifications;
 using SchoolManagement.Application.SpecialClasses.DTOs;
 using SchoolManagement.Domain.Entities;
@@ -44,6 +45,31 @@ public class SpecialClassController : ControllerBase
     // NOT allowed here
     // ============================================================
 
+    [HttpGet("creation-options")]
+    public async Task<IActionResult> CreationOptions()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = string.IsNullOrEmpty(userId) ? null : await _userManager.FindByIdAsync(userId);
+        if (user == null || !user.IsActive) return Unauthorized();
+        var roles = await EffectiveStaffRoles.GetAsync(_userManager, user, User);
+        var wholeSchool = roles.Any(r => new[] { "Admin", "Principal", "Deputy Principal" }.Contains(r));
+        if (!wholeSchool && !roles.Contains("Section Head")) return Forbid();
+        var staff = await _context.Staff.FirstOrDefaultAsync(s => s.ApplicationUserId == userId && s.IsActive);
+        if (staff == null) return Forbid();
+        var query = _context.TeacherAssignments.AsNoTracking().Where(a => a.IsActive && a.Staff.IsActive
+            && a.AcademicYear.IsActive && a.SchoolClass.IsActive && a.SchoolClass.Grade.IsActive
+            && a.SchoolClass.Grade.Section.IsActive && a.Subject.IsActive);
+        if (!wholeSchool) query = query.Where(a => _context.SectionHeadAssignments.Any(h => h.IsActive
+            && h.StaffId == staff.Id && h.AcademicYearId == a.AcademicYearId && h.SectionId == a.SchoolClass.Grade.SectionId));
+        var assignments = await query.OrderBy(a => a.AcademicYear.Name).ThenBy(a => a.SchoolClass.Grade.Name)
+            .ThenBy(a => a.SchoolClass.Name).ThenBy(a => a.Subject.Name).ThenBy(a => a.Staff.FullName)
+            .Select(a => new { a.Id, academicYear = new { a.AcademicYear.Id, a.AcademicYear.Name },
+                schoolClass = new { a.SchoolClass.Id, a.SchoolClass.Name, grade = new { a.SchoolClass.Grade.Id,
+                    a.SchoolClass.Grade.Name, section = new { a.SchoolClass.Grade.Section.Id, a.SchoolClass.Grade.Section.Name } } },
+                subject = new { a.Subject.Id, a.Subject.Name }, staff = new { a.Staff.Id, a.Staff.FullName, a.Staff.StaffNumber } }).ToListAsync();
+        return Ok(new { assignments });
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(
         CreateSpecialClassRequest request)
@@ -65,7 +91,7 @@ public class SpecialClassController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -414,7 +440,7 @@ public class SpecialClassController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         if (!roles.Contains("Teacher"))
         {
@@ -668,7 +694,7 @@ public class SpecialClassController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -840,7 +866,7 @@ public class SpecialClassController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -1049,7 +1075,7 @@ public class SpecialClassController : ControllerBase
         if (string.IsNullOrWhiteSpace(currentUserId)) return Unauthorized();
         var account = await _userManager.FindByIdAsync(currentUserId);
         if (account == null) return Unauthorized();
-        var roles = await _userManager.GetRolesAsync(account);
+        var roles = await EffectiveStaffRoles.GetAsync(_userManager, account, User);
         if (!roles.Any(role => new[] { "Admin", "Principal", "Deputy Principal" }.Contains(role)))
         {
             var staff = await _context.Staff.AsNoTracking().FirstOrDefaultAsync(x => x.IsActive && x.ApplicationUserId == currentUserId);
@@ -1305,7 +1331,7 @@ public class SpecialClassController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -1570,7 +1596,7 @@ public class SpecialClassController : ControllerBase
         }
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         var isWholeSchool =
             roles.Contains("Admin") ||
@@ -1836,7 +1862,8 @@ public class SpecialClassController : ControllerBase
         var parentIds = await _context.StudentParentGuardians.Where(x => x.IsActive && studentIds.Contains(x.StudentId) && x.ParentGuardian.IsActive)
             .Select(x => x.ParentGuardianId).Distinct().ToListAsync();
         var subject = await _context.Subjects.Where(x => x.Id == session.SubjectId).Select(x => x.Name).SingleAsync();
-        var details = $"{message} {subject}: {session.ClassDate:yyyy-MM-dd}, {session.StartTime:HH:mm}–{session.EndTime:HH:mm}.";
+        var details = $"{message} {subject}: {session.ClassDate:yyyy-MM-dd}, {session.StartTime:HH:mm}–{session.EndTime:HH:mm}."
+            + (string.IsNullOrWhiteSpace(session.Room) ? "" : $" Location: {session.Room}.");
         foreach (var id in staffIds) _context.Notifications.Add(new Notification { RecipientStaffId = id, Type = type, Title = title, Message = details,
             ReferenceType = "SpecialClassSession", ReferenceId = session.Id, CreatedAt = DateTime.UtcNow });
         foreach (var id in studentIds) _context.Notifications.Add(new Notification { RecipientStudentId = id, Type = type, Title = title, Message = details,

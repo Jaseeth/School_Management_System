@@ -1,4 +1,3 @@
-import { disableBrowserPush } from "../../services/browserPush";
 import {
     Award,
     BookOpen,
@@ -7,12 +6,9 @@ import {
     CalendarDays,
     CalendarPlus,
     CalendarRange,
-    GraduationCap,
     History,
     LockKeyhole,
-    LogOut,
     Megaphone,
-    UserRound,
     UsersRound,
 } from "lucide-react";
 
@@ -49,29 +45,6 @@ export default function StudentDashboardPage() {
     }
 
 
-    const handleLogout =
-        async () => {
-            await disableBrowserPush("student").catch(() => {});
-
-            localStorage.removeItem(
-                "studentAccessToken"
-            );
-
-            localStorage.removeItem(
-                "studentUser"
-            );
-
-
-            navigate(
-                "/student/login",
-                {
-                    replace: true,
-                }
-            );
-
-        };
-
-
     return (
 
         <div className="min-h-screen bg-slate-50">
@@ -80,45 +53,7 @@ export default function StudentDashboardPage() {
                 HEADER
             ==================================================== */}
 
-            <header className="border-b border-slate-200 bg-white">
 
-                <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-6 px-5 sm:px-7 lg:px-8">
-
-                    <div className="flex items-center gap-3">
-
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
-                            <GraduationCap className="h-5 w-5" />
-                        </div>
-
-                        <div>
-
-                            <p className="font-bold text-slate-950">
-                                School Management
-                            </p>
-
-                            <p className="text-xs text-slate-500">
-                                Student Portal
-                            </p>
-
-                        </div>
-
-                    </div>
-
-
-                    <button
-                        type="button"
-                        onClick={
-                            handleLogout
-                        }
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-                    >
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                    </button>
-
-                </div>
-
-            </header>
 
 
             {/* ====================================================
@@ -156,21 +91,6 @@ export default function StudentDashboardPage() {
                         title="School Calendar"
                         description="View school days, public holidays and school breaks."
                         onClick={() => navigate("/student/school-calendar")}
-                    />
-
-
-
-                    <DashboardCard
-                        icon={
-                            <UserRound className="h-5 w-5" />
-                        }
-                        title="My Profile"
-                        description="View your student information and academic placement."
-                        onClick={() =>
-                            navigate(
-                                "/student/profile"
-                            )
-                        }
                     />
 
 

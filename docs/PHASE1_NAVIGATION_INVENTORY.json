@@ -1,0 +1,988 @@
+{
+  "routes": [
+    "/",
+    "/parent/forgot-password",
+    "/login",
+    "/student/register",
+    "/student/login",
+    "/dashboard",
+    "/students",
+    "/students/add",
+    "/students/:id",
+    "/students/:id/reset-password",
+    "/staff/my-profile",
+    "/staff",
+    "/academic-setup",
+    "/promotion",
+    "/staff-leave",
+    "/staff-attendance",
+    "/staff-leave-allowance",
+    "/attendance",
+    "/audit-logs",
+    "/school-calendar",
+    "/school-settings",
+    "/backups",
+    "/teacher-assignments",
+    "/timetable",
+    "/teacher/timetable",
+    "/teacher/today",
+    "/teacher/attendance",
+    "/section-head/attendance-approvals",
+    "/teacher/marks",
+    "/section-head/marks-review",
+    "/section-head-assignments",
+    "/results/publishing",
+    "/announcements",
+    "/special-classes",
+    "/notifications",
+    "/reports",
+    "/parents",
+    "/exams",
+    "*",
+    "/student/school-calendar",
+    "/student/dashboard",
+    "/student/profile",
+    "/student/subjects",
+    "/student/attendance",
+    "/student/results",
+    "/student/timetable",
+    "/student/announcements",
+    "/student/notifications",
+    "/student/special-classes",
+    "/student/daily-schedule",
+    "/student/enrollment-history",
+    "/student/guardians",
+    "/student/change-password",
+    "/student/forgot-password",
+    "/parent/children/:studentId/schedule",
+    "/parent/school-calendar",
+    "/parent/login",
+    "/parent/announcements",
+    "/change-password",
+    "/parent/dashboard",
+    "/parent/children/:studentId/attendance",
+    "/parent/children/:studentId/results",
+    "/parent/children/:studentId/academic-profile",
+    "/parent/notifications",
+    "/parent/change-password",
+    "/parent/profile",
+    "/staff/forgot-password"
+  ],
+  "links": [
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/school-settings",
+      "line": 28,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/dashboard",
+      "line": 31,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/students",
+      "line": 36,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/parent/dashboard",
+      "line": 42,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/parents",
+      "line": 48,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/staff",
+      "line": 54,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/section-head-assignments",
+      "line": 60,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/academic-setup",
+      "line": 66,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/promotion",
+      "line": 72,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/teacher-assignments",
+      "line": 78,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/attendance",
+      "line": 84,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/section-head/attendance-approvals",
+      "line": 97,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/teacher/attendance",
+      "line": 104,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/timetable",
+      "line": 110,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/teacher/timetable",
+      "line": 121,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/teacher/today",
+      "line": 127,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/announcements",
+      "line": 134,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/special-classes",
+      "line": 148,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/staff-leave",
+      "line": 154,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/staff-attendance",
+      "line": 160,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/staff-leave-allowance",
+      "line": 165,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/school-calendar",
+      "line": 168,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/notifications",
+      "line": 173,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/reports",
+      "line": 179,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/audit-logs",
+      "line": 185,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/teacher/marks",
+      "line": 191,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/section-head/marks-review",
+      "line": 197,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/results/publishing",
+      "line": 203,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/exams",
+      "line": 210,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/login",
+      "line": 273,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/DashboardLayout.jsx",
+      "target": "/notifications",
+      "line": 544,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/StaffAccountMenu.jsx",
+      "target": "/login",
+      "line": 37,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/components/layout/StaffAccountMenu.jsx",
+      "target": "/staff/my-profile",
+      "line": 76,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/academic/PromotionPanel.jsx",
+      "target": "/academic-setup",
+      "line": 85,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/academic/PromotionPanel.jsx",
+      "target": "/academic-setup",
+      "line": 92,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/LoginPage.jsx",
+      "target": "/change-password",
+      "line": 49,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/LoginPage.jsx",
+      "target": "/dashboard",
+      "line": 56,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/LoginPage.jsx",
+      "target": "/staff/forgot-password",
+      "line": 198,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/StaffForcedChangePasswordPage.jsx",
+      "target": "/dashboard",
+      "line": 53,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/StaffForcedChangePasswordPage.jsx",
+      "target": "/login",
+      "line": 71,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/StaffForgotPasswordPage.jsx",
+      "target": "/login",
+      "line": 153,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/auth/StaffForgotPasswordPage.jsx",
+      "target": "/login",
+      "line": 325,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/dashboard/DashboardPage.jsx",
+      "target": "/staff-attendance",
+      "line": 545,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/management/BackupsPage.jsx",
+      "target": "/login",
+      "line": 47,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentAcademicProfilePage.jsx",
+      "target": "/parent/dashboard",
+      "line": 62,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentAnnouncementsPage.jsx",
+      "target": "/parent/dashboard",
+      "line": 18,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentChangePasswordPage.jsx",
+      "target": "/parent/dashboard",
+      "line": 84,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentDashboardPage.jsx",
+      "target": "/parent/notifications",
+      "line": 66,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentDashboardPage.jsx",
+      "target": "/parent/school-calendar",
+      "line": 72,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentDashboardPage.jsx",
+      "target": "/parent/announcements",
+      "line": 73,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentDashboardPage.jsx",
+      "target": "/parent/change-password",
+      "line": 76,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentForgotPasswordPage.jsx",
+      "target": "/parent/login",
+      "line": 82,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentForgotPasswordPage.jsx",
+      "target": "/parent/login",
+      "line": 115,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentLoginPage.jsx",
+      "target": "/parent/forgot-password",
+      "line": 110,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentLoginPage.jsx",
+      "target": "/parent/dashboard",
+      "line": 41,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentProfilePage.jsx",
+      "target": "/parent/dashboard",
+      "line": 139,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentSchedulePage.jsx",
+      "target": "/parent/dashboard",
+      "line": 9,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/public/PortalLandingPage.jsx",
+      "target": "/student/login",
+      "line": 16,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/public/PortalLandingPage.jsx",
+      "target": "/login",
+      "line": 25,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/public/PortalLandingPage.jsx",
+      "target": "/parent/login",
+      "line": 34,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/public/PortalLandingPage.jsx",
+      "target": "/",
+      "line": 47,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffLeaveCoverage.jsx",
+      "target": "/teacher/attendance",
+      "line": 61,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/AddStudentPage.jsx",
+      "target": "/students",
+      "line": 1000,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/AddStudentPage.jsx",
+      "target": "/students",
+      "line": 1985,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentAnnouncementsPage.jsx",
+      "target": "/student/dashboard",
+      "line": 107,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentAttendancePage.jsx",
+      "target": "/student/dashboard",
+      "line": 107,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentChangePasswordPage.jsx",
+      "target": "/student/dashboard",
+      "line": 103,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDailySchedulePage.jsx",
+      "target": "/student/dashboard",
+      "line": 112,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/school-calendar",
+      "line": 93,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/subjects",
+      "line": 104,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/attendance",
+      "line": 118,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/results",
+      "line": 131,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/timetable",
+      "line": 144,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/announcements",
+      "line": 157,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/notifications",
+      "line": 170,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/special-classes",
+      "line": 180,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/daily-schedule",
+      "line": 188,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/enrollment-history",
+      "line": 197,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/guardians",
+      "line": 206,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDashboardPage.jsx",
+      "target": "/student/change-password",
+      "line": 214,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDetailsPage.jsx",
+      "target": "/students",
+      "line": 120,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDetailsPage.jsx",
+      "target": "/students",
+      "line": 137,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentDetailsPage.jsx",
+      "target": "/students/",
+      "line": 184,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentEnrollmentHistoryPage.jsx",
+      "target": "/student/dashboard",
+      "line": 63,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentForgotPasswordPage.jsx",
+      "target": "/student/login",
+      "line": 168,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentForgotPasswordPage.jsx",
+      "target": "/student/login",
+      "line": 271,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentGuardiansPage.jsx",
+      "target": "/student/dashboard",
+      "line": 58,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentLoginPage.jsx",
+      "target": "/student/forgot-password",
+      "line": 201,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentLoginPage.jsx",
+      "target": "/student/register",
+      "line": 229,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentProfilePage.jsx",
+      "target": "/student/dashboard",
+      "line": 131,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentRegistrationPage.jsx",
+      "target": "/student/login",
+      "line": 1232,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentRegistrationPage.jsx",
+      "target": "/student/login",
+      "line": 678,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentResultsPage.jsx",
+      "target": "/student/dashboard",
+      "line": 108,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentsPage.jsx",
+      "target": "/students/add",
+      "line": 644,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentSpecialClassesPage.jsx",
+      "target": "/student/dashboard",
+      "line": 67,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentSubjectsPage.jsx",
+      "target": "/student/dashboard",
+      "line": 111,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentTimetablePage.jsx",
+      "target": "/student/dashboard",
+      "line": 140,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/AppRoutes.jsx",
+      "target": "/school-settings",
+      "line": 163,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/AppRoutes.jsx",
+      "target": "/",
+      "line": 237,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/AppRoutes.jsx",
+      "target": "/student/dashboard",
+      "line": 241,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/AppRoutes.jsx",
+      "target": "/parent/dashboard",
+      "line": 366,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/ParentProtectedRoute.jsx",
+      "target": "/parent/login",
+      "line": 20,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/ProtectedRoute.jsx",
+      "target": "/login",
+      "line": 17,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/ProtectedRoute.jsx",
+      "target": "/change-password",
+      "line": 24,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/ProtectedRoute.jsx",
+      "target": "/dashboard",
+      "line": 31,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/ProtectedRoute.jsx",
+      "target": "/",
+      "line": 35,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/ProtectedRoute.jsx",
+      "target": "/dashboard",
+      "line": 47,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/StudentProtectedRoute.jsx",
+      "target": "/student/login",
+      "line": 11,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/StudentProtectedRoute.jsx",
+      "target": "/student/login",
+      "line": 18,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/StudentProtectedRoute.jsx",
+      "target": "/student/change-password",
+      "line": 25,
+      "matched": true
+    },
+    {
+      "file": "school-management-web/src/routes/StudentProtectedRoute.jsx",
+      "target": "/student/login",
+      "line": 30,
+      "matched": true
+    }
+  ],
+  "unmatched": [],
+  "forms": [
+    {
+      "file": "school-management-web/src/components/MondayAssembly.jsx",
+      "forms": 1,
+      "buttons": 4,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/components/TemporaryAttendanceTeacher.jsx",
+      "forms": 1,
+      "buttons": 1,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/academic/AcademicSetupPanel.jsx",
+      "forms": 1,
+      "buttons": 4,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/academic/GovernmentCalendarImport.jsx",
+      "forms": 1,
+      "buttons": 4,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/academic/SchoolCalendarPage.jsx",
+      "forms": 3,
+      "buttons": 12,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/academic/SchoolEvents.jsx",
+      "forms": 2,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/announcements/AnnouncementsPage.jsx",
+      "forms": 1,
+      "buttons": 5,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/auth/LoginPage.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/auth/StaffForcedChangePasswordPage.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/auth/StaffForgotPasswordPage.jsx",
+      "forms": 3,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/exams/ExamsTestsPage.jsx",
+      "forms": 2,
+      "buttons": 8,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/exams/TermsExamsManagementPage.jsx",
+      "forms": 1,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/management/AttendanceOverviewPage.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/management/AuditLogsPage.jsx",
+      "forms": 1,
+      "buttons": 5,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/management/BackupsPage.jsx",
+      "forms": 2,
+      "buttons": 9,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/management/SchoolSettingsPage.jsx",
+      "forms": 1,
+      "buttons": 4,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentChangePasswordPage.jsx",
+      "forms": 1,
+      "buttons": 2,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentForgotPasswordPage.jsx",
+      "forms": 3,
+      "buttons": 6,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentLoginPage.jsx",
+      "forms": 1,
+      "buttons": 1,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentManagementActions.jsx",
+      "forms": 2,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentProfilePage.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentsManagementPage.jsx",
+      "forms": 2,
+      "buttons": 9,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/parents/ParentStudentLinks.jsx",
+      "forms": 2,
+      "buttons": 9,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/sectionHeads/SectionHeadAssignmentsPage.jsx",
+      "forms": 1,
+      "buttons": 9,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/specialClasses/SpecialClassesPage.jsx",
+      "forms": 1,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/AddStaffForm.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/ExtraLeaveAllowance.jsx",
+      "forms": 2,
+      "buttons": 9,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffActions.jsx",
+      "forms": 1,
+      "buttons": 5,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffAttendancePage.jsx",
+      "forms": 1,
+      "buttons": 6,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffLeaveCancellation.jsx",
+      "forms": 1,
+      "buttons": 9,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffLeavePage.jsx",
+      "forms": 1,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffLeavePolicy.jsx",
+      "forms": 1,
+      "buttons": 2,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/staff/StaffProfilePage.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentChangePasswordPage.jsx",
+      "forms": 1,
+      "buttons": 2,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentForgotPasswordPage.jsx",
+      "forms": 3,
+      "buttons": 2,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentLoginPage.jsx",
+      "forms": 1,
+      "buttons": 2,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentProfilePage.jsx",
+      "forms": 1,
+      "buttons": 5,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/students/StudentRegistrationPage.jsx",
+      "forms": 3,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/teachers/TeacherAssignmentsManagementPage.jsx",
+      "forms": 1,
+      "buttons": 7,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/teachers/TeacherAttendancePage.jsx",
+      "forms": 1,
+      "buttons": 3,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    },
+    {
+      "file": "school-management-web/src/pages/timetable/TimetableManagementPage.jsx",
+      "forms": 1,
+      "buttons": 8,
+      "coverage": "Inventory only; see browser and integration evidence for execution coverage."
+    }
+  ]
+}

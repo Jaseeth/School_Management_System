@@ -1,3 +1,4 @@
+import BulkSubjectAssignments from "./BulkSubjectAssignments";
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, RefreshCw, Users } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -240,12 +241,13 @@ export default function TeacherAssignmentsManagementPage() {
             </nav>
             {(dataError || error) && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{dataError || error}</p>}
             {success && <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">{success}</p>}
-            <form onSubmit={assign} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            {type === "subjects" && <BulkSubjectAssignments onBusy={setSaving} refresh={reload} onSaved={() => { setSelection(emptySelection); setReload(v => v + 1); }} onContextChanged={(yearId, staffId) => setSelection({ ...emptySelection, academicYearId: yearId, staffId })} />}
+            {type === "classes" && <form onSubmit={assign} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
                 <h2 className="text-lg font-semibold text-slate-950">{type === "subjects" ? "Assign a subject teacher" : "Assign a class teacher"}</h2>
                 <p className="mt-2 text-sm text-slate-500">Only active staff accounts with the Teacher role are listed. Selections also filter the assignments below.</p>
                 <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                     {fields.map(([name, label, options, disabled]) => <label key={name} className="text-sm font-medium text-slate-700">{label}
-                        <select required name={name} value={selection[name]} onChange={changeSelection} disabled={saving || disabled || !!loadError} className={`${inputClass} cursor-pointer`}>
+                        <span className="required-marker" aria-hidden="true"> *</span><select required name={name} value={selection[name]} onChange={changeSelection} disabled={saving || disabled || !!loadError} className={`${inputClass} cursor-pointer`}>
                             <option value="">Select {label.toLowerCase()}</option>
                             {options.map((item) => <option key={item.id} value={item.id}>{name === "staffId" ? `${item.staffNumber} — ${item.fullName}` : item.name}</option>)}
                         </select>
@@ -260,7 +262,7 @@ export default function TeacherAssignmentsManagementPage() {
                     <button type="submit" disabled={saving || pending || !!dataError || !canSave} className={`${buttonClass} w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto`}>{saving ? "Saving…" : alreadyAssigned ? "Already assigned" : replacing ? "Replace class teacher" : subjectAssignment && !subjectAssignment.isActive ? "Reactivate assignment" : "Assign teacher"}</button>
                     <button type="button" disabled={saving} onClick={clearSelection} className={`${buttonClass} border border-slate-200 text-slate-700 hover:bg-slate-50`}>Clear selections</button>
                 </div>
-            </form>
+            </form>}
             {action && <section aria-label="Confirm assignment change" className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
                 <h2 className="font-semibold text-amber-950">{action.isActive ? "Deactivate" : "Reactivate"} this subject assignment?</h2>
                 <p className="mt-2 text-sm text-amber-900">{action.teacher.fullName} · {action.subject.name} · {action.schoolClass.grade.name} {action.schoolClass.name} · {action.academicYear.name}. {action.isActive && "The assignment record and existing marks are kept."}</p>

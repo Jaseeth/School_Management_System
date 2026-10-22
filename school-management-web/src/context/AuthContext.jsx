@@ -1,15 +1,56 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authService } from "../services/authService";
 
 const AuthContext = createContext(null);
+const STAFF_WORKSPACE_ROLES = ["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher"];
+
+function workspaceValueForRole(role) {
+    return role === "Teacher" ? "teacher" : role;
+}
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [storedWorkspaceRole, setWorkspaceRole] = useState(() => localStorage.getItem("staffWorkspaceRole") || "teacher");
+
+    const setActiveWorkspace = (role) => {
+        localStorage.setItem("staffWorkspaceRole", role);
+        setWorkspaceRole(role);
+    };
+
+    const baseRoles = user?.baseRoles || user?.roles || [];
+    const workspaceOptions = useMemo(() => {
+        const roles = STAFF_WORKSPACE_ROLES.filter(role => baseRoles.includes(role));
+        const options = roles.map(role => ({ value: workspaceValueForRole(role), role, label: role }));
+        if (!options.length && user) options.push({ value: "staff", role: null, label: "Staff" });
+        return options;
+    }, [baseRoles, user]);
+    const selectedWorkspace = workspaceOptions.find(option => option.value === storedWorkspaceRole)
+        || workspaceOptions.find(option => option.value === "teacher")
+        || workspaceOptions[0]
+        || { value: "staff", role: null, label: "Staff" };
+    const workspaceUser = useMemo(() => {
+        if (!user) return null;
+        return {
+            ...user,
+            baseRoles,
+            roles: selectedWorkspace.role ? [selectedWorkspace.role] : [],
+        };
+    }, [user, baseRoles, selectedWorkspace]);
 
     useEffect(() => {
         const syncSession = () => {
-            setUser(authService.getUser());
+            const saved = authService.getUser();
+            const baseUser = saved ? { ...saved, baseRoles: saved.baseRoles || saved.roles || [] } : null;
+            setUser(baseUser);
+            if (baseUser) {
+                const roles = baseUser.baseRoles || baseUser.roles || [];
+                const choices = STAFF_WORKSPACE_ROLES.filter(role => roles.includes(role)).map(workspaceValueForRole);
+                const savedWorkspace = localStorage.getItem("staffWorkspaceRole");
+                if (!choices.includes(savedWorkspace)) {
+                    setActiveWorkspace(choices.includes("teacher") ? "teacher" : choices[0] || "staff");
+                }
+            }
             setLoading(false);
         };
         syncSession();
@@ -30,10 +71,15 @@ export function AuthProvider({ children }) {
             fullName: result.fullName,
             email: result.email,
             roles: result.roles,
+            baseRoles: result.roles,
             mustChangePassword: result.mustChangePassword,
             expiresAt: result.expiresAt,
         });
-
+        const availableWorkspaces = STAFF_WORKSPACE_ROLES.filter(role => result.roles?.includes(role)).map(workspaceValueForRole);
+        const savedWorkspace = localStorage.getItem("staffWorkspaceRole");
+        if (!availableWorkspaces.includes(savedWorkspace)) {
+            setActiveWorkspace(availableWorkspaces.includes("teacher") ? "teacher" : availableWorkspaces[0] || "staff");
+        }
         return result;
     };
 
@@ -72,7 +118,7 @@ export function AuthProvider({ children }) {
     };
 
     const hasRole = (role) => {
-        return user?.roles?.includes(role) ?? false;
+        return workspaceUser?.roles?.includes(role) ?? false;
     };
 
     const isAuthenticated = !!user;
@@ -80,7 +126,10 @@ export function AuthProvider({ children }) {
     return (
         <AuthContext.Provider
             value={{
-                user,
+                user: workspaceUser,
+                activeWorkspaceRole: selectedWorkspace.value,
+                workspaceOptions,
+                setActiveWorkspace,
                 loading,
                 isAuthenticated,
                 login,

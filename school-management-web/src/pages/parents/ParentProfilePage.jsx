@@ -1,6 +1,5 @@
-﻿import {
+import {
     ArrowLeft,
-    GraduationCap,
     UserRound,
     UsersRound,
 } from "lucide-react";
@@ -133,27 +132,12 @@ export default function ParentProfilePage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white">
-                <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
-                        <GraduationCap className="h-6 w-6" />
-                    </span>
 
-                    <div>
-                        <p className="font-bold text-slate-950">
-                            School Management
-                        </p>
-                        <p className="text-xs text-slate-500">
-                            Parent Portal
-                        </p>
-                    </div>
-                </div>
-            </header>
 
             <main className="mx-auto max-w-6xl px-5 py-9">
                 <Link
                     to="/parent/dashboard"
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700"
+                    className="portal-back-button"
                 >
                     <ArrowLeft className="h-4 w-4" />
                     Back to My Children
@@ -208,7 +192,7 @@ export default function ParentProfilePage() {
                                 {isEditing ? (
                                     <label className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
                                         Full Name
-                                        <input
+                                        <span className="required-marker" aria-hidden="true"> *</span><input
                                             type="text"
                                             value={form.fullName}
                                             onChange={(event) => {
@@ -241,7 +225,7 @@ export default function ParentProfilePage() {
                                 {isEditing ? (
                                     <label className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
                                         Login and contact email
-                                        <input
+                                        <span className="required-marker" aria-hidden="true"> *</span><input
                                             type="email"
                                             value={form.email}
                                             onChange={(event) => {
@@ -297,7 +281,7 @@ export default function ParentProfilePage() {
                             {isEditing && emailChanged && (
                                 <label className="mt-4 block rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm sm:max-w-md">
                                     Current password (required to change email)
-                                    <input
+                                    <span className="required-marker" aria-hidden="true"> *</span><input
                                         type="password"
                                         value={form.currentPassword}
                                         onChange={(event) => {

@@ -308,7 +308,7 @@ function Detail({ label, value }) {
 function Field({ label, type, value, onChange, ...props }) {
     return (
         <label className="block min-w-0 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
-            {label}
+            {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
             <input
                 type={type}
                 value={value}

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using SchoolManagement.API.Reports;
+using SchoolManagement.API.Services;
 using SchoolManagement.Application.Reports.DTOs;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
@@ -64,12 +65,15 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         var enrollments = _context.StudentAcademicEnrollments.Where(e => e.IsActive && e.Student.IsActive &&
             (global || heads.Any(h => h.AcademicYearId == e.AcademicYearId && h.SectionId == e.SchoolClass.Grade.SectionId)));
         var students = await enrollments.Select(e => new { id = e.StudentId, name = e.Student.FullName, code = e.Student.IndexNumber, academicYearId = e.AcademicYearId, schoolClassId = e.SchoolClassId }).Distinct().ToListAsync();
-        var years = await _context.AcademicYears.Where(y => global || heads.Any(h => h.AcademicYearId == y.Id)).Select(y => new { y.Id, y.Name }).ToListAsync();
+        var years = await _context.AcademicYears.Where(y => global || heads.Any(h => h.AcademicYearId == y.Id))
+            .OrderByDescending(y => y.StartDate)
+            .Select(y => new { y.Id, y.Name, y.StartDate, y.EndDate, y.IsActive })
+            .ToListAsync();
         var classes = await _context.SchoolClasses.Where(c => global || heads.Any(h => h.SectionId == c.Grade.SectionId)).Select(c => new { c.Id, name = c.Grade.Section.Name + " · " + c.Grade.Name + " " + c.Name }).ToListAsync();
         var terms = await _context.AcademicTerms.Where(t => global || heads.Any(h => h.AcademicYearId == t.AcademicYearId)).Select(t => new { t.Id, t.Name, t.AcademicYearId }).ToListAsync();
         var exams = await _context.Exams.Where(e => global || heads.Any(h => h.AcademicYearId == e.AcademicTerm.AcademicYearId))
             .Select(e => new { e.Id, e.Name, e.AcademicTermId }).ToListAsync();
-        return Ok(new { students, years, classes, terms, exams, globalReports = global });
+        return Ok(new { students, years, classes, terms, exams, today = SchoolClock.Today.ToString("yyyy-MM-dd"), globalReports = global });
     }
 
     [HttpGet("people/{kind}")]
@@ -112,20 +116,310 @@ public class ReportsController : ControllerBase, IAsyncActionFilter
         else return BadRequest(new { message = "Unknown report type." });
         if (!Request.Path.Value!.EndsWith("/pdf", StringComparison.OrdinalIgnoreCase))
             return Ok(new { title, academicYear = year, totalRows = rows.Count, records = rows.Select(row => columns.Select((column, index) => new { column, value = row[index] }).ToDictionary(cell => cell.column, cell => cell.value)) });
+        var school = await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1);
+        var logoPath = Path.Combine(_environment.WebRootPath ?? string.Empty, "images", "school-logo.png");
         var pdf = QuestPDF.Fluent.Document.Create(document => document.Page(page => {
             page.Size(842, 595);
             page.Margin(30);
             page.DefaultTextStyle(style => style.FontSize(10));
-            page.Header().Column(column => { column.Item().Text(title).FontSize(20).Bold(); column.Item().Text("Academic year: " + year); });
-            page.Content().PaddingTop(15).Table(table => {
-                table.ColumnsDefinition(definition => { foreach (var unused in columns) definition.RelativeColumn(); });
-                table.Header(header => { foreach (var column in columns) header.Cell().Padding(5).Text(column).Bold(); });
-                foreach (var row in rows) foreach (var cell in row) table.Cell().BorderBottom(0.5f).Padding(5).Text(cell);
+            page.Content().Column(content => {
+                content.Item().Element(container => SchoolPdfLogo.Compose(container, school, logoPath));
+                content.Item().Text(title).FontSize(20).Bold();
+                content.Item().Text("Academic year: " + year);
+                content.Item().PaddingTop(15).Table(table => {
+                    table.ColumnsDefinition(definition => { foreach (var unused in columns) definition.RelativeColumn(); });
+                    table.Header(header => { foreach (var column in columns) header.Cell().Padding(5).Text(column).Bold(); });
+                    foreach (var row in rows) foreach (var cell in row) table.Cell().BorderBottom(0.5f).Padding(5).Text(cell);
+                });
             });
             page.Footer().AlignCenter().Text(text => { text.Span("Page "); text.CurrentPageNumber(); });
         })).GeneratePdf();
         return File(pdf, "application/pdf", kind + "-report.pdf");
     }
+
+    [HttpGet("staff-teaching/options")]
+    public async Task<IActionResult> GetStaffTeachingOptions(int academicYearId)
+    {
+        if (!await _context.AcademicYears.AnyAsync(y => y.Id == academicYearId))
+            return BadRequest(new { message = "Select a valid academic year." });
+
+        var global = IsGlobalReporter;
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var heads = _context.SectionHeadAssignments.Where(h => h.IsActive &&
+            h.AcademicYearId == academicYearId && h.Staff.IsActive &&
+            h.Staff.ApplicationUserId == userId);
+        var scopedStaffIds = _context.TeacherAssignments
+            .Where(a => a.AcademicYearId == academicYearId &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+            .Select(a => a.StaffId)
+            .Union(_context.ClassTeacherAssignments
+                .Where(a => a.AcademicYearId == academicYearId &&
+                    (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+                .Select(a => a.StaffId))
+            .Union(_context.SectionHeadAssignments
+                .Where(a => a.AcademicYearId == academicYearId && a.IsActive &&
+                    (global || heads.Any(h => h.SectionId == a.SectionId)))
+                .Select(a => a.StaffId))
+            .Union(_context.MarksReviewerAssignments
+                .Where(a => a.AcademicYearId == academicYearId && a.IsActive &&
+                    (global || heads.Any(h => h.SectionId == a.SectionId)))
+                .Select(a => a.StaffId))
+            .Union(_context.TimetableEntries
+                .Where(a => a.AcademicYearId == academicYearId &&
+                    (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+                .Select(a => a.StaffId))
+            .Union(_context.TemporaryClassTeacherAssignments
+                .Where(a => a.AcademicYearId == academicYearId &&
+                    (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+                .Select(a => a.StaffId));
+
+        var staffQuery = _context.Staff.AsNoTracking();
+        if (!global) staffQuery = staffQuery.Where(s => scopedStaffIds.Contains(s.Id));
+        var staff = await staffQuery
+            .Where(s => !(s.ApplicationUserId != null && _context.UserRoles.Any(ur =>
+                    ur.UserId == s.ApplicationUserId && _context.Roles.Any(role =>
+                        role.Id == ur.RoleId &&
+                        (role.Name == "Principal" || role.Name == "Deputy Principal")))))
+            .OrderBy(s => s.FullName)
+            .Select(s => new { s.Id, s.FullName, s.StaffNumber, s.Designation, s.IsActive })
+            .ToListAsync();
+
+        return Ok(staff);
+    }
+
+    [HttpGet("staff-teaching/{staffId:int}")]
+    [HttpGet("staff-teaching/{staffId:int}/pdf")]
+    public async Task<IActionResult> GetStaffTeachingReport(int staffId, int academicYearId, bool includeInactive = false)
+    {
+        var today = DateOnly.FromDateTime(SchoolClock.Today);
+        var year = await _context.AcademicYears.AsNoTracking()
+            .Where(y => y.Id == academicYearId)
+            .Select(y => y.Name)
+            .FirstOrDefaultAsync();
+        if (year == null) return BadRequest(new { message = "Select a valid academic year." });
+
+        var global = IsGlobalReporter;
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var heads = _context.SectionHeadAssignments.Where(h => h.IsActive &&
+            h.AcademicYearId == academicYearId && h.Staff.IsActive &&
+            h.Staff.ApplicationUserId == userId);
+        var staff = await _context.Staff.AsNoTracking()
+            .Where(s => s.Id == staffId &&
+                !(s.ApplicationUserId != null && _context.UserRoles.Any(ur =>
+                    ur.UserId == s.ApplicationUserId && _context.Roles.Any(role =>
+                        role.Id == ur.RoleId &&
+                        (role.Name == "Principal" || role.Name == "Deputy Principal")))))
+            .Select(s => new
+            {
+                s.Id,
+                s.FullName,
+                s.StaffNumber,
+                s.Designation,
+                s.IsActive,
+                Email = _context.Users.Where(user => user.Id == s.ApplicationUserId)
+                    .Select(user => user.Email).FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+        if (staff == null) return NotFound(new { message = "Staff member not found." });
+
+        var visibleAssignment = _context.TeacherAssignments.Any(a => a.StaffId == staffId &&
+                a.AcademicYearId == academicYearId &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId))) ||
+            _context.ClassTeacherAssignments.Any(a => a.StaffId == staffId &&
+                a.AcademicYearId == academicYearId &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId))) ||
+            _context.SectionHeadAssignments.Any(a => a.StaffId == staffId &&
+                a.AcademicYearId == academicYearId && a.IsActive &&
+                (global || heads.Any(h => h.SectionId == a.SectionId))) ||
+            _context.MarksReviewerAssignments.Any(a => a.StaffId == staffId &&
+                a.AcademicYearId == academicYearId &&
+                (global || heads.Any(h => h.SectionId == a.SectionId))) ||
+            _context.TimetableEntries.Any(a => a.StaffId == staffId &&
+                a.AcademicYearId == academicYearId &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId))) ||
+            _context.TemporaryClassTeacherAssignments.Any(a => a.StaffId == staffId &&
+                a.AcademicYearId == academicYearId &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)));
+        if (!global && !visibleAssignment)
+            return Forbid();
+
+        var subjectAssignments = await _context.TeacherAssignments.AsNoTracking()
+            .Where(a => a.StaffId == staffId && a.AcademicYearId == academicYearId &&
+                (includeInactive || (a.IsActive && a.Staff.IsActive)) &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+            .Select(a => new StaffTeachingAssignmentRow(
+                "Subject teacher", a.Subject.Name, a.SchoolClass.Grade.Section.Name,
+                a.SchoolClass.Grade.Name, a.SchoolClass.Name,
+                a.IsActive && a.Staff.IsActive ? "Active" : "Inactive", ""))
+            .ToListAsync();
+        var classAssignments = await _context.ClassTeacherAssignments.AsNoTracking()
+            .Where(a => a.StaffId == staffId && a.AcademicYearId == academicYearId &&
+                (includeInactive || (a.IsActive && a.Staff.IsActive)) &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+            .Select(a => new StaffTeachingAssignmentRow(
+                "Class teacher", "—", a.SchoolClass.Grade.Section.Name,
+                a.SchoolClass.Grade.Name, a.SchoolClass.Name,
+                a.IsActive && a.Staff.IsActive ? "Active" : "Inactive", ""))
+            .ToListAsync();
+
+        var sectionHeadAssignments = await _context.SectionHeadAssignments.AsNoTracking()
+            .Where(a => a.StaffId == staffId && a.AcademicYearId == academicYearId &&
+                (includeInactive || (a.IsActive && a.Staff.IsActive &&
+                    (!a.IsTemporary || !a.EndsOn.HasValue || a.EndsOn.Value >= today))) &&
+                (global || heads.Any(h => h.SectionId == a.SectionId)))
+            .Select(a => new
+            {
+                a.IsTemporary,
+                Section = a.Section.Name,
+                Status = a.IsActive && a.Staff.IsActive ? "Active" : "Inactive",
+                a.StartsOn,
+                a.EndsOn,
+                a.Reason
+            })
+            .ToListAsync();
+        var sectionHeadRows = sectionHeadAssignments.Select(a => new StaffTeachingAssignmentRow(
+            a.IsTemporary ? "Acting Section Head" : "Section Head", "—", a.Section, "—", "—", a.Status,
+            string.Join(" · ", new[]
+            {
+                a.StartsOn.HasValue ? $"From {a.StartsOn.Value:dd MMM yyyy}" : null,
+                a.EndsOn.HasValue ? $"Until {a.EndsOn.Value:dd MMM yyyy}" : null,
+                string.IsNullOrWhiteSpace(a.Reason) ? null : $"Reason: {a.Reason}"
+            }.Where(value => value != null)))).ToList();
+
+        var reviewerAssignments = await (from assignment in _context.MarksReviewerAssignments.AsNoTracking()
+            join section in _context.Sections.AsNoTracking() on assignment.SectionId equals section.Id
+            where assignment.StaffId == staffId && assignment.AcademicYearId == academicYearId &&
+                (includeInactive || (assignment.IsActive && assignment.Staff.IsActive)) &&
+                (global || heads.Any(h => h.SectionId == assignment.SectionId))
+            select new StaffTeachingAssignmentRow("Marks reviewer", "—", section.Name, "—", "—",
+                assignment.IsActive && assignment.Staff.IsActive ? "Active" : "Inactive",
+                assignment.IsActive ? assignment.Reason : assignment.EndReason ?? assignment.Reason))
+            .ToListAsync();
+
+        var temporaryClassTeacherAssignments = await _context.TemporaryClassTeacherAssignments.AsNoTracking()
+            .Where(a => a.StaffId == staffId && a.AcademicYearId == academicYearId &&
+                (includeInactive || (!a.IsRevoked && a.ExpiresAt > DateTime.UtcNow && a.Staff.IsActive)) &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+            .Select(a => new
+            {
+                Section = a.SchoolClass.Grade.Section.Name,
+                Grade = a.SchoolClass.Grade.Name,
+                Class = a.SchoolClass.Name,
+                a.ExpiresAt,
+                a.IsRevoked,
+                a.Reason
+            })
+            .ToListAsync();
+        var temporaryClassTeacherRows = temporaryClassTeacherAssignments.Select(a => new StaffTeachingAssignmentRow(
+            "Temporary class teacher", "—", a.Section, a.Grade, a.Class,
+            !a.IsRevoked && a.ExpiresAt > DateTime.UtcNow ? "Active" : "Ended",
+            string.Join(" · ", new[]
+            {
+                $"Expires {a.ExpiresAt:dd MMM yyyy HH:mm}",
+                string.IsNullOrWhiteSpace(a.Reason) ? null : $"Reason: {a.Reason}"
+            }.Where(value => value != null)))).ToList();
+
+        var timetableEntries = await _context.TimetableEntries.AsNoTracking()
+            .Where(a => a.StaffId == staffId && a.AcademicYearId == academicYearId &&
+                (includeInactive || (a.IsActive && a.Staff.IsActive)) &&
+                (global || heads.Any(h => h.SectionId == a.SchoolClass.Grade.SectionId)))
+            .Select(a => new
+            {
+                Subject = a.Subject.Name,
+                Section = a.SchoolClass.Grade.Section.Name,
+                Grade = a.SchoolClass.Grade.Name,
+                Class = a.SchoolClass.Name,
+                Day = a.Day.ToString(),
+                a.StartTime,
+                a.EndTime,
+                a.Room,
+                a.IsActive
+            })
+            .ToListAsync();
+        var timetableRows = timetableEntries.Select(a => new StaffTeachingAssignmentRow(
+            "Timetable period", a.Subject, a.Section, a.Grade, a.Class,
+            a.IsActive ? "Active" : "Inactive",
+            $"{a.Day} · {a.StartTime:HH\\:mm}–{a.EndTime:HH\\:mm}" + (string.IsNullOrWhiteSpace(a.Room) ? "" : $" · Room {a.Room}"))).ToList();
+
+        var assignments = subjectAssignments.Concat(classAssignments).Concat(sectionHeadRows)
+            .Concat(reviewerAssignments).Concat(temporaryClassTeacherRows).Concat(timetableRows)
+            .OrderBy(x => x.Section).ThenBy(x => x.Grade).ThenBy(x => x.Class)
+            .ThenBy(x => x.Subject).ThenBy(x => x.AssignmentType).ToList();
+
+        var roles = staff.Id > 0 && staffId > 0
+            ? await (from userRole in _context.UserRoles.AsNoTracking()
+                join role in _context.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+                join person in _context.Staff.AsNoTracking() on userRole.UserId equals person.ApplicationUserId
+                where person.Id == staffId
+                select role.Name).Distinct().OrderBy(name => name).ToListAsync()
+            : [];
+        var report = new
+        {
+            title = "Staff report",
+            academicYear = year,
+            includeInactive,
+            staff = new
+            {
+                staff.StaffNumber,
+                staff.FullName,
+                staff.Designation,
+                staff.Email,
+                status = staff.IsActive ? "Active" : "Inactive",
+                roleNames = roles.Count == 0 ? "Not recorded" : string.Join(", ", roles)
+            },
+            assignments
+        };
+
+        if (!Request.Path.Value!.EndsWith("/pdf", StringComparison.OrdinalIgnoreCase))
+            return Ok(report);
+
+        var schoolProfile = await _context.SchoolProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1);
+        var schoolLogoPath = Path.Combine(_environment.WebRootPath ?? string.Empty, "images", "school-logo.png");
+        var pdf = Document.Create(document => document.Page(page =>
+        {
+            page.Size(842, 595);
+            page.Margin(30);
+            page.DefaultTextStyle(style => style.FontSize(10));
+            page.Content().Column(content =>
+            {
+                content.Item().Element(container => SchoolPdfLogo.Compose(container, schoolProfile, schoolLogoPath));
+                content.Item().Text("Staff report").FontSize(20).Bold();
+                content.Item().Text($"{staff.FullName} ({staff.StaffNumber}) · Academic year: {year}");
+                if (!string.IsNullOrWhiteSpace(staff.Email))
+                    content.Item().Text("Email: " + staff.Email);
+                if (!string.IsNullOrWhiteSpace(staff.Designation))
+                    content.Item().Text("Designation: " + staff.Designation);
+                if (roles.Count > 0)
+                    content.Item().Text("Roles: " + string.Join(", ", roles));
+                content.Item().PaddingTop(15).Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(1.2f);
+                        columns.RelativeColumn(1.4f);
+                        columns.RelativeColumn(1.2f);
+                        columns.RelativeColumn(1.1f);
+                        columns.RelativeColumn(0.8f);
+                        columns.RelativeColumn(0.8f);
+                        columns.RelativeColumn(2.2f);
+                    });
+                    table.Header(header =>
+                    {
+                        foreach (var column in new[] { "Assignment", "Subject", "Section", "Grade", "Class", "Status", "Details" })
+                            header.Cell().Padding(5).Text(column).Bold();
+                    });
+                    foreach (var row in assignments)
+                        foreach (var value in new[] { row.AssignmentType, row.Subject, row.Section, row.Grade, row.Class, row.Status, row.Details })
+                            table.Cell().BorderBottom(0.5f).Padding(5).Text(value);
+                });
+            });
+            page.Footer().AlignCenter().Text(text => { text.Span("Page "); text.CurrentPageNumber(); });
+        })).GeneratePdf();
+        return File(pdf, "application/pdf", $"staff-report-{staff.StaffNumber}-{academicYearId}.pdf");
+    }
+
+    private sealed record StaffTeachingAssignmentRow(
+        string AssignmentType, string Subject, string Section, string Grade, string Class, string Status, string Details);
 
     // ============================================================
     // STUDENT ACADEMIC PROFILE JSON REPORT

@@ -101,8 +101,9 @@ public class SectionHeadAssignmentsController : ControllerBase
         // ------------------------------
 
         var existing =
-            await _context.SectionHeadAssignments
+            await _context.SectionHeadAssignments.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(x =>
+                    !x.IsTemporary &&
                     x.StaffId ==
                         request.StaffId &&
                     x.SectionId ==
@@ -224,7 +225,7 @@ public class SectionHeadAssignmentsController : ControllerBase
         {
             _context.ChangeTracker.Clear();
             await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-            var assignment = await _context.SectionHeadAssignments.FindAsync(id);
+            var assignment = await _context.SectionHeadAssignments.FirstOrDefaultAsync(x => x.Id == id);
             if (assignment == null || !assignment.IsActive)
                 return NotFound(new { message = "Active section head assignment not found." });
             var staff = await _context.Staff.FirstOrDefaultAsync(x => x.Id == request.StaffId && x.IsActive);
@@ -347,6 +348,7 @@ public class SectionHeadAssignmentsController : ControllerBase
     {
         var assignment =
             await _context.SectionHeadAssignments
+                .Include(x => x.Staff).Include(x => x.Section).Include(x => x.AcademicYear)
                 .FirstOrDefaultAsync(x =>
                     x.Id == id &&
                     x.IsActive);
@@ -362,7 +364,12 @@ public class SectionHeadAssignmentsController : ControllerBase
 
         assignment.IsActive = false;
         _context.AuditLogs.Add(new AuditLog { UserId = User.FindFirstValue(ClaimTypes.NameIdentifier), Action = "RemoveSectionHeadAssignment",
-            EntityName = "SectionHeadAssignment", EntityId = id.ToString(), Description = $"Deactivated staff {assignment.StaffId}, section {assignment.SectionId}, year {assignment.AcademicYearId}.", CreatedAt = DateTime.UtcNow });
+            EntityName = "SectionHeadAssignment", EntityId = id.ToString(),
+            Description = $"Removed {assignment.Staff.FullName} ({assignment.Staff.StaffNumber}) as section head of {assignment.Section.Name} for {assignment.AcademicYear.Name}.",
+            OldValues = System.Text.Json.JsonSerializer.Serialize(new { staff = assignment.Staff.FullName, staffNumber = assignment.Staff.StaffNumber,
+                section = assignment.Section.Name, academicYear = assignment.AcademicYear.Name, status = "Assigned" }),
+            NewValues = System.Text.Json.JsonSerializer.Serialize(new { staff = assignment.Staff.FullName, staffNumber = assignment.Staff.StaffNumber,
+                section = assignment.Section.Name, academicYear = assignment.AcademicYear.Name, status = "Removed" }), CreatedAt = DateTime.UtcNow });
 
         await _context.SaveChangesAsync();
 

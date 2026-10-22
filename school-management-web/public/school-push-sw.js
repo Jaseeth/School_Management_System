@@ -14,9 +14,11 @@ self.addEventListener("push", event => {
         const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
         for (const client of windows) client.postMessage({ kind: "school-browser-update", portal: data.portal, recipientUserId: data.recipientUserId });
         // Keep school/leave/student details off the lock screen. Open the authenticated inbox for details.
-        await self.registration.showNotification("School Management", {
-            body: "You have a new school update. Open your notifications to view it.",
-            icon: "/favicon.svg", tag: `school-update-${data.portal}`,
+        const sos = data.kind === "school-sos";
+        await self.registration.showNotification(sos ? "SOS — Urgent school alert" : "School Management", {
+            body: sos ? "School management sent an urgent alert. Open your portal now and acknowledge it." : "You have a new school update. Open your notifications to view it.",
+            requireInteraction: sos,
+            icon: "/favicon.svg", tag: sos ? `school-sos-${data.portal}-${data.alertId}` : `school-update-${data.portal}`,
             data: { portal: data.portal, recipientUserId: data.recipientUserId }
         });
     })());
@@ -32,9 +34,9 @@ self.addEventListener("notificationclick", event => {
     })());
 });
 self.addEventListener("message", event => {
-    if (event.data?.kind !== "school-clear-notifications") return;
+    if (!["school-clear-notifications", "school-clear-sos"].includes(event.data?.kind)) return;
     event.waitUntil((async () => {
-        const notifications = await self.registration.getNotifications({ tag: `school-update-${event.data.portal}` });
-        notifications.forEach(n => n.close());
+        const notifications = await self.registration.getNotifications();
+        notifications.filter(n => n.data?.portal === event.data.portal && (event.data.kind !== "school-clear-sos" || n.tag === `school-sos-${event.data.portal}-${event.data.alertId}`)).forEach(n => n.close());
     })());
 });

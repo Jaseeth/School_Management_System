@@ -67,26 +67,7 @@ public class ClassStudentReportPdfDocument : IDocument
         container.Column(column =>
         {
             column.Item()
-                .AlignCenter()
-                .Height(30)
-                .Element(logoContainer =>
-                {
-                    if (!string.IsNullOrEmpty(_school?.LogoDataUrl)) { logoContainer.Image(Convert.FromBase64String(_school.LogoDataUrl.Split(',')[1])).FitArea(); }
-                    else if (!string.IsNullOrWhiteSpace(
-                            _logoPath) &&
-                        File.Exists(_logoPath))
-                    {
-                        var logoBytes =
-                            File.ReadAllBytes(
-                                _logoPath);
-
-                        logoContainer
-                            .AlignCenter()
-                            .AlignMiddle()
-                            .Image(logoBytes)
-                            .FitArea();
-                    }
-                });
+                .Element(logoContainer => SchoolPdfLogo.Compose(logoContainer, _school, _logoPath));
 
             column.Item()
                 .PaddingTop(5)

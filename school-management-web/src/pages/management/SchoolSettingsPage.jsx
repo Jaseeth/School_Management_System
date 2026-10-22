@@ -58,7 +58,7 @@ function SchoolDetails() {
             <fieldset disabled={busy} className="space-y-5">
                 <legend className="mb-4 font-semibold">School details</legend>
                 <div className="grid gap-5 sm:grid-cols-2">
-                    {[["name", "School name", "text", 160], ["phone", "Phone number", "tel", 100], ["email", "Email address", "email", 254], ["website", "Website", "url", 300]].map(([key, label, type, max]) => <label className="text-sm" key={key}>{label}<input className={inputClass} required={key === "name"} maxLength={max} type={type} value={form[key]} onChange={e => update(key, e.target.value)} /></label>)}
+                    {[["name", "School name", "text", 160], ["phone", "Phone number", "tel", 100], ["email", "Email address", "email", 254], ["website", "Website", "url", 300]].map(([key, label, type, max]) => <label className="text-sm" key={key}>{label}{key === "name" && <span className="required-marker" aria-hidden="true"> *</span>}<input className={inputClass} required={key === "name"} maxLength={max} type={type} value={form[key]} onChange={e => update(key, e.target.value)} /></label>)}
                 </div>
                 <label className="block text-sm">Address<textarea className={inputClass} rows={3} maxLength={500} value={form.address} onChange={e => update("address", e.target.value)} /></label>
                 <div className="grid gap-5 sm:grid-cols-2">

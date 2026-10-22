@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +8,7 @@ using SchoolManagement.Application.Notifications;
 using SchoolManagement.Domain.Entities;
 using SchoolManagement.Domain.Enums;
 using SchoolManagement.Infrastructure.Persistence;
+using SchoolManagement.API.Services;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -40,12 +41,13 @@ public class MarksReviewController : ControllerBase
             return Forbid();
 
         var isSectionHead = User.IsInRole("Section Head");
+        var assignedReviews = MarksReviewerAccess.Valid(_context).Where(a => a.StaffId == staff.Id);
 
         var query = _context.MarksSubmissions
             .AsNoTracking()
             .Where(x =>
                 x.Status == MarksSubmissionStatus.Submitted &&
-                x.TeacherAssignment.StaffId != staff.Id);
+                x.TeacherAssignment.StaffId != staff.Id && x.SubmittedByStaffId != staff.Id);
 
         if (isSectionHead)
         {
@@ -55,7 +57,7 @@ public class MarksReviewController : ControllerBase
                     x.StaffId == staff.Id &&
                     x.IsActive);
 
-            if (!hasAssignment)
+            if (!hasAssignment && !await assignedReviews.AnyAsync())
             {
                 return StatusCode(
                     StatusCodes.Status403Forbidden,
@@ -74,7 +76,8 @@ public class MarksReviewController : ControllerBase
                         submission.TeacherAssignment.AcademicYearId &&
                     assignment.SectionId ==
                         submission.TeacherAssignment
-                            .SchoolClass.Grade.SectionId));
+                            .SchoolClass.Grade.SectionId)
+                || assignedReviews.Any(a => a.AcademicYearId == submission.TeacherAssignment.AcademicYearId && a.SectionId == submission.TeacherAssignment.SchoolClass.Grade.SectionId));
         }
         else
         {
@@ -88,8 +91,10 @@ public class MarksReviewController : ControllerBase
                         staff.Id,
                         "Marks.Review");
 
-                if (delegatedSectionIds.Count == 0)
+                var hasReviewerAssignment = await assignedReviews.AnyAsync();
+                if (delegatedSectionIds.Count == 0 && !hasReviewerAssignment)
                 {
+                    if (User.IsInRole("Teacher")) return Ok(Array.Empty<object>());
                     return StatusCode(
                         StatusCodes.Status403Forbidden,
                         new
@@ -102,7 +107,8 @@ public class MarksReviewController : ControllerBase
                 query = query.Where(x =>
                     delegatedSectionIds.Contains(
                         x.TeacherAssignment
-                            .SchoolClass.Grade.SectionId));
+                            .SchoolClass.Grade.SectionId)
+                    || assignedReviews.Any(a => a.AcademicYearId == x.TeacherAssignment.AcademicYearId && a.SectionId == x.TeacherAssignment.SchoolClass.Grade.SectionId));
             }
         }
 
@@ -328,7 +334,7 @@ public class MarksReviewController : ControllerBase
             });
         }
 
-        if (submission.TeacherAssignment.StaffId == staff.Id)
+        if (submission.TeacherAssignment.StaffId == staff.Id || submission.SubmittedByStaffId == staff.Id)
         {
             return StatusCode(
                 StatusCodes.Status403Forbidden,
@@ -382,7 +388,8 @@ public class MarksReviewController : ControllerBase
                 ? null
                 : request.Comment.Trim();
 
-        await _context.SaveChangesAsync();
+        try { await _context.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException) { return Conflict(new { message = "This marks submission was already changed by another reviewer. Refresh to see the current decision." }); }
 
         await _auditLogService.LogAsync(
             action: "Approve",
@@ -446,7 +453,7 @@ public class MarksReviewController : ControllerBase
             });
         }
 
-        if (submission.TeacherAssignment.StaffId == staff.Id)
+        if (submission.TeacherAssignment.StaffId == staff.Id || submission.SubmittedByStaffId == staff.Id)
         {
             return StatusCode(
                 StatusCodes.Status403Forbidden,
@@ -514,7 +521,8 @@ public class MarksReviewController : ControllerBase
             mark.UpdatedAt = reviewedAt;
         }
 
-        await _context.SaveChangesAsync();
+        try { await _context.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException) { return Conflict(new { message = "This marks submission was already changed by another reviewer. Refresh to see the current decision." }); }
 
         await _auditLogService.LogAsync(
             action: "Reject",
@@ -627,7 +635,8 @@ public class MarksReviewController : ControllerBase
             mark.UpdatedAt = publishedAt;
         }
 
-        await _context.SaveChangesAsync();
+        try { await _context.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException) { return Conflict(new { message = "This marks submission was already changed by another reviewer. Refresh to see the current decision." }); }
 
         await _auditLogService.LogAsync(
             action: "Publish",
@@ -941,6 +950,7 @@ public class MarksReviewController : ControllerBase
         int sectionId,
         int academicYearId)
     {
+        if (permissionName == "Marks.Review" && await MarksReviewerAccess.Valid(_context).AnyAsync(a => a.StaffId == staff.Id && a.SectionId == sectionId && a.AcademicYearId == academicYearId)) return true;
         if (User.IsInRole("Section Head") &&
             (permissionName == "Marks.Review" || permissionName == "Marks.Publish"))
         {
@@ -1019,6 +1029,7 @@ public class MarksReviewController : ControllerBase
         return await _context.Staff
             .FirstOrDefaultAsync(x =>
                 x.ApplicationUserId == userId &&
-                x.IsActive);
+                x.IsActive && _context.Users.Any(u => u.Id == userId && u.IsActive));
     }
 }
+

@@ -1,6 +1,6 @@
-﻿import { GraduationCap, LogIn } from "lucide-react";
+import { GraduationCap, LogIn } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { parentPortalApi } from "../../api/parentPortalApi";
 
 export default function ParentLoginPage() {
@@ -81,7 +81,7 @@ export default function ParentLoginPage() {
 
                     <label className="mt-7 block text-sm font-semibold text-slate-700">
                         Email
-                        <input
+                        <span className="required-marker" aria-hidden="true"> *</span><input
                             type="email"
                             required
                             placeholder="example@gmail.com"
@@ -95,7 +95,7 @@ export default function ParentLoginPage() {
 
                     <label className="mt-5 block text-sm font-semibold text-slate-700">
                         Password
-                        <input
+                        <span className="required-marker" aria-hidden="true"> *</span><input
                             type="password"
                             required
                             placeholder="Enter your password"
@@ -107,6 +107,7 @@ export default function ParentLoginPage() {
                         />
                     </label>
 
+                    <div className="mt-3 text-right"><Link to="/parent/forgot-password" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-600 hover:underline">Forgot password?</Link></div>
                     {error && (
                         <p
                             role="alert"

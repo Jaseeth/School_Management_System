@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using SchoolManagement.Application.Marks.DTOs;
@@ -6,6 +6,8 @@ using SchoolManagement.Domain.Entities;
 using SchoolManagement.Infrastructure.Authorization;
 using SchoolManagement.Infrastructure.Persistence;
 using SchoolManagement.Domain.Enums;
+using SchoolManagement.API.Services;
+using SchoolManagement.Application.Notifications;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -14,11 +16,13 @@ namespace SchoolManagement.API.Controllers;
 public class MarksController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IPushNotificationService? _push;
 
     public MarksController(
-        ApplicationDbContext context)
+        ApplicationDbContext context, IPushNotificationService? push = null)
     {
         _context = context;
+        _push = push;
     }
 
     // =====================================
@@ -540,6 +544,18 @@ public class MarksController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+        var sectionId = await _context.SchoolClasses.Where(c => c.Id == assignment.SchoolClassId).Select(c => c.Grade.SectionId).SingleAsync();
+        var recipients = await MarksReviewerAccess.Recipients(_context, sectionId, assignment.AcademicYearId, staff.Id);
+        var title = "Marks submitted for review";
+        var details = await _context.TeacherAssignments.Where(a => a.Id == assignment.Id)
+            .Select(a => new { subject = a.Subject.Name, grade = a.SchoolClass.Grade.Name, schoolClass = a.SchoolClass.Name, year = a.AcademicYear.Name }).SingleAsync();
+        var examName = await _context.Exams.Where(e => e.Id == examId).Select(e => e.Name).SingleAsync();
+        var message = $"{staff.FullName} submitted {examName} marks for {details.subject}, Grade {details.grade} · Class {details.schoolClass} ({details.year}). Either the section head or assigned marks reviewer can review this submission. Open Marks Review.";
+        foreach (var recipient in recipients) _context.Notifications.Add(new Notification { RecipientStaffId = recipient, Title = title, Message = message,
+            Type = NotificationType.General, ReferenceType = "MarksSubmission", ReferenceId = submission.Id });
+        await _context.SaveChangesAsync();
+        if (_push != null) foreach (var recipient in recipients) try { await _push.SendToStaffAsync(recipient, title, message, "MarksSubmission", submission.Id); }
+            catch (Exception exception) { HttpContext.RequestServices?.GetService<Microsoft.Extensions.Logging.ILogger<MarksController>>()?.LogWarning(exception, "Marks review browser alert failed; portal notification retained."); }
 
         return Ok(new
         {

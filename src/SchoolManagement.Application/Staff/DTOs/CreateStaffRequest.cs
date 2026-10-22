@@ -4,6 +4,8 @@ using System.ComponentModel.DataAnnotations;
 
 public class CreateStaffRequest
 {
+    public bool? CanTeach { get; set; }
+    public List<int> TeachingSubjectIds { get; set; } = [];
     [Required, StringLength(450)]
     public string StaffNumber { get; set; } = string.Empty;
 

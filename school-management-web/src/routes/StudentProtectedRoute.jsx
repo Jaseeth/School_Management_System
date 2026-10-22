@@ -1,3 +1,4 @@
+import PortalHeader from "../components/layout/PortalHeader";
 import { getPortalToken } from "../services/portalSession";
 import { Navigate, useLocation } from "react-router-dom";
 
@@ -29,5 +30,5 @@ export default function StudentProtectedRoute({ children }) {
         return <Navigate to="/student/login" replace />;
     }
 
-    return children;
+    return <div className="min-h-screen bg-slate-50"><PortalHeader portal="student" />{children}</div>;
 }

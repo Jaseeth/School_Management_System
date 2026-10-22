@@ -855,7 +855,7 @@ export default function StudentRegistrationPage() {
 
                             <div className="mt-7 space-y-5">
 
-                                <FormField
+                                <FormField aria-required={true}
                                     label="Index Number"
                                     name="indexNumber"
                                     value={
@@ -871,7 +871,7 @@ export default function StudentRegistrationPage() {
                                     }
                                 />
 
-                                <FormField
+                                <FormField aria-required={true}
                                     label="Registration Code"
                                     name="registrationCode"
                                     value={
@@ -975,14 +975,14 @@ export default function StudentRegistrationPage() {
                             <div className="mt-6">
 
                                 <label className="mb-2 block text-sm font-semibold text-slate-700">
-                                    Verification Code
+                                    Verification Code<span className="required-marker" aria-hidden="true"> *</span>
                                 </label>
 
                                 <input
                                     type="text"
                                     inputMode="numeric"
                                     autoComplete="one-time-code"
-                                    name="otp"
+                                    name="otp" aria-required="true"
                                     value={
                                         form.otp
                                     }
@@ -1024,7 +1024,7 @@ export default function StudentRegistrationPage() {
                                     disabled={
                                         loading
                                     }
-                                    className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-800"
+                                    className="portal-back-button"
                                 >
                                     <ArrowLeft className="h-4 w-4" />
                                     Back
@@ -1112,7 +1112,7 @@ export default function StudentRegistrationPage() {
 
                             <div className="mt-7 space-y-5">
 
-                                <PasswordField
+                                <PasswordField aria-required={true}
                                     label="Password"
                                     name="password"
                                     value={
@@ -1135,7 +1135,7 @@ export default function StudentRegistrationPage() {
                                     }
                                 />
 
-                                <PasswordField
+                                <PasswordField aria-required={true}
                                     label="Confirm Password"
                                     name="confirmPassword"
                                     value={
@@ -1314,7 +1314,7 @@ function FormField({
         <div>
 
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-                {label}
+                {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
             </label>
 
             <input
@@ -1345,7 +1345,7 @@ function PasswordField({
         <div>
 
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-                {label}
+                {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
             </label>
 
             <div className="relative">

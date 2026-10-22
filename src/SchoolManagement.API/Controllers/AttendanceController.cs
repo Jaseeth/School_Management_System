@@ -875,7 +875,7 @@ public class AttendanceController : ControllerBase
             return null;
 
         var roles =
-            await _userManager.GetRolesAsync(user);
+            await EffectiveStaffRoles.GetAsync(_userManager, user, User);
 
         var wholeSchool =
             roles.Contains("Admin") ||

@@ -1,9 +1,8 @@
-﻿import {
+import {
     ArrowLeft,
     Award,
     BookOpen,
     CalendarDays,
-    GraduationCap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -56,26 +55,12 @@ export default function ParentAcademicProfilePage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white">
-                <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
-                        <GraduationCap className="h-6 w-6" />
-                    </span>
-                    <div>
-                        <p className="font-bold text-slate-950">
-                            School Management
-                        </p>
-                        <p className="text-xs text-slate-500">
-                            Parent Portal
-                        </p>
-                    </div>
-                </div>
-            </header>
+
 
             <main className="mx-auto max-w-6xl px-5 py-9">
                 <Link
                     to="/parent/dashboard"
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700"
+                    className="portal-back-button"
                 >
                     <ArrowLeft className="h-4 w-4" />
                     Back to My Children
@@ -235,6 +220,7 @@ export default function ParentAcademicProfilePage() {
                         <div className="mt-5 flex flex-wrap gap-3">
                             <Link
                                 to={`/parent/children/${studentId}/attendance`}
+                                state={{ fromAcademicProfile: true }}
                                 className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
                             >
                                 <CalendarDays className="h-4 w-4" />
@@ -243,6 +229,7 @@ export default function ParentAcademicProfilePage() {
 
                             <Link
                                 to={`/parent/children/${studentId}/results`}
+                                state={{ fromAcademicProfile: true }}
                                 className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
                             >
                                 <Award className="h-4 w-4" />

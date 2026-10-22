@@ -35,7 +35,13 @@ public class NotificationHistoryController(ApplicationDbContext db) : Controller
         if (status != "all") query = query.Where(n => n.IsRead == (status == "read"));
         var total = await query.CountAsync();
         var totalPages = Math.Max(1, (int)Math.Ceiling(total / 25d)); page = Math.Min(page, totalPages);
-        var items = await query.OrderByDescending(n => n.CreatedAt).ThenByDescending(n => n.Id).Skip((page - 1) * 25).Take(25).Select(n => new { n.Id, n.Title, n.Message, type = n.Type.ToString(), n.IsRead, n.CreatedAt, n.ReferenceType, n.ReferenceId }).ToListAsync();
+        var items = await query.OrderByDescending(n => n.CreatedAt).ThenByDescending(n => n.Id).Skip((page - 1) * 25).Take(25).Select(n => new {
+            n.Id, n.Title, n.Message, type = n.Type.ToString(), n.IsRead, n.CreatedAt, n.ReferenceType, n.ReferenceId,
+            isOwnLeave = n.ReferenceType == "StaffLeaveExtraAllowance"
+                ? db.StaffExtraLeaveAllowances.Any(a => a.Id == n.ReferenceId && a.StaffId == n.RecipientStaffId)
+                : db.StaffLeaveRequests.Any(l => l.Id == n.ReferenceId && l.StaffId == n.RecipientStaffId)
+                    && (n.ReferenceType == "StaffLeaveCancellation" || n.ReferenceType == "StaffLeaveRequest")
+        }).ToListAsync();
         return Ok(new { items, page, totalPages, total, totalUnread });
     }
 

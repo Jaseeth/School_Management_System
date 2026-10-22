@@ -341,7 +341,7 @@ function Field({
 }) {
     return (
         <label className="block text-sm font-semibold text-slate-700">
-            {label}
+            {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
 
             <span className="relative mt-2 block">
                 {Icon && (
@@ -374,7 +374,7 @@ function PasswordField({
 
     return (
         <div className="block text-sm font-semibold text-slate-700">
-            <label htmlFor={inputId}>{label}</label>
+            <label htmlFor={inputId}>{label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}</label>
 
             <span className="relative mt-2 block">
                 <input

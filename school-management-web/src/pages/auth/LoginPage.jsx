@@ -163,14 +163,15 @@ export default function LoginPage() {
                         >
                             {/* EMAIL */}
                             <div>
-                                <label className="mb-2 block text-sm font-medium text-slate-700">
-                                    Staff ID or email address
-                                </label>
+                                <label htmlFor="staff-login-email" className="mb-2 block text-sm font-medium text-slate-700">
+                                    Staff ID or email address<span className="required-marker" aria-hidden="true"> *</span>
+</label>
 
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
                                     <input
+                                        id="staff-login-email" aria-required="true"
                                         type="text"
                                         value={email}
                                         onChange={(e) =>
@@ -188,9 +189,9 @@ export default function LoginPage() {
                             {/* PASSWORD */}
                             <div>
                                 <div className="mb-2 flex items-center justify-between">
-                                    <label className="text-sm font-medium text-slate-700">
-                                        Password
-                                    </label>
+                                    <label htmlFor="staff-login-password" className="text-sm font-medium text-slate-700">
+                                        Password<span className="required-marker" aria-hidden="true"> *</span>
+</label>
 
                                     <button
                                         type="button"
@@ -205,6 +206,7 @@ export default function LoginPage() {
                                     <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
                                     <input
+                                        id="staff-login-password" aria-required="true"
                                         type={
                                             showPassword
                                                 ? "text"
@@ -223,6 +225,7 @@ export default function LoginPage() {
 
                                     <button
                                         type="button"
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
                                         onClick={() =>
                                             setShowPassword(
                                                 (current) =>

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 using SchoolManagement.Infrastructure.Identity;
+using SchoolManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace SchoolManagement.API.Middleware;
 
@@ -15,7 +17,8 @@ public class ForcePasswordChangeMiddleware
 
     public async Task InvokeAsync(
         HttpContext context,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        ApplicationDbContext db)
     {
         // User is not logged in
         if (context.User.Identity?.IsAuthenticated != true)
@@ -26,7 +29,7 @@ public class ForcePasswordChangeMiddleware
 
         var path = context.Request.Path.Value?.ToLowerInvariant();
 
-        if (path is "/api/auth/login" or "/api/auth/student-login" || path?.StartsWith("/api/auth/staff-forgot-password/") == true || path?.StartsWith("/api/student-registration/") == true) { await _next(context); return; }
+        if (path is "/api/auth/login" or "/api/auth/student-login" || (path?.StartsWith("/api/auth/staff-forgot-password/") == true || path?.StartsWith("/api/auth/parent-forgot-password/") == true) || path?.StartsWith("/api/student-registration/") == true) { await _next(context); return; }
 
         var userId = context.User.FindFirstValue(
             ClaimTypes.NameIdentifier);
@@ -55,6 +58,7 @@ public class ForcePasswordChangeMiddleware
             await context.Response.WriteAsJsonAsync(new { message = "Your account access changed. Sign in again to continue." });
             return;
         }
+
         if (path == "/api/auth/change-password") { await _next(context); return; }
         if (user.MustChangePassword)
         {

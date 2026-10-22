@@ -135,7 +135,7 @@ public partial class TeacherAssignmentTests
         var calls = 0; var middleware = new ForcePasswordChangeMiddleware(_ => { calls++; return Task.CompletedTask; });
         async Task<int> Request(string role, string? tokenStamp, string path = "/api/staff/my/profile") {
             var context = new DefaultHttpContext { User = AccessUser(user.Id, role, tokenStamp) }; context.Request.Path = path; context.Response.Body = new MemoryStream();
-            await middleware.InvokeAsync(context, db.Users); return context.Response.StatusCode;
+            await middleware.InvokeAsync(context, db.Users, db.Context); return context.Response.StatusCode;
         }
         Assert.Equal(200, await Request("Teacher", stamp)); Assert.Equal(1, calls);
         Assert.Equal(401, await Request("Teacher", null));
@@ -153,13 +153,15 @@ public partial class TeacherAssignmentTests
         await using var db = await TestDatabase.CreateAsync();
         var roles = db.Services.GetRequiredService<RoleManager<IdentityRole>>();
         Assert.True((await roles.CreateAsync(new IdentityRole("Principal"))).Succeeded);
-        db.Context.Permissions.AddRange(new Permission { Name = "Students.View" }, new Permission { Name = "Students.Create" }, new Permission { Name = "Staff.Create" }); await db.Context.SaveChangesAsync();
+        db.Context.Permissions.AddRange(new Permission { Name = "Students.View" }, new Permission { Name = "Students.Create" }, new Permission { Name = "Staff.Create" }, new Permission { Name = "Marks.Review" }, new Permission { Name = "Marks.Publish" }); await db.Context.SaveChangesAsync();
         await RoleAccessBaseline.Apply(db.Context); var count = await db.Context.RolePermissions.CountAsync();
         await RoleAccessBaseline.Apply(db.Context); Assert.Equal(count, await db.Context.RolePermissions.CountAsync());
         var principal = await db.CreateUserAsync("principal-access", "Principal");
         var handler = new PermissionAuthorizationHandler(db.Context, roles);
         async Task<bool> Allows(string uid, string role, string permission) { var ctx = new AuthorizationHandlerContext([new PermissionRequirement(permission)], AccessUser(uid, role), null); await handler.HandleAsync(ctx); return ctx.HasSucceeded; }
         Assert.True(await Allows(principal.Id, "Principal", "Staff.Create"));
+        Assert.True(await Allows(principal.Id, "Principal", "Marks.Publish"));
+        Assert.True(await Allows(principal.Id, "Principal", "Marks.Review"));
         Assert.False(await Allows(db.TeacherUserIds[0], "Teacher", "Students.Create"));
         Assert.False(await Allows(db.TeacherUserIds[0], "Principal", "Staff.Create"));
         principal.IsActive = false; await db.Users.UpdateAsync(principal);

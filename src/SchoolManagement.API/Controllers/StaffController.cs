@@ -296,6 +296,19 @@ public partial class StaffController : ControllerBase
         if (!User.IsInRole("Admin") && role.Name is "Admin" or "Principal" or "Deputy Principal")
             return Forbid();
 
+        var teachingRole = role.Name is "Admin" or "Section Head" or "Teacher";
+        if (teachingRole && request.CanTeach == null)
+            return BadRequest(new { message = "Choose whether this staff member can teach." });
+        var subjectIds = (request.TeachingSubjectIds ?? []).Distinct().ToList();
+        if (teachingRole && request.CanTeach == true && (subjectIds.Count == 0 || subjectIds.Count > 500 ||
+            await _context.Subjects.CountAsync(s => s.IsActive && subjectIds.Contains(s.Id)) != subjectIds.Count))
+            return BadRequest(new { message = "Select one or more valid, active teaching subjects." });
+        if (!teachingRole || request.CanTeach != true) subjectIds.Clear();
+
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync<IActionResult>(async () => {
+        _context.ChangeTracker.Clear();
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
         var user = new ApplicationUser
         {
             UserName = request.Email,
@@ -340,6 +353,8 @@ public partial class StaffController : ControllerBase
 
         var staff = new Staff
         {
+            CanTeach = teachingRole ? request.CanTeach : null,
+            TeachingSubjects = subjectIds.Select(id => new StaffTeachingSubject { SubjectId = id }).ToList(),
             StaffNumber = request.StaffNumber,
             FullName = request.FullName,
             Designation = request.Designation,
@@ -364,13 +379,18 @@ public partial class StaffController : ControllerBase
                 staff.Designation,
                 Email = user.Email,
                 Role = role.Name,
+                staff.CanTeach,
+                TeachingSubjects = await _context.Subjects.Where(s => subjectIds.Contains(s.Id)).Select(s => s.Name).ToListAsync(),
                 staff.IsActive,
                 user.MustChangePassword
             });
 
+        await transaction.CommitAsync();
         return Ok(new
         {
             message = "Staff account created successfully.",
+            staff.CanTeach,
+            TeachingSubjectIds = subjectIds,
             staff.Id,
             staff.StaffNumber,
             staff.FullName,
@@ -378,7 +398,11 @@ public partial class StaffController : ControllerBase
             Role = role.Name,
             MustChangePassword = user.MustChangePassword
         });
+        });
     }
+
+    [HasPermission("Staff.Create"), HttpGet("teaching-subjects")]
+    public async Task<IActionResult> TeachingSubjects() => Ok(await _context.Subjects.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Name).Select(s => new { s.Id, s.Name }).ToListAsync());
 
     [HasPermission("Staff.View")]
     [HttpGet]
@@ -396,6 +420,8 @@ public partial class StaffController : ControllerBase
                 s.FullName,
                 Email = u.Email,
                 s.Designation,
+                s.CanTeach,
+                TeachingSubjects = s.TeachingSubjects.OrderBy(t => t.Subject.Name).Select(t => new { t.SubjectId, t.Subject.Name }).ToList(),
                 s.ApplicationUserId,
                 s.IsActive,
                 AccountIsActive = u.IsActive,

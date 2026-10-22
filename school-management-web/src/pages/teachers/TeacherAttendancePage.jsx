@@ -617,7 +617,7 @@ export default function TeacherAttendancePage() {
 
                                         <label className="text-xs font-semibold text-slate-600">
                                             Status
-                                            <select
+                                            {canSaveDirectly && <span className="required-marker" aria-hidden="true"> *</span>}<select
                                                 value={draft[student.id]?.status || ""}
                                                 onChange={(event) => changeStudent(
                                                     student.id,

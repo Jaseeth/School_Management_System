@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.TeacherAssignments.DTOs;
@@ -8,22 +8,25 @@ using SchoolManagement.Infrastructure.Identity;
 using SchoolManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using SchoolManagement.Application.Auditing;
 
 namespace SchoolManagement.API.Controllers;
 
 [ApiController]
 [Route("api/teacher-assignments")]
-public class TeacherAssignmentsController : ControllerBase
+public partial class TeacherAssignmentsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditLogService? _audit;
 
     public TeacherAssignmentsController(
         ApplicationDbContext context,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager, IAuditLogService? audit = null)
     {
         _context = context;
         _userManager = userManager;
+        _audit = audit;
     }
 
     // =====================================
@@ -35,154 +38,8 @@ public class TeacherAssignmentsController : ControllerBase
     public async Task<IActionResult> CreateAssignment(
         CreateTeacherAssignmentRequest request)
     {
-        var academicYearExists =
-            await _context.AcademicYears
-                .AnyAsync(x =>
-                    x.Id == request.AcademicYearId && x.IsActive);
-
-        if (!academicYearExists)
-        {
-            return BadRequest(new
-            {
-                message = "Invalid academic year."
-            });
-        }
-
-        var staff = await _context.Staff
-            .FirstOrDefaultAsync(x =>
-                x.Id == request.StaffId &&
-                x.IsActive);
-
-        if (staff == null)
-        {
-            return BadRequest(new
-            {
-                message = "Invalid staff member."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(
-            staff.ApplicationUserId))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This staff member does not have a user account."
-            });
-        }
-
-        var user = await _userManager.FindByIdAsync(
-            staff.ApplicationUserId);
-
-        if (user == null || !user.IsActive)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Staff user account was not found."
-            });
-        }
-
-        var isTeacher =
-            await _userManager.IsInRoleAsync(
-                user,
-                "Teacher");
-
-        if (!isTeacher)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Selected staff member is not a teacher."
-            });
-        }
-
-        var classExists =
-            await _context.SchoolClasses
-                .AnyAsync(x =>
-                    x.Id == request.SchoolClassId &&
-                    x.IsActive && x.Grade.IsActive && x.Grade.Section.IsActive);
-
-        if (!classExists)
-        {
-            return BadRequest(new
-            {
-                message = "Invalid class."
-            });
-        }
-
-        var subjectExists =
-            await _context.Subjects
-                .AnyAsync(x =>
-                    x.Id == request.SubjectId &&
-                    x.IsActive);
-
-        if (!subjectExists)
-        {
-            return BadRequest(new
-            {
-                message = "Invalid subject."
-            });
-        }
-
-        var existingAssignment =
-            await _context.TeacherAssignments
-                .FirstOrDefaultAsync(x =>
-                    x.AcademicYearId ==
-                        request.AcademicYearId &&
-                    x.StaffId ==
-                        request.StaffId &&
-                    x.SchoolClassId ==
-                        request.SchoolClassId &&
-                    x.SubjectId ==
-                        request.SubjectId);
-
-        if (existingAssignment?.IsActive == true)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "This teacher assignment already exists."
-            });
-        }
-
-        if (existingAssignment != null)
-        {
-            existingAssignment.IsActive = true;
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Teacher assignment reactivated successfully.", existingAssignment.Id });
-        }
-
-        var assignment =
-            new TeacherAssignment
-            {
-                AcademicYearId =
-                    request.AcademicYearId,
-
-                StaffId =
-                    request.StaffId,
-
-                SchoolClassId =
-                    request.SchoolClassId,
-
-                SubjectId =
-                    request.SubjectId,
-
-                IsActive = true
-            };
-
-        _context.TeacherAssignments.Add(
-            assignment);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message =
-                "Teacher assignment created successfully.",
-
-            assignment.Id
-        });
+        var result = await AssignBulk(new BulkAssignmentRequest(request.AcademicYearId, request.StaffId, [new AssignmentRow(request.SubjectId, request.SchoolClassId)]));
+        return result is ConflictObjectResult conflict ? BadRequest(conflict.Value) : result;
     }
 
     // =====================================

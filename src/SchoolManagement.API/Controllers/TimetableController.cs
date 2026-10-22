@@ -103,8 +103,9 @@ public class TimetableController : ControllerBase
             });
             }
 
-            if (request.Day == SchoolDay.Monday && request.StartTime < new TimeOnly(8, 15))
-                return BadRequest(new { message = "Monday period 1 is Assembly (07:30-08:15). Teaching periods must start at 08:15 or later." });
+            var assemblyEnd = await _context.SchoolProfiles.Select(x => (TimeOnly?)x.MondayAssemblyEnd).FirstOrDefaultAsync() ?? new TimeOnly(8, 15);
+            if (request.Day == SchoolDay.Monday && request.StartTime < assemblyEnd)
+                return BadRequest(new { message = $"Monday period 1 is Assembly. Teaching periods must start at {assemblyEnd:HH:mm} or later." });
 
             // ========================================================
             // VALIDATE TIME
@@ -242,19 +243,6 @@ public class TimetableController : ControllerBase
                 {
                     message =
                         "Teacher login account not found."
-                });
-            }
-
-            var teacherRoles =
-                await _userManager.GetRolesAsync(
-                    teacherUser);
-
-            if (!teacherRoles.Contains("Teacher"))
-            {
-                return BadRequest(new
-                {
-                    message =
-                        "Selected staff member does not have the Teacher role."
                 });
             }
 
@@ -565,8 +553,9 @@ public class TimetableController : ControllerBase
                 });
             }
 
-            if (request.IsActive && request.Day == SchoolDay.Monday && request.StartTime < new TimeOnly(8, 15))
-                return BadRequest(new { message = "Monday period 1 is Assembly (07:30-08:15). Teaching periods must start at 08:15 or later." });
+            var assemblyEnd = await _context.SchoolProfiles.Select(x => (TimeOnly?)x.MondayAssemblyEnd).FirstOrDefaultAsync() ?? new TimeOnly(8, 15);
+            if (request.IsActive && request.Day == SchoolDay.Monday && request.StartTime < assemblyEnd)
+                return BadRequest(new { message = $"Monday period 1 is Assembly. Teaching periods must start at {assemblyEnd:HH:mm} or later." });
 
             if (request.EndTime <=
                 request.StartTime)
@@ -685,19 +674,6 @@ public class TimetableController : ControllerBase
                 {
                     message =
                         "Teacher login account not found."
-                });
-            }
-
-            var teacherRoles =
-                await _userManager.GetRolesAsync(
-                    teacherUser);
-
-            if (!teacherRoles.Contains("Teacher"))
-            {
-                return BadRequest(new
-                {
-                    message =
-                        "Selected staff member does not have the Teacher role."
                 });
             }
 

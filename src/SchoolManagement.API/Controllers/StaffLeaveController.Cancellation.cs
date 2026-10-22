@@ -71,7 +71,7 @@ public partial class StaffLeaveController
     }
 
     [HttpGet("cancellations")]
-    public async Task<IActionResult> Cancellations(DateOnly? from = null, DateOnly? to = null, string? search = null, string? status = null, int page = 1, int pageSize = 25)
+    public async Task<IActionResult> Cancellations(DateOnly? from = null, DateOnly? to = null, string? search = null, string? status = null, int page = 1, int pageSize = 25, string scope = "all")
     {
         var actor = await GetCurrentStaffAsync(); if (actor == null) return Forbid();
         var leaders = await LeadershipIdsAsync(); var global = leaders.Contains(actor.Id);
@@ -86,6 +86,14 @@ public partial class StaffLeaveController
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(start.ToDateTime(TimeOnly.MinValue), zone);
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(end.AddDays(1).ToDateTime(TimeOnly.MinValue), zone);
         var scoped = _context.StaffLeaveCancellations.AsNoTracking().Where(c => global || c.StaffLeaveRequest.StaffId == actor.Id || scopedLeaveIds.Contains(c.StaffLeaveRequestId));
+        if (!new[] { "all", "mine", "team" }.Contains(scope)) return BadRequest();
+        if (scope == "mine") scoped = scoped.Where(c => c.StaffLeaveRequest.StaffId == actor.Id);
+        if (scope == "team")
+        {
+            var currentUser = await _userManager.FindByIdAsync(actor.ApplicationUserId!);
+            if (!global && (currentUser == null || !(await EffectiveRolesAsync(currentUser)).Contains("Section Head"))) return Forbid();
+            scoped = scoped.Where(c => c.StaffLeaveRequest.StaffId != actor.Id);
+        }
         var pendingLeaveIds = await _context.StaffLeaveCancellations.Where(c => c.StaffLeaveRequest.StaffId == actor.Id && c.Status == "Pending").Select(c => c.StaffLeaveRequestId).ToListAsync();
         var query = scoped.Where(c => c.RequestedAt >= startUtc && c.RequestedAt < endUtc);
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); query = query.Where(c => c.StaffLeaveRequest.Staff.FullName.Contains(term) || c.StaffLeaveRequest.Staff.StaffNumber.Contains(term)); }

@@ -5,7 +5,7 @@ export function notificationPath(portal) {
     return portal === "staff" ? "/notifications" : portals.includes(portal) ? `/${portal}/notifications` : null;
 }
 export function matchesBinding(data, binding) {
-    return Boolean(data?.kind === "school-update" && portals.includes(data.portal) && binding?.enabled && binding.portal === data.portal && binding.userId === data.recipientUserId);
+    return Boolean(["school-update", "school-sos"].includes(data?.kind) && portals.includes(data.portal) && binding?.enabled && binding.portal === data.portal && binding.userId === data.recipientUserId);
 }
 export function bindingStore(portal, value, expectedRevision = undefined) {
     return new Promise((resolve, reject) => {

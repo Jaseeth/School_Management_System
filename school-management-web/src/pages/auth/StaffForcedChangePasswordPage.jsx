@@ -185,7 +185,7 @@ function PasswordField({
                 htmlFor={name}
                 className="block text-sm font-semibold text-slate-700"
             >
-                {label}
+                {label}<span className="required-marker" aria-hidden="true"> *</span>
             </label>
 
             <div className="relative mt-2">

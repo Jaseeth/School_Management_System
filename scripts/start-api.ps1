@@ -94,5 +94,29 @@ catch {
 finally { $connection.Dispose() }
 
 if ($CheckOnly) { return }
+
+# A previous `dotnet run` can still be serving the API while this launcher tries
+# to rebuild the same Debug output. Stop only this project's apphost so its DLLs
+# are released before the build starts; leave other SchoolManagement.API
+# processes (for example, another checkout) untouched.
+$apiOutputDirectory = [System.IO.Path]::GetFullPath((Join-Path $projectRoot 'src\SchoolManagement.API\bin\Debug\net10.0')).TrimEnd('\')
+$apiProcesses = @(Get-Process -Name 'SchoolManagement.API' -ErrorAction SilentlyContinue)
+$projectApiProcesses = @($apiProcesses | Where-Object {
+    try {
+        $processPath = $_.Path
+        $processPath -and [System.IO.Path]::GetFullPath($processPath).StartsWith(
+            "$apiOutputDirectory\",
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    }
+    catch { $false }
+})
+
+foreach ($apiProcess in $projectApiProcesses) {
+    Write-Host "Stopping the existing API process (PID $($apiProcess.Id)) before rebuilding."
+    Stop-Process -Id $apiProcess.Id -ErrorAction Stop
+    try { $apiProcess.WaitForExit(10000) } catch { }
+}
+
 & dotnet run --project $projectPath --launch-profile https -- --ConnectionStrings:DefaultConnection $connectionSettings.ConnectionString
 if ($LASTEXITCODE -ne 0) { throw "API exited with code $LASTEXITCODE. Check the final error above." }

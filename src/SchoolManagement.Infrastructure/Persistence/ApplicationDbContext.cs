@@ -8,13 +8,17 @@ namespace SchoolManagement.Infrastructure.Persistence;
 
 public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
-    public ApplicationDbContext(
-        DbContextOptions<ApplicationDbContext> options)
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
     }
 
     public DbSet<SchoolProfile> SchoolProfiles => Set<SchoolProfile>();
+    public DbSet<SosRecipient> SosRecipients => Set<SosRecipient>();
+    public DbSet<RegistrationDraft> RegistrationDrafts => Set<RegistrationDraft>();
+    public DbSet<MarksReviewerAssignment> MarksReviewerAssignments => Set<MarksReviewerAssignment>();
+    public DbSet<StudentLeadershipAppointment> StudentLeadershipAppointments => Set<StudentLeadershipAppointment>();
+    public DbSet<StudentLeadershipChange> StudentLeadershipChanges => Set<StudentLeadershipChange>();
     public DbSet<AssessmentSchedule> AssessmentSchedules => Set<AssessmentSchedule>();
     public DbSet<SchoolEvent> SchoolEvents => Set<SchoolEvent>();
     public DbSet<AcademicYear> AcademicYears { get; set; }
@@ -24,6 +28,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<StaffLeaveCalendar> StaffLeaveCalendars => Set<StaffLeaveCalendar>();
     public DbSet<StaffLeaveHoliday> StaffLeaveHolidays => Set<StaffLeaveHoliday>();
     public DbSet<StaffLeaveAllowance> StaffLeaveAllowances => Set<StaffLeaveAllowance>();
+    public DbSet<StaffExtraLeaveAllowance> StaffExtraLeaveAllowances => Set<StaffExtraLeaveAllowance>();
     public DbSet<AnnualPromotionRule> AnnualPromotionRules => Set<AnnualPromotionRule>();
     public DbSet<AnnualPromotionException> AnnualPromotionExceptions => Set<AnnualPromotionException>();
     public DbSet<AnnualPromotionChange> AnnualPromotionChanges => Set<AnnualPromotionChange>();
@@ -109,6 +114,24 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<StaffTeachingSubject>().HasKey(s => new { s.StaffId, s.SubjectId });
+        builder.Entity<StaffTeachingSubject>().HasOne(s => s.Staff).WithMany(s => s.TeachingSubjects).HasForeignKey(s => s.StaffId);
+        builder.Entity<StaffTeachingSubject>().HasOne(s => s.Subject).WithMany().HasForeignKey(s => s.SubjectId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<SosRecipient>().HasIndex(r => new { r.SchoolAnnouncementId, r.UserId, r.Portal }).IsUnique();
+        builder.Entity<SosRecipient>().HasIndex(r => new { r.UserId, r.Portal, r.AcknowledgedAt });
+        builder.Entity<SosRecipient>().HasOne<ApplicationUser>().WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<MarksReviewerAssignment>(e => {
+            e.HasIndex(a => new { a.AcademicYearId, a.SectionId }).IsUnique().HasFilter("[IsActive] = 1");
+            e.HasOne(a => a.Staff).WithMany().HasForeignKey(a => a.StaffId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(a => a.AssignedByStaff).WithMany().HasForeignKey(a => a.AssignedByStaffId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<StudentLeadershipAppointment>(e => {
+            e.HasIndex(a => a.Slot).IsUnique().HasFilter("[IsActive] = 1 AND [Slot] IS NOT NULL");
+            e.HasIndex(a => new { a.AcademicYearId, a.StudentId, a.Category }).IsUnique().HasFilter("[IsActive] = 1");
+            e.HasOne(a => a.AcademicYear).WithMany().HasForeignKey(a => a.AcademicYearId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(a => a.Student).WithMany().HasForeignKey(a => a.StudentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(a => a.SchoolClass).WithMany().HasForeignKey(a => a.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+        });
         builder.Entity<SchoolProfile>().Property(x => x.Id).ValueGeneratedNever();
         builder.Entity<AssessmentSchedule>(entity => {
             entity.Property(e => e.Title).HasMaxLength(200);
@@ -149,6 +172,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(c => new { c.Year, c.LeaveType }).IsUnique().HasFilter("[StaffId] IS NULL");
             entity.HasOne(c => c.Staff).WithMany().HasForeignKey(c => c.StaffId).OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<Staff>().WithMany().HasForeignKey(c => c.UpdatedByStaffId).OnDelete(DeleteBehavior.NoAction);
+        });
+        builder.Entity<StaffExtraLeaveAllowance>(entity => {
+            entity.Property(x => x.Reason).HasMaxLength(1000);
+            entity.Property(x => x.ReviewRemarks).HasMaxLength(1000);
+            entity.HasIndex(x => new { x.StaffId, x.Year }).IsUnique().HasFilter("[Status] = 1");
+            entity.HasIndex(x => new { x.Year, x.Status, x.RequestedAt });
+            entity.HasOne(x => x.Staff).WithMany().HasForeignKey(x => x.StaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.RequestedByStaff).WithMany().HasForeignKey(x => x.RequestedByStaffId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.ReviewedByStaff).WithMany().HasForeignKey(x => x.ReviewedByStaffId).OnDelete(DeleteBehavior.NoAction);
         });
         builder.Entity<StaffAttendanceRecord>(entity => {
             entity.Property(c => c.Status).HasMaxLength(20);
@@ -427,6 +459,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(x => x.Id);
 
+            entity.Property(x => x.Reason).HasMaxLength(500);
+
+            // Acting Section Head coverage is no longer used for access. Keep its historical
+            // rows out of normal permission and assignment queries while retaining the records.
+            entity.HasQueryFilter(x => !x.IsTemporary);
+
             entity.HasOne(x => x.Staff)
                 .WithMany()
                 .HasForeignKey(x => x.StaffId)
@@ -448,7 +486,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 x.SectionId,
                 x.AcademicYearId
             })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("[IsTemporary] = 0");
         });
 
         builder.Entity<ClassTeacherAssignment>(entity =>

@@ -1,9 +1,11 @@
+import StaffTeachingEditor from "./StaffTeachingEditor";
 import StaffActions from "./StaffActions";
 import { useEffect, useState } from "react";
 import { Plus, RefreshCw, Search, Users } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { staffManagementApi, staffErrorMessage } from "../../api/staffManagementApi";
 import AddStaffForm from "./AddStaffForm";
+import { RegistrationDraftList } from "../../components/RegistrationDrafts";
 
 const buttonClass = "inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
@@ -23,6 +25,8 @@ export default function StaffManagementPage() {
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("all");
     const [creating, setCreating] = useState(false);
+    const [draftId, setDraftId] = useState(null);
+    const [draftVersion, setDraftVersion] = useState(0);
     const [page, setPage] = useState(1);
     const pageSize = 12;
 
@@ -77,11 +81,12 @@ export default function StaffManagementPage() {
                 <div><h1 className="text-2xl font-bold text-slate-950">Staff Management</h1><p className="mt-2 text-sm text-slate-500">Manage staff accounts and check their sign-in status.</p></div>
                 <div className="flex flex-wrap gap-3">
                     <button type="button" disabled={loading || creating} onClick={() => setReload((current) => current + 1)} className={`${buttonClass} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><RefreshCw className="h-4 w-4" />Refresh</button>
-                    <button type="button" disabled={creating} onClick={() => { setCreating(true); setSuccess(""); }} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}><Plus className="h-4 w-4" />Add Staff</button>
+                    <button type="button" disabled={creating} onClick={() => { setDraftId(null); setCreating(true); setSuccess(""); }} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}><Plus className="h-4 w-4" />Add Staff</button>
                 </div>
             </div>
             {success && <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">{success}</p>}
-            {creating && <AddStaffForm onCreated={created} onCancel={() => setCreating(false)} />}
+            {creating && <AddStaffForm key={draftId || "new"} draftId={draftId} onDraftSaved={() => setDraftVersion(v => v + 1)} onCreated={data => { created(data); setDraftVersion(v => v + 1); }} onCancel={() => setCreating(false)} />}
+            {!creating && <RegistrationDraftList kind="staff" refresh={draftVersion} onResume={id => { setDraftId(id); setCreating(true); }} />}
             <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-label="Staff accounts">
                 <div className="flex items-center gap-2"><Users className="h-5 w-5 text-blue-600" /><h2 className="text-lg font-bold text-slate-950">Staff accounts</h2></div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_220px]">
@@ -101,7 +106,9 @@ export default function StaffManagementPage() {
                                 <article key={person.id} className="min-w-0 rounded-xl border border-slate-200 p-4">
                                     <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3 className="break-words font-semibold text-slate-950">{person.fullName}</h3><p className="mt-1 break-all text-sm text-slate-500">{person.staffNumber}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${isActive(person) ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}>{isActive(person) ? "Active" : "Inactive"}</span></div>
                                     <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-500">Email</dt><dd className="mt-1 break-all text-slate-800">{person.email || "—"}</dd></div><div><dt className="text-slate-500">Designation</dt><dd className="mt-1 break-words text-slate-800">{person.designation || "—"}</dd></div><div><dt className="text-slate-500">Roles</dt><dd className="mt-1 break-words text-slate-800">{person.roles?.join(", ") || "—"}</dd></div></dl>
+                                    <p className="mt-4 text-sm text-slate-700">Teaching: {person.canTeach === true ? person.teachingSubjects?.map(s => s.name).join(", ") || "Subjects not recorded" : person.canTeach === false ? "Does not teach" : "Not recorded"}</p>
                                     <p className={`mt-4 rounded-lg px-3 py-2 text-xs font-medium ${person.mustChangePassword ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600"}`}>{person.mustChangePassword ? "Password change required at next sign-in" : "Password change completed"}</p>
+                                    <StaffTeachingEditor person={person} admin={user?.roles?.includes("Admin")} onSaved={() => setReload(v => v + 1)} />
                                     <StaffActions person={person} admin={user?.roles?.includes("Admin")} self={person.email?.toLowerCase() === user?.email?.toLowerCase()} onSaved={() => setReload(v => v + 1)} />
                                 </article>
                             ))}

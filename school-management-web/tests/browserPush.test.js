@@ -54,3 +54,11 @@ test("real worker displays a generic alert and opens only the matching portal", 
     assert.deepEqual(active.opened, ["https://school.example/student/notifications"]);
     const signedOut = await worker(null); await signedOut.event("notificationclick", { notification: { data: delivery, close() {} } }); assert.equal(signedOut.opened.length, 0);
 });
+test("SOS uses a distinct persistent urgent notification and still respects account consent", async () => {
+    const sos = { ...delivery, kind: "school-sos", alertId: "42" };
+    const active = await worker(); await active.event("push", { data: { json: () => ({ data: sos }) } });
+    assert.equal(active.shown.length, 1);
+    const serialized = JSON.stringify(active.shown);
+    assert.ok(serialized.includes("SOS")); assert.ok(serialized.includes("school-sos-student-42")); assert.ok(serialized.includes('"requireInteraction":true'));
+    const signedOut = await worker(null); await signedOut.event("push", { data: { json: () => ({ data: sos }) } }); assert.equal(signedOut.shown.length, 0);
+});

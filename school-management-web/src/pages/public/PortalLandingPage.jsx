@@ -67,12 +67,6 @@ export default function PortalLandingPage() {
                         aria-label="Main navigation"
                     >
                         <a
-                            href="#about"
-                            className="hidden cursor-pointer text-slate-600 hover:text-blue-700 sm:inline"
-                        >
-                            About
-                        </a>
-                        <a
                             href="#portals"
                             className="cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 text-white transition hover:bg-blue-700"
                         >

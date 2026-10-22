@@ -1,6 +1,9 @@
 ﻿import api from "./axios";
 
 export const parentPortalApi = {
+    requestPasswordResetOtp(payload) { return api.post("/auth/parent-forgot-password/request-otp", payload); },
+    verifyPasswordResetOtp(payload) { return api.post("/auth/parent-forgot-password/verify-otp", payload); },
+    resetPassword(payload) { return api.post("/auth/parent-forgot-password/reset-password", payload); },
     login(email, password) {
         return api.post("/Auth/login", { email, password });
     },

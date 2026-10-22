@@ -267,7 +267,7 @@ public class FirebasePushNotificationService
                 };
 
             if (browserPortal != null) {
-                firebaseMessage = BrowserPushMessage.Create(token, browserPortal, recipientUserId ?? "");
+                firebaseMessage = BrowserPushMessage.Create(token, browserPortal, recipientUserId ?? "", referenceType == "SchoolSos", referenceId);
             }
 
             await FirebaseMessaging

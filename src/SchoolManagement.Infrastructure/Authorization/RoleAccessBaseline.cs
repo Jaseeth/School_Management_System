@@ -8,7 +8,7 @@ public static class RoleAccessBaseline
 {
     public static async Task Apply(ApplicationDbContext db)
     {
-        var leaders = new[] { "AcademicSetup.View", "AcademicSetup.Manage", "Staff.View", "Staff.Create", "Roles.View", "Students.View", "Students.Create", "TeacherAssignments.View", "TeacherAssignments.Manage", "Exams.View", "Exams.Manage" };
+        var leaders = new[] { "AcademicSetup.View", "AcademicSetup.Manage", "Staff.View", "Staff.Create", "Roles.View", "Students.View", "Students.Create", "TeacherAssignments.View", "TeacherAssignments.Manage", "Exams.View", "Exams.Manage", "Marks.Review", "Marks.Publish" };
         var matrix = new Dictionary<string, string[]> {
             ["Principal"] = leaders, ["Deputy Principal"] = leaders,
             ["Section Head"] = ["Students.View", "AcademicSetup.View", "Exams.View"],

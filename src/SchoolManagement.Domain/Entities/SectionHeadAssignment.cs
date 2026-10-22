@@ -14,4 +14,10 @@ public class SectionHeadAssignment
     public AcademicYear AcademicYear { get; set; } = null!;
 
     public bool IsActive { get; set; } = true;
+
+    public bool IsTemporary { get; set; }
+    public DateOnly? StartsOn { get; set; }
+    public DateOnly? EndsOn { get; set; }
+    public string? Reason { get; set; }
+    public string? CreatedByUserId { get; set; }
 }

@@ -1,8 +1,7 @@
-﻿import {
+import {
     ArrowLeft,
     Eye,
     EyeOff,
-    GraduationCap,
     LockKeyhole,
 } from "lucide-react";
 import { useState } from "react";
@@ -78,27 +77,12 @@ export default function ParentChangePasswordPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white">
-                <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
-                        <GraduationCap className="h-6 w-6" />
-                    </span>
 
-                    <div>
-                        <p className="font-bold text-slate-950">
-                            School Management
-                        </p>
-                        <p className="text-xs text-slate-500">
-                            Parent Portal
-                        </p>
-                    </div>
-                </div>
-            </header>
 
             <main className="mx-auto max-w-6xl px-5 py-9">
                 <Link
                     to="/parent/dashboard"
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700"
+                    className="portal-back-button"
                 >
                     <ArrowLeft className="h-4 w-4" />
                     Back to My Children
@@ -205,7 +189,7 @@ function PasswordField({
                 htmlFor={id}
                 className="block text-sm font-semibold text-slate-700"
             >
-                {label}
+                {label}<span className="required-marker" aria-hidden="true"> *</span>
             </label>
 
             <div className="relative mt-2">

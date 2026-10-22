@@ -21,7 +21,8 @@ public partial class StaffLeaveController
     [HttpGet("settings")]
     public async Task<IActionResult> LeaveSettings(int year)
     {
-        if (await PolicyAdmin() == null) return Forbid();
+        var actor = await GetCurrentStaffAsync();
+        if (actor == null || await PolicyAdmin() == null && !await AllowancePrincipal(actor)) return Forbid();
         if (year < 1900 || year > 2100) return BadRequest();
         var calendar = await _context.StaffLeaveCalendars.AsNoTracking().SingleOrDefaultAsync(c => c.Year == year);
         var holidays = await _context.StaffLeaveHolidays.AsNoTracking().Where(h => h.Date.Year == year && h.IsActive).OrderBy(h => h.Date).Select(h => new { h.Id, h.Date, h.Name }).ToListAsync();
@@ -51,12 +52,24 @@ public partial class StaffLeaveController
     public async Task<IActionResult> SaveAllowance(AllowanceRequest request)
     {
         var actor = await PolicyAdmin(); if (actor == null) return Forbid();
+        if (request.StaffId.HasValue) return BadRequest(new { message = "Individual extra leave days require a reason and Principal approval. Use Request extra days." });
         if (request.Year < 1900 || request.Year > 2100 || request.Days < 0 || request.Days > 366 || request.StaffId.HasValue && !await _context.Staff.AnyAsync(s => s.Id == request.StaffId && s.IsActive))
             return BadRequest(new { message = "Choose a valid year, staff member and shared yearly allowance (0–366 days)." });
-        var allowance = await _context.StaffLeaveAllowances.SingleOrDefaultAsync(a => a.Year == request.Year && a.LeaveType == 0 && a.StaffId == request.StaffId);
-        if (allowance == null) { allowance = new StaffLeaveAllowance { Year = request.Year, LeaveType = 0, StaffId = request.StaffId }; _context.StaffLeaveAllowances.Add(allowance); }
-        allowance.Days = request.Days; allowance.UpdatedByStaffId = actor.Id; allowance.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(); return Ok(new { message = "Shared yearly allowance saved. All leave types use this one total." });
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync<IActionResult>(async () =>
+        {
+            _context.ChangeTracker.Clear();
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var additions = await _context.StaffExtraLeaveAllowances.Where(x => x.Year == request.Year && x.Status == StaffLeaveStatus.Approved)
+                .GroupBy(x => x.StaffId).Select(g => new { StaffId = g.Key, Days = g.Sum(x => x.ApprovedDays ?? x.ExtraDays) }).ToListAsync();
+            var legacy = await _context.StaffLeaveAllowances.Where(x => x.Year == request.Year && x.LeaveType == 0 && x.StaffId != null).Select(x => x.StaffId!.Value).ToListAsync();
+            if (additions.Any(x => !legacy.Contains(x.StaffId) && x.Days + request.Days > 366))
+                return BadRequest(new { message = "This default would make an existing staff allowance exceed 366 days after approved extra days." });
+            var allowance = await _context.StaffLeaveAllowances.SingleOrDefaultAsync(a => a.Year == request.Year && a.LeaveType == 0 && a.StaffId == null);
+            if (allowance == null) { allowance = new StaffLeaveAllowance { Year = request.Year, LeaveType = 0 }; _context.StaffLeaveAllowances.Add(allowance); }
+            allowance.Days = request.Days; allowance.UpdatedByStaffId = actor.Id; allowance.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(); await transaction.CommitAsync();
+            return Ok(new { message = "Shared yearly allowance saved. All leave types use this one total." });
+        });
     }
 
     [HttpPost("settings/holidays")]

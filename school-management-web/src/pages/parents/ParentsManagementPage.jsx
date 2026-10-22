@@ -507,7 +507,7 @@ export default function ParentsManagementPage() {
 function Field({ label, ...props }) {
     return (
         <label className="block text-sm font-semibold text-slate-700">
-            {label}
+            {label}{(props.required || props["aria-required"]) && <span className="required-marker" aria-hidden="true"> *</span>}
             <input
                 {...props}
                 className="mt-2 block w-full rounded-xl border border-slate-200 px-4 py-3 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"

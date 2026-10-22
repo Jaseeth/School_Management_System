@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Eye, RefreshCw, RotateCcw } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { marksReviewApi } from "../../api/marksReviewApi";
+import MarksReviewerAssignments from "./MarksReviewerAssignments";
 
 const buttonClass =
     "inline-flex cursor-pointer items-center justify-center gap-2 " +
@@ -55,6 +56,7 @@ export default function SectionHeadMarksReviewPage() {
     const { user } = useAuth();
     const isSectionHead =
         user?.roles?.includes("Section Head") === true;
+    const canUsePage = isSectionHead || user?.roles?.includes("Teacher") === true;
 
     const [pending, setPending] = useState([]);
     const [details, setDetails] = useState(null);
@@ -74,7 +76,7 @@ export default function SectionHeadMarksReviewPage() {
     useEffect(() => {
         let cancelled = false;
 
-        if (!isSectionHead) {
+        if (!canUsePage) {
             setLoading(false);
             return;
         }
@@ -104,7 +106,7 @@ export default function SectionHeadMarksReviewPage() {
         return () => {
             cancelled = true;
         };
-    }, [isSectionHead, reload]);
+    }, [canUsePage, reload]);
 
     useEffect(() => {
         return () => {
@@ -229,10 +231,10 @@ export default function SectionHeadMarksReviewPage() {
         }
     }
 
-    if (!isSectionHead) {
+    if (!canUsePage) {
         return (
             <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-                This page is available to Section Heads.
+                This page is available to section heads and assigned teacher reviewers.
             </div>
         );
     }
@@ -245,7 +247,7 @@ export default function SectionHeadMarksReviewPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p className="text-sm font-semibold text-blue-600">
-                        Section Head Portal
+                        Marks review
                     </p>
 
                     <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
@@ -268,6 +270,7 @@ export default function SectionHeadMarksReviewPage() {
                 </button>
             </div>
 
+            {isSectionHead && <MarksReviewerAssignments onChanged={() => setReload(v => v + 1)} />}
             {error && (
                 <p
                     role="alert"
@@ -300,7 +303,7 @@ export default function SectionHeadMarksReviewPage() {
                     <p className="mt-5 text-sm text-slate-500">
                         {error
                             ? "Submissions could not be loaded."
-                            : "No marks submissions are waiting for your review. Only submissions for your active section and academic-year assignments appear. If you expected a submission, ask Admin to check Section Head Assignments for that year."}
+                            : "No marks submissions are waiting for your review. This list shows your assigned sections and academic years. Your own submissions are excluded. Teachers need a marks reviewer assignment from their section head."}
                     </p>
                 ) : (
                     <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -427,7 +430,7 @@ export default function SectionHeadMarksReviewPage() {
                         <div className="space-y-4 border-t border-slate-200 p-5 sm:p-6">
                             <label className="block text-sm font-semibold text-slate-700">
                                 Review comment
-                                <textarea
+                                <span className="required-marker" aria-hidden="true"> *</span><textarea
                                     value={comment}
                                     onChange={(event) => {
                                         setComment(event.target.value);

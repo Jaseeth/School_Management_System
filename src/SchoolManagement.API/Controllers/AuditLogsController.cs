@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Infrastructure.Persistence;
+using System.Text.Json;
 
 namespace SchoolManagement.API.Controllers;
 
@@ -137,6 +138,10 @@ public class AuditLogsController : ControllerBase
                     x.Id,
 
                     x.UserId,
+                    actorName = _context.Users.Where(u => u.Id == x.UserId).Select(u => u.FullName).FirstOrDefault()
+                        ?? _context.Staff.Where(s => s.Id == x.StaffId).Select(s => s.FullName).FirstOrDefault()
+                        ?? _context.Students.Where(s => s.Id == x.StudentId).Select(s => s.FullName).FirstOrDefault()
+                        ?? _context.ParentGuardians.Where(p => p.Id == x.ParentGuardianId).Select(p => p.FullName).FirstOrDefault(),
 
                     x.StaffId,
 
@@ -203,6 +208,10 @@ public class AuditLogsController : ControllerBase
                     x.Id,
 
                     x.UserId,
+                    actorName = _context.Users.Where(u => u.Id == x.UserId).Select(u => u.FullName).FirstOrDefault()
+                        ?? _context.Staff.Where(s => s.Id == x.StaffId).Select(s => s.FullName).FirstOrDefault()
+                        ?? _context.Students.Where(s => s.Id == x.StudentId).Select(s => s.FullName).FirstOrDefault()
+                        ?? _context.ParentGuardians.Where(p => p.Id == x.ParentGuardianId).Select(p => p.FullName).FirstOrDefault(),
 
                     x.StaffId,
 
@@ -239,6 +248,42 @@ public class AuditLogsController : ControllerBase
             });
         }
 
-        return Ok(auditLog);
+        object? recipientContext = null;
+        var hasSavedAudience = false;
+        try {
+            using var snapshot = JsonDocument.Parse(auditLog.NewValues ?? "{}");
+            hasSavedAudience = snapshot.RootElement.ValueKind == JsonValueKind.Object && snapshot.RootElement.EnumerateObject()
+                .Any(p => new[] { "students", "staff", "parents" }.Contains(p.Name.ToLowerInvariant()));
+        } catch (JsonException) { }
+        if (!hasSavedAudience && auditLog.EntityName == "SchoolAnnouncement" && int.TryParse(auditLog.EntityId, out var announcementId))
+        {
+            var announcement = await _context.SchoolAnnouncements.AsNoTracking().FirstOrDefaultAsync(a => a.Id == announcementId);
+            // Older audit snapshots did not retain recipient identities. Current record data is labelled separately.
+            if (announcement != null)
+            {
+                var students = await _context.Students.Where(s => announcement.StudentIds.Contains(s.Id))
+                    .Select(s => s.FullName + " (" + s.IndexNumber + ")").ToListAsync();
+                var staff = await _context.Staff.Where(s => announcement.StaffIds.Contains(s.Id))
+                    .Select(s => s.FullName + " (" + s.StaffNumber + ")").ToListAsync();
+                var parents = await _context.ParentGuardians.Where(p => announcement.ParentIds.Contains(p.Id))
+                    .Select(p => p.FullName + " (" + p.ParentNumber + ")").ToListAsync();
+                recipientContext = new { note = "Current announcement audience. Older audit entries may not contain the original recipient list; this is not proof of delivery.",
+                    details = new { students, staff, parents,
+                        section = await _context.Sections.Where(s => s.Id == announcement.SectionId).Select(s => s.Name).FirstOrDefaultAsync(),
+                        grade = await _context.Grades.Where(g => g.Id == announcement.GradeId).Select(g => g.Name).FirstOrDefaultAsync(),
+                        schoolClass = await _context.SchoolClasses.Where(c => c.Id == announcement.SchoolClassId).Select(c => c.Grade.Name + " " + c.Name).FirstOrDefaultAsync() } };
+            }
+        }
+        var displayDescription = auditLog.Description;
+        if (auditLog.Action == "RemoveSectionHeadAssignment" && int.TryParse(auditLog.EntityId, out var assignmentId))
+        {
+            var assignment = await _context.SectionHeadAssignments.AsNoTracking().Where(a => a.Id == assignmentId)
+                .Select(a => new { a.Staff.FullName, a.Staff.StaffNumber, section = a.Section.Name, year = a.AcademicYear.Name }).FirstOrDefaultAsync();
+            if (assignment != null && (auditLog.Description?.StartsWith("Deactivated staff ") ?? false))
+                displayDescription = $"Removed {assignment.FullName} ({assignment.StaffNumber}) as section head of {assignment.section} for {assignment.year}. Names are from the linked record.";
+        }
+        return Ok(new { auditLog.Id, auditLog.UserId, auditLog.actorName, auditLog.StaffId, auditLog.StudentId,
+            auditLog.ParentGuardianId, auditLog.Action, auditLog.EntityName, auditLog.EntityId, Description = displayDescription,
+            auditLog.OldValues, auditLog.NewValues, auditLog.IpAddress, auditLog.UserAgent, auditLog.CreatedAt, recipientContext });
     }
 }

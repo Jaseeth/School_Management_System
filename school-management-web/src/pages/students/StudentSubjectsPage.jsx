@@ -100,33 +100,7 @@ export default function StudentSubjectsPage() {
 
         <div className="min-h-screen bg-slate-50">
 
-            <header className="border-b border-slate-200 bg-white">
 
-                <div className="mx-auto flex min-h-20 max-w-7xl items-center px-5 sm:px-7 lg:px-8">
-
-                    <div className="flex items-center gap-3">
-
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
-                            <GraduationCap className="h-5 w-5" />
-                        </div>
-
-                        <div>
-
-                            <p className="font-bold text-slate-950">
-                                School Management
-                            </p>
-
-                            <p className="text-xs text-slate-500">
-                                Student Portal
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </header>
 
 
             <main className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-7 lg:px-8 lg:py-10">
@@ -138,7 +112,7 @@ export default function StudentSubjectsPage() {
                             "/student/dashboard"
                         )
                     }
-                    className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+                    className="portal-back-button"
                 >
                     <ArrowLeft className="h-4 w-4" />
                     Back to Dashboard

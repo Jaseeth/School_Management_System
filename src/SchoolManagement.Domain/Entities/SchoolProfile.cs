@@ -13,5 +13,7 @@ public class SchoolProfile
     [MaxLength(2)] public string CountryCode { get; set; } = "LK";
     [MaxLength(100)] public string TimeZoneId { get; set; } = "Asia/Colombo";
     public string LogoDataUrl { get; set; } = "";
+    public TimeOnly MondayAssemblyStart { get; set; } = new(7, 30);
+    public TimeOnly MondayAssemblyEnd { get; set; } = new(8, 15);
     [Timestamp] public byte[] Version { get; set; } = [];
 }

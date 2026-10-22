@@ -16,6 +16,7 @@ import {
 
 import {
     useEffect,
+    useId,
     useMemo,
     useRef,
     useState,
@@ -23,7 +24,9 @@ import {
 
 import {
     useNavigate,
+    useSearchParams,
 } from "react-router-dom";
+import { useRegistrationDraft } from "../../components/RegistrationDrafts";
 
 import {
     academicApi,
@@ -73,6 +76,7 @@ export default function AddStudentPage() {
 
     const navigate =
         useNavigate();
+    const [searchParams] = useSearchParams();
 
     const submissionBusy = useRef(false);
     const completedRegistration = useRef(false);
@@ -221,6 +225,16 @@ export default function AddStudentPage() {
     // ============================================================
     // INITIAL LOAD
     // ============================================================
+
+    const draft = useRegistrationDraft({ kind: "student", draftId: searchParams.get("draft"), busy: submitting,
+        data: { studentForm, parentForm, academicYearId, sectionId, gradeId, selectedSubjectIds, currentStep },
+        hasData: Object.values(studentForm).some(Boolean) || Object.entries(parentForm).some(([, value]) => typeof value === "string" && value.length > 0) || Boolean(academicYearId || sectionId || gradeId || selectedSubjectIds.length),
+        restore: data => {
+            setStudentForm(current => ({ ...current, ...data.studentForm })); setParentForm(current => ({ ...current, ...data.parentForm }));
+            setAcademicYearId(data.academicYearId || ""); setSectionId(data.sectionId || ""); setGradeId(data.gradeId || "");
+            setSelectedSubjectIds(data.selectedSubjectIds || []); setCurrentStep(Math.max(1, Math.min(5, Number(data.currentStep) || 1)));
+            if (data.sectionId) loadGrades(data.sectionId); if (data.gradeId) loadClasses(data.gradeId);
+        } });
 
     useEffect(() => {
 
@@ -961,6 +975,7 @@ export default function AddStudentPage() {
             const studentId = response.data?.id;
             if (!studentId) throw new Error("Registration completed but no student ID was returned. Check the Students list before retrying.");
             completedRegistration.current = true;
+            await draft.complete();
             setExistingRegistration(null);
             setSuccess("Student registration completed successfully.");
             setTimeout(() => navigate(`/students/${studentId}`), 900);
@@ -986,9 +1001,11 @@ export default function AddStudentPage() {
     // RENDER
     // ============================================================
 
+    if (draft.loading) return <div className="space-y-4 p-6">{draft.controls}</div>;
     return (
 
         <div className="mx-auto w-full max-w-[1600px] pb-6">
+            <div className="mb-5 space-y-3">{draft.controls}</div>
 
             {/* ====================================================
                 BACK
@@ -2103,12 +2120,12 @@ function FormInput({
     icon: Icon,
     ...props
 }) {
-
+    const fieldId = useId();
     return (
 
         <div>
 
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
+            <label htmlFor={fieldId} className="mb-2 block text-sm font-semibold text-slate-700">
 
                 {label}
 
@@ -2131,6 +2148,8 @@ function FormInput({
 
                 <input
                     {...props}
+                    id={fieldId}
+                    aria-required={required}
                     className={`h-11 w-full rounded-xl border border-slate-200 bg-white pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 ${Icon
                             ? "pl-11"
                             : "pl-4"

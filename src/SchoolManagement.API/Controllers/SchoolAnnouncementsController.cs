@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Application.Announcements.DTOs;
@@ -13,7 +13,7 @@ namespace SchoolManagement.API.Controllers;
 
 [ApiController]
 [Route("api/school-announcements")]
-public class SchoolAnnouncementsController : ControllerBase
+public partial class SchoolAnnouncementsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IPushNotificationService _pushNotificationService;
@@ -76,7 +76,7 @@ public class SchoolAnnouncementsController : ControllerBase
             (x.ExpiresAt == null || x.ExpiresAt > now) && (
                 (x.AudienceType == "SpecificParents" && x.ParentIds.Contains(parent.Id)) ||
                 (x.AudienceType == "Role" && x.RoleName == "Parent")))
-            .OrderByDescending(x => x.PublishAt).Select(x => new { x.Id, x.Title, x.Message, x.PublishAt }).ToListAsync();
+            .OrderByDescending(x => x.PublishAt).Select(x => new { x.Id, x.Title, x.Message, x.IsSos, x.PublishAt }).ToListAsync();
         return Ok(new { announcements });
     }
 
@@ -113,6 +113,9 @@ public class SchoolAnnouncementsController : ControllerBase
     public async Task<IActionResult> CreateAnnouncement(
         CreateSchoolAnnouncementRequest request)
     {
+        if (request.IsSos && !IsGlobalCreator()) return Forbid();
+        if (request.IsSos && (request.PublishAt > DateTime.UtcNow.AddSeconds(5) || request.ExpiresAt <= DateTime.UtcNow || request.ExpiresAt > DateTime.UtcNow.AddHours(24)))
+            return BadRequest(new { message = "SOS alerts send immediately and must expire within 24 hours." });
         var userId =
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier);
@@ -393,6 +396,7 @@ public class SchoolAnnouncementsController : ControllerBase
         var announcement =
             new SchoolAnnouncement
             {
+                IsSos = request.IsSos,
                 Title =
                     request.Title.Trim(),
 
@@ -451,6 +455,13 @@ public class SchoolAnnouncementsController : ControllerBase
         _context.SchoolAnnouncements
             .Add(announcement);
 
+        if (announcement.IsSos)
+        {
+            announcement.PublishAt = DateTime.UtcNow;
+            announcement.ExpiresAt ??= DateTime.UtcNow.AddHours(2);
+            return await PublishSosAsync(announcement);
+        }
+
         await _context.SaveChangesAsync();
 
         await _auditLogService.LogAsync(
@@ -471,6 +482,12 @@ public class SchoolAnnouncementsController : ControllerBase
                 announcement.PublishAt,
                 announcement.ExpiresAt,
                 announcement.IsActive
+                ,students = await _context.Students.Where(s => selectedStudents.Contains(s.Id)).Select(s => new { s.FullName, s.IndexNumber }).ToListAsync()
+                ,staff = await _context.Staff.Where(s => announcement.StaffIds.Contains(s.Id)).Select(s => new { s.FullName, s.StaffNumber }).ToListAsync()
+                ,parents = await _context.ParentGuardians.Where(p => announcement.ParentIds.Contains(p.Id)).Select(p => new { p.FullName, p.ParentNumber }).ToListAsync()
+                ,section = await _context.Sections.Where(s => s.Id == announcement.SectionId).Select(s => s.Name).FirstOrDefaultAsync()
+                ,grade = await _context.Grades.Where(g => g.Id == announcement.GradeId).Select(g => g.Name).FirstOrDefaultAsync()
+                ,schoolClass = await _context.SchoolClasses.Where(c => c.Id == announcement.SchoolClassId).Select(c => c.Grade.Name + " " + c.Name).FirstOrDefaultAsync()
             });
 
 
@@ -1172,6 +1189,7 @@ public class SchoolAnnouncementsController : ControllerBase
 
                     x.RoleName,
 
+                    x.IsSos,
                     x.PublishAt,
 
                     x.ExpiresAt,
@@ -1248,6 +1266,7 @@ public class SchoolAnnouncementsController : ControllerBase
 
                     x.RoleName,
 
+                    x.IsSos,
                     x.PublishAt,
 
                     x.ExpiresAt,
@@ -1378,6 +1397,7 @@ public class SchoolAnnouncementsController : ControllerBase
                     x.StaffIds,
                     x.ParentIds,
 
+                    x.IsSos,
                     x.PublishAt,
 
                     x.ExpiresAt,
@@ -1498,6 +1518,7 @@ public class SchoolAnnouncementsController : ControllerBase
 
                     x.RoleName,
 
+                    x.IsSos,
                     x.PublishAt,
 
                     x.ExpiresAt,
@@ -1556,6 +1577,8 @@ public class SchoolAnnouncementsController : ControllerBase
                 message = "Announcement not found."
             });
         }
+
+        if (announcement.IsSos) return BadRequest(new { message = "SOS messages cannot be edited. Cancel this alert and send a new SOS with the correct message." });
 
         var oldValues = new
         {
@@ -1733,6 +1756,8 @@ public class SchoolAnnouncementsController : ControllerBase
         // ========================================================
         // NOTIFY USERS THAT ANNOUNCEMENT WAS CANCELLED
         // ========================================================
+
+        if (announcement.IsSos) return Ok(new { message = "SOS cancelled. It will disappear from active portal alerts on their next refresh." });
 
         await NotifyAnnouncementAudienceAsync(
             announcement,
@@ -2124,3 +2149,5 @@ public class SchoolAnnouncementsController : ControllerBase
 
 
 }
+
+

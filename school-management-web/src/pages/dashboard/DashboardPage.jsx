@@ -16,14 +16,15 @@ import api from "../../api/axios";
 import { Link } from "react-router-dom";
 
 function SchoolDashboardPage() {
-    const { user } = useAuth();
+    const { user, activeWorkspaceRole } = useAuth();
+    const viewRoles = user?.roles || [];
     const [staffAttendance, setStaffAttendance] = useState(null);
     useEffect(() => {
-        if (!["Admin", "Principal", "Deputy Principal", "Section Head"].some(role => user?.roles?.includes(role))) return;
+        if (!["Admin", "Principal", "Deputy Principal", "Section Head"].some(role => viewRoles.includes(role))) return;
         const controller = new AbortController();
         api.get("/staff-attendance", { signal: controller.signal }).then(response => setStaffAttendance(response.data.summary)).catch(() => {});
         return () => controller.abort();
-    }, [user]);
+    }, [user, activeWorkspaceRole]);
 
     const [dashboardData, setDashboardData] =
         useState(null);
@@ -42,29 +43,29 @@ function SchoolDashboardPage() {
 
                 let response;
 
-                if (user?.roles?.includes("Admin")) {
+                if (viewRoles.includes("Admin")) {
                     response =
                         await dashboardApi.getAdminSummary();
                 } else if (
-                    user?.roles?.includes("Principal") ||
-                    user?.roles?.includes(
+                    viewRoles.includes("Principal") ||
+                    viewRoles.includes(
                         "Deputy Principal"
                     )
                 ) {
                     response =
                         await dashboardApi.getManagementSummary();
                 } else if (
-                    user?.roles?.includes("Section Head")
+                    viewRoles.includes("Section Head")
                 ) {
                     response =
                         await dashboardApi.getSectionHeadSummary();
                 } else if (
-                    user?.roles?.includes("Teacher")
+                    viewRoles.includes("Teacher")
                 ) {
                     response =
                         await dashboardApi.getTeacherSummary();
                 } else if (
-                    user?.roles?.includes("Student")
+                    viewRoles.includes("Student")
                 ) {
                     response =
                         await dashboardApi.getStudentSummary();
@@ -92,7 +93,7 @@ function SchoolDashboardPage() {
         };
 
         loadDashboard();
-    }, [user]);
+    }, [user, activeWorkspaceRole]);
 
     const cards = useMemo(() => {
         if (!dashboardData) {
@@ -103,7 +104,7 @@ function SchoolDashboardPage() {
         // ADMIN
         // ========================================================
 
-        if (user?.roles?.includes("Admin")) {
+        if (viewRoles.includes("Admin")) {
             return [
                 {
                     title: "Students",
@@ -149,8 +150,8 @@ function SchoolDashboardPage() {
         // ========================================================
 
         if (
-            user?.roles?.includes("Principal") ||
-            user?.roles?.includes(
+            viewRoles.includes("Principal") ||
+            viewRoles.includes(
                 "Deputy Principal"
             )
         ) {
@@ -199,7 +200,7 @@ function SchoolDashboardPage() {
         // ========================================================
 
         if (
-            user?.roles?.includes(
+            viewRoles.includes(
                 "Section Head"
             )
         ) {
@@ -248,7 +249,7 @@ function SchoolDashboardPage() {
         // ========================================================
 
         if (
-            user?.roles?.includes("Teacher")
+            viewRoles.includes("Teacher")
         ) {
             return [
                 {
@@ -295,7 +296,7 @@ function SchoolDashboardPage() {
         // ========================================================
 
         if (
-            user?.roles?.includes("Student")
+            viewRoles.includes("Student")
         ) {
             return [
                 {
@@ -342,6 +343,7 @@ function SchoolDashboardPage() {
     }, [
         dashboardData,
         user,
+        activeWorkspaceRole,
     ]);
 
     // ============================================================
@@ -431,9 +433,9 @@ function SchoolDashboardPage() {
                 ADMIN / MANAGEMENT LOWER SECTION
             ==================================================== */}
 
-            {(user?.roles?.includes("Admin") ||
-                user?.roles?.includes("Principal") ||
-                user?.roles?.includes(
+            {(viewRoles.includes("Admin") ||
+                viewRoles.includes("Principal") ||
+                viewRoles.includes(
                     "Deputy Principal"
                 )) && (
                     <div className="mt-8 grid gap-6 xl:grid-cols-3">
@@ -537,12 +539,12 @@ function SchoolDashboardPage() {
                                         </p>
 
                                         <p className="mt-1 text-xs text-slate-400">
-                                            {staffAttendance ? `${staffAttendance.onLeave} on approved leave Â· ${staffAttendance.reviewRequired} attendance conflicts` : "Current staff absences"}
+                                            {staffAttendance ? `${staffAttendance.onLeave} on approved leave · ${staffAttendance.reviewRequired} attendance conflicts` : "Current staff absences"}
                                         </p>
                                     </div>
 
                                     <span className="min-w-10 rounded-lg bg-red-50 px-3 py-1.5 text-center text-sm font-semibold text-red-700">
-                                        <Link to="/staff-attendance" aria-label="Open staff attendance">{staffAttendance?.absent ?? "â€”"}</Link>
+                                        <Link to="/staff-attendance" aria-label="Open staff attendance">{staffAttendance?.absent ?? "—"}</Link>
                                     </span>
                                 </div>
 
@@ -594,9 +596,9 @@ function SchoolDashboardPage() {
                 NON-ADMIN SUMMARY AREA
             ==================================================== */}
 
-            {!user?.roles?.includes("Admin") &&
-                !user?.roles?.includes("Principal") &&
-                !user?.roles?.includes(
+            {!viewRoles.includes("Admin") &&
+                !viewRoles.includes("Principal") &&
+                !viewRoles.includes(
                     "Deputy Principal"
                 ) && (
                     <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -641,6 +643,7 @@ function SchoolDashboardPage() {
 
 export default function DashboardPage() {
     const { user } = useAuth();
-    if (!["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher", "Student", "Parent"].some(role => user?.roles?.includes(role))) return <div className="space-y-5"><h1 className="text-2xl font-bold">Welcome, {user?.fullName}</h1><p>Manage your leave and view school updates.</p><div className="flex flex-wrap gap-4">{[["/staff-leave", "My leave requests"], ["/school-calendar", "School calendar"], ["/notifications", "Notifications"], ["/staff/my-profile", "My profile"]].map(([path, label]) => <Link className="rounded-xl border border-slate-200 bg-white p-5 text-blue-700" key={path} to={path}>{label}</Link>)}</div></div>;
+    const viewRoles = user?.roles || [];
+    if (!["Admin", "Principal", "Deputy Principal", "Section Head", "Teacher", "Student", "Parent"].some(role => viewRoles.includes(role))) return <div className="space-y-5"><h1 className="text-2xl font-bold">Welcome, {user?.fullName}</h1><p>Manage your leave and view school updates.</p><div className="flex flex-wrap gap-4">{[["/staff-leave", "My leave requests"], ["/school-calendar", "School calendar"], ["/notifications", "Notifications"], ["/staff/my-profile", "My profile"]].map(([path, label]) => <Link className="rounded-xl border border-slate-200 bg-white p-5 text-blue-700" key={path} to={path}>{label}</Link>)}</div></div>;
     return <SchoolDashboardPage />;
 }

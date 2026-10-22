@@ -4,10 +4,11 @@ export const studentsApi = {
     registerStudent(data) {
         return api.post("/students/registration", data);
     },
-    getManagementStudents(params = {}) {
+    getManagementStudents(params = {}, options = {}) {
         return api.get(
             "/Students/management",
             {
+                ...options,
                 params,
             }
         );

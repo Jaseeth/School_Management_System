@@ -2,6 +2,8 @@
 
 public class Staff
 {
+    public bool? CanTeach { get; set; }
+    public ICollection<StaffTeachingSubject> TeachingSubjects { get; set; } = new List<StaffTeachingSubject>();
     public int Id { get; set; }
 
     public string StaffNumber { get; set; } = string.Empty;
